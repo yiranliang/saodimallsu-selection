@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 250" width="600" height="750">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#E9E9EE"/>
+      <stop offset="1" stop-color="#DBDBE3"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="250" fill="url(#g)"/>
+  <circle cx="100" cy="118" r="66" fill="#ffffff" opacity="0.22"/>
+  <g fill="none" stroke="#8E8E9A" stroke-width="2.4"
+     stroke-linecap="round" stroke-linejoin="round" opacity="0.72">
+    <path d="M46 132 q4 -56 54 -56 q50 0 54 56" />
+    <path d="M46 132 q54 18 108 0" />
+    <path d="M100 76 V60" />
+    <circle cx="100" cy="56" r="5" />
+  </g>
+  <text x="100" y="228" text-anchor="middle"
+        font-family="Inter, Helvetica, Arial, sans-serif" font-size="7"
+        letter-spacing="2.6" fill="#8E8E9A" opacity="0.6">BERET</text>
+</svg>

@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- `?v=` is a cache-buster, not decoration: browsers keep favicons far
+         longer than any other asset and will happily show the old letter for
+         days after a deploy. Bump the number whenever the artwork changes. -->
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg?v=2" sizes="any" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="description" content="Saodimallsu selection — this week's edit, picked for you." />
+    <meta name="theme-color" content="#FAF8F5" />
+    <!--
+      No preconnect to the database host.
+
+      It looks like an obvious win — the first product request leaves at ~4.1 s
+      and spends three round trips on DNS + TCP + TLS before a byte moves — but
+      measured under Slow 4G it changed first-card by 40 ms, i.e. nothing. The
+      browser was already overlapping that setup with the bundle download. A tag
+      that costs a handshake and buys nothing is a tag that will confuse the next
+      person, so it stays out until a measurement says otherwise.
+    -->
+    <title>Saodimallsu · Selection</title>
+    <!--
+      No webfont, on purpose.
+
+      This block used to pull Inter from fonts.googleapis.com with five weights.
+      A cross-origin stylesheet in <head> is RENDER-BLOCKING: until it answers the
+      browser paints nothing, so a creator on a phone where Google is slow or
+      unreachable sat in front of a white screen. Measured under Slow 4G: FCP
+      5.4 s normally, 7.6 s with that request held for 6 s — the whole difference
+      was one link tag.
+
+      The type is now whatever the device already has (SF / PingFang SC / Segoe UI
+      / Roboto): zero requests, zero bytes. See tailwind.config.js → fontFamily.
+    -->
+    <!--
+      Boot shell — the part that cannot wait for JavaScript.
+
+      Measured under Slow 4G + 4× CPU: the bundle finishes executing at ~4.1 s.
+      Everything the React tree can draw, including its skeleton, arrives after
+      that. So for the first four seconds the page was an empty cream rectangle
+      no matter how good the skeleton was — a screenshot at 2.6 s showed exactly
+      that.
+
+      This block is inline HTML + inline CSS: no request, no font, no image, about
+      1.5 kB of markup. It paints as soon as the document parses (~600 ms) and
+      React replaces it on mount, at which point the skeleton in ProductGrid
+      takes over. Same shapes, same colours, so the hand-off is invisible.
+
+      The two skeletons are deliberately separate: this one must be static (it
+      cannot import anything), and the React one owns the real card geometry. If
+      the grid layout changes, change both.
+    -->
+    <style>
+      body {
+        margin: 0;
+        background: #faf8f5;
+      }
+      .boot {
+        max-width: 72rem;
+        margin: 0 auto;
+        padding: 20px 20px 0;
+      }
+      .boot-brand {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 12px;
+        padding: 4px 0 28px;
+      }
+      .boot-ring {
+        position: relative;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 56px;
+        height: 56px;
+      }
+      .boot-ring::before {
+        content: '';
+        position: absolute;
+        inset: 0;
+        border-radius: 9999px;
+        border: 2px solid rgba(43, 43, 43, 0.08);
+        border-top-color: #c8855a;
+        animation: boot-spin 0.9s linear infinite;
+      }
+      .boot-mark {
+        width: 32px;
+        height: 32px;
+        border-radius: 8px;
+        background: #c8855a;
+        color: #fff;
+        font: 700 13px/32px system-ui, sans-serif;
+        text-align: center;
+      }
+      .boot-hint {
+        margin: 0;
+        font: 400 11.5px/1.4 system-ui, sans-serif;
+        letter-spacing: 0.08em;
+        color: #6b6b6b;
+      }
+      .boot-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .boot-card {
+        overflow: hidden;
+        border-radius: 16px;
+        background: #fff;
+      }
+      .boot-img {
+        aspect-ratio: 1 / 1;
+        background: #f2eee8;
+        animation: boot-pulse 1.6s ease-in-out infinite;
+      }
+      .boot-lines {
+        display: grid;
+        gap: 8px;
+        padding: 12px 12px 16px;
+      }
+      .boot-line {
+        height: 12px;
+        border-radius: 4px;
+        background: #f2eee8;
+        animation: boot-pulse 1.6s ease-in-out infinite;
+      }
+      @keyframes boot-spin {
+        to {
+          transform: rotate(360deg);
+        }
+      }
+      @keyframes boot-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.55;
+        }
+      }
+      @media (min-width: 768px) {
+        .boot-grid {
+          grid-template-columns: repeat(3, minmax(0, 1fr));
+          gap: 16px;
+        }
+      }
+      @media (min-width: 1024px) {
+        .boot-grid {
+          grid-template-columns: repeat(4, minmax(0, 1fr));
+        }
+      }
+      @media (prefers-reduced-motion: reduce) {
+        .boot-img,
+        .boot-line {
+          animation: none;
+        }
+        .boot-ring::before {
+          animation: none;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root">
+      <!-- Replaced by React on mount. aria-hidden: these are shapes, not content. -->
+      <div class="boot" aria-hidden="true">
+        <div class="boot-brand">
+          <div class="boot-ring"><span class="boot-mark">S</span></div>
+          <p class="boot-hint">Curating the best picks for you…</p>
+        </div>
+        <div class="boot-grid">
+          <div class="boot-card">
+            <div class="boot-img"></div>
+            <div class="boot-lines">
+              <div class="boot-line" style="width: 80%"></div>
+              <div class="boot-line" style="width: 55%; height: 10px"></div>
+              <div class="boot-line" style="height: 24px; border-radius: 9999px"></div>
+            </div>
+          </div>
+          <div class="boot-card">
+            <div class="boot-img"></div>
+            <div class="boot-lines">
+              <div class="boot-line" style="width: 70%"></div>
+              <div class="boot-line" style="width: 60%; height: 10px"></div>
+              <div class="boot-line" style="height: 24px; border-radius: 9999px"></div>
+            </div>
+          </div>
+          <div class="boot-card">
+            <div class="boot-img"></div>
+            <div class="boot-lines">
+              <div class="boot-line" style="width: 85%"></div>
+              <div class="boot-line" style="width: 50%; height: 10px"></div>
+              <div class="boot-line" style="height: 24px; border-radius: 9999px"></div>
+            </div>
+          </div>
+          <div class="boot-card">
+            <div class="boot-img"></div>
+            <div class="boot-lines">
+              <div class="boot-line" style="width: 75%"></div>
+              <div class="boot-line" style="width: 55%; height: 10px"></div>
+              <div class="boot-line" style="height: 24px; border-radius: 9999px"></div>
+            </div>
+          </div>
+          <div class="boot-card">
+            <div class="boot-img"></div>
+            <div class="boot-lines">
+              <div class="boot-line" style="width: 80%"></div>
+              <div class="boot-line" style="width: 60%; height: 10px"></div>
+              <div class="boot-line" style="height: 24px; border-radius: 9999px"></div>
+            </div>
+          </div>
+          <div class="boot-card">
+            <div class="boot-img"></div>
+            <div class="boot-lines">
+              <div class="boot-line" style="width: 65%"></div>
+              <div class="boot-line" style="width: 50%; height: 10px"></div>
+              <div class="boot-line" style="height: 24px; border-radius: 9999px"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

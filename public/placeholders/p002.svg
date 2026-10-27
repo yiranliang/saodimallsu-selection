@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 250" width="600" height="750">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#E7ECE7"/>
+      <stop offset="1" stop-color="#D8E0D9"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="250" fill="url(#g)"/>
+  <circle cx="100" cy="118" r="66" fill="#ffffff" opacity="0.22"/>
+  <g fill="none" stroke="#8B968C" stroke-width="2.4"
+     stroke-linecap="round" stroke-linejoin="round" opacity="0.72">
+    <path d="M82 60 L96 56 L100 74 L104 56 L118 60 L126 96 L152 196 H48 L74 96 Z" />
+    <path d="M74 96 H126" />
+  </g>
+  <text x="100" y="228" text-anchor="middle"
+        font-family="Inter, Helvetica, Arial, sans-serif" font-size="7"
+        letter-spacing="2.6" fill="#8B968C" opacity="0.6">DRESS</text>
+</svg>

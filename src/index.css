@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ===== 全局基础样式 ===== */
+@layer base {
+  html {
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  body {
+    @apply bg-cream text-charcoal font-sans;
+    /* 移动端底部安全区 */
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+
+  /* 隐藏滚动条但保留功能 */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* ===== 可复用组件类 ===== */
+@layer components {
+  /* 强调色按钮 */
+  .btn-primary {
+    @apply bg-accent text-white font-medium rounded-full
+           px-6 py-3 transition-all duration-200
+           hover:bg-accent-dark hover:shadow-lg
+           active:scale-95;
+  }
+
+  /* 次级按钮 */
+  .btn-secondary {
+    @apply bg-transparent text-charcoal font-medium rounded-full
+           border border-charcoal/15 px-6 py-3 transition-all duration-200
+           hover:border-charcoal/30 hover:bg-cream-dark
+           active:scale-95;
+  }
+
+  /* 商品卡片 */
+  /* 商品卡：白底、无边框。灰边会让 contain 的留白显形成一块面板，
+     而页面底色是 bg-cream，白色卡片自己就有边界。hover 只加投影。 */
+  .product-card {
+    @apply bg-white rounded-2xl overflow-hidden
+           transition-all duration-300
+           hover:shadow-md cursor-pointer;
+  }
+
+  /* 输入框 */
+  .input-field {
+    @apply w-full bg-cream-dark rounded-xl px-4 py-3
+           text-charcoal placeholder:text-charcoal-light/50
+           border border-transparent
+           focus:border-accent focus:outline-none
+           transition-all duration-200;
+  }
+}
+
+/* ===== 加载态（纯 CSS，零网络请求） =====
+   骨架屏的脉冲用 Tailwind 的 animate-pulse，这里只补两件它做不到的事：
+   一个不依赖图片的品牌转圈，和列表数据的淡入。 */
+@layer utilities {
+  @keyframes brand-spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+
+  @keyframes fade-up {
+    from {
+      opacity: 0;
+      transform: translateY(6px);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  /* 套在品牌方块外面的一圈环：只有边框在转，方块本身不动 */
+  .brand-spinner {
+    border-radius: 9999px;
+    border: 2px solid rgba(43, 43, 43, 0.08);
+    border-top-color: #c8855a;
+    animation: brand-spin 0.9s linear infinite;
+  }
+
+  /* 数据到了，网格淡入。位移只有 6px：再大就成了“入场动画”，
+     而这一屏用户已经等了几秒，他要的是内容，不是表演。 */
+  .fade-up {
+    animation: fade-up 0.22s ease-out both;
+  }
+
+  /* 引导卡片入场：只做 4px 位移 + 淡入。再大就成了"表演"，而这一屏是
+     一次性的说明，用户想读的是字。 */
+  @keyframes guide-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px) scale(0.995);
+    }
+    to {
+      opacity: 1;
+      transform: none;
+    }
+  }
+
+  .guide-in {
+    animation: guide-in 0.18s ease-out both;
+  }
+}
+
+/* 关掉动效偏好：不转、不脉冲、不位移，内容照常出现。
+   这不是可选项 —— 前庭功能敏感的用户会因为这个设置放弃整个页面。 */
+@media (prefers-reduced-motion: reduce) {
+  .brand-spinner {
+    animation: none;
+    border-top-color: rgba(43, 43, 43, 0.18);
+  }
+
+  .fade-up {
+    animation: none;
+  }
+
+  .guide-in {
+    animation: none;
+  }
+
+  .animate-pulse,
+  .animate-spin {
+    animation: none !important;
+  }
+}

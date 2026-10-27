@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 250" width="600" height="750">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#EFEAE1"/>
+      <stop offset="1" stop-color="#E4DCD0"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="250" fill="url(#g)"/>
+  <circle cx="100" cy="118" r="66" fill="#ffffff" opacity="0.22"/>
+  <g fill="none" stroke="#9A9083" stroke-width="2.4"
+     stroke-linecap="round" stroke-linejoin="round" opacity="0.72">
+    <path d="M74 56 H126 L133 196 H111 L100 118 L89 196 H67 Z" />
+    <path d="M74 56 H126" />
+  </g>
+  <text x="100" y="228" text-anchor="middle"
+        font-family="Inter, Helvetica, Arial, sans-serif" font-size="7"
+        letter-spacing="2.6" fill="#9A9083" opacity="0.6">TROUSERS</text>
+</svg>

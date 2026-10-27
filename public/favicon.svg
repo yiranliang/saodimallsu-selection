@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="Saodimallsu">
+  <!--
+    Brand mark: accent square + a white "S".
+
+    The A is a stroked path, not <text>. A favicon renders in its own document
+    with no access to the page's webfonts, so `<text font-family="Inter">` falls
+    back to whatever the OS picks — the letter came out a different shape on
+    every platform, and at 16px in a tab that is the entire icon. Strokes also
+    stay crisp when the browser downsamples, where glyph hinting does not.
+
+    Geometry (32×32): apex at y=8.6, feet at y=23.4, half-width 6.4. With a 3px
+    stroke and round caps the drawn bounds are x 8.15–23.85, y 7.2–24.85 — the
+    optical centre of the square, with equal margins on all four sides.
+  -->
+  <rect width="32" height="32" rx="9" fill="#C8855A"/>
+  <g fill="none" stroke="#FFFFFF" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M21.5 10.2c-1.6-1.5-3.9-1.9-6-1.1-1.9.7-3.2 2.4-3.4 4.4-.2 2 .7 3.9 2.4 4.9l3.1 1.8c1.7 1 2.6 2.9 2.4 4.9-.2 2-1.5 3.7-3.4 4.4-2.1.8-4.4.4-6-1.1" stroke-width="3"/>
+  </g>
+</svg>

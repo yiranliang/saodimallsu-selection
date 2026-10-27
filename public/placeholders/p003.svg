@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 250" width="600" height="750">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#EDE8E3"/>
+      <stop offset="1" stop-color="#E0D7CF"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="250" fill="url(#g)"/>
+  <circle cx="100" cy="118" r="66" fill="#ffffff" opacity="0.22"/>
+  <g fill="none" stroke="#9B8E82" stroke-width="2.4"
+     stroke-linecap="round" stroke-linejoin="round" opacity="0.72">
+    <path d="M80 58 H120 L146 76 L140 124 L128 120 V196 H72 V120 L60 124 L54 76 Z" />
+    <path d="M100 58 V196" />
+  </g>
+  <text x="100" y="228" text-anchor="middle"
+        font-family="Inter, Helvetica, Arial, sans-serif" font-size="7"
+        letter-spacing="2.6" fill="#9B8E82" opacity="0.6">JACKET</text>
+</svg>

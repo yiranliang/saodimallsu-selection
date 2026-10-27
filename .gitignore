@@ -1,0 +1,37 @@
+# 依赖
+node_modules/
+.pnp
+.pnp.js
+
+# 构建产物
+dist/
+dist-ssr/
+build/
+
+# 本地生成的导入脚本（含全量 ASIN，绝不入库、绝不对外服务）
+scripts/out/
+
+# 本地环境
+.env
+.env.local
+.env.*.local
+# 每个品牌一份：.env.aoysky / .env.brandb …（含密钥，绝不入库）
+.env.*
+!.env.example
+
+# 编辑器 / 系统
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
+
+# 日志
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# 缓存
+.cache/
+.vite/

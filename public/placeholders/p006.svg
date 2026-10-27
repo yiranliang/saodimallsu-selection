@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 250" width="600" height="750">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#ECE9E0"/>
+      <stop offset="1" stop-color="#DFDACD"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="250" fill="url(#g)"/>
+  <circle cx="100" cy="118" r="66" fill="#ffffff" opacity="0.22"/>
+  <g fill="none" stroke="#958F7E" stroke-width="2.4"
+     stroke-linecap="round" stroke-linejoin="round" opacity="0.72">
+    <path d="M50 160 q0 -22 24 -26 l26 -6 q14 -3 22 6 q11 10 26 15 q13 4 14 15 H50 z" />
+    <path d="M48 168 H166" />
+    <path d="M82 138 q16 12 34 11" />
+  </g>
+  <text x="100" y="228" text-anchor="middle"
+        font-family="Inter, Helvetica, Arial, sans-serif" font-size="7"
+        letter-spacing="2.6" fill="#958F7E" opacity="0.6">LOAFERS</text>
+</svg>

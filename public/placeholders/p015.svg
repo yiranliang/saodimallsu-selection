@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 250" width="600" height="750">
+  <defs>
+    <linearGradient id="g" x1="0" y1="0" x2="0.6" y2="1">
+      <stop offset="0" stop-color="#EDE8E3"/>
+      <stop offset="1" stop-color="#E0D7CF"/>
+    </linearGradient>
+  </defs>
+  <rect width="200" height="250" fill="url(#g)"/>
+  <circle cx="100" cy="118" r="66" fill="#ffffff" opacity="0.22"/>
+  <g fill="none" stroke="#9B8E82" stroke-width="2.4"
+     stroke-linecap="round" stroke-linejoin="round" opacity="0.72">
+    <path d="M50 156 q0 -20 24 -24 l20 -5 q12 -3 20 5 q12 10 28 15 q16 5 16 14 H50 z" />
+    <path d="M48 164 H164" />
+    <path d="M48 172 H164" />
+    <path d="M96 138 l9 -9" />
+    <path d="M108 144 l9 -9" />
+    <path d="M120 150 l9 -9" />
+  </g>
+  <text x="100" y="228" text-anchor="middle"
+        font-family="Inter, Helvetica, Arial, sans-serif" font-size="7"
+        letter-spacing="2.6" fill="#9B8E82" opacity="0.6">SNEAKERS</text>
+</svg>
