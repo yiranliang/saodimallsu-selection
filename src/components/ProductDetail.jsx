@@ -220,6 +220,21 @@ export default function ProductDetail({
     }
   }, [open, product?.id])
 
+  /* "No ASIN" folds into the same answer as sold out: a combination the ASIN
+   * table has nothing for cannot be ordered either, so it greys out exactly
+   * like a sold-out one. The lookup reuses `listingKnownFor`, which reads the
+   * public `product_links` view — the one storefront-safe signal for "does this
+   * colour/size have a listing", since the real ASINs stay behind RLS.
+   *
+   * MUST stay above the `if (!product) return null` below. A hook after an
+   * early return runs only on the renders that get past it, so the sheet ran
+   * one hook more once a product arrived — React #310, "rendered more hooks
+   * than during the previous render". `product?.id` keeps the null case safe. */
+  const asinLookup = useMemo(
+    () => (colour, size) => listingKnownFor(product?.id, colour, size),
+    [product?.id],
+  )
+
   if (!product) return null
 
   const campaignId = campaignIdOf(product)
@@ -240,15 +255,8 @@ export default function ProductDetail({
    * Green being out of M says nothing about Green in L. `isOptionAvailable`
    * applies the same rule per button, using whatever is picked so far.
    *
-   * "No ASIN" is folded into the same answer: a combination the ASIN table has
-   * nothing for cannot be ordered either, so it greys out exactly like a
-   * sold-out one. The lookup reuses `hasListingFor`, which reads the public
-   * `product_links` view — the one storefront-safe signal for "does this
-   * colour/size have a listing", since the real ASINs stay behind RLS. */
-  const asinLookup = useMemo(
-    () => (colour, size) => listingKnownFor(product.id, colour, size),
-    [product?.id],
-  )
+   * `asinLookup` (defined above the early return) makes a combination with no
+   * ASIN answer "unavailable" too, so the same grey-out covers both. */
   const soldOutNow = complete && isSoldOut(product, spec, asinLookup)
 
   /* The combination currently in the pickers — this is what the footer edits */
