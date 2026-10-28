@@ -100,8 +100,15 @@ export const HEADER_HINTS = ['货号', 'asin', '颜色', '尺寸', 'sku', 'colou
  *     477 empty variants.
  *   · rows missing any of the four fields are rejected with a reason rather
  *     than guessed at.
+ *
+ * `allowMissingAsin` (default false) changes the ASIN column from "required"
+ * to "optional": a row with a 货号 + colour + size but no ASIN is kept with
+ * `asin: ''` instead of rejected. This is how the batch importer records a
+ * variant that exists but has no listing yet — on the storefront such a
+ * combination is treated as Sold Out. The ASIN-only importers keep the default,
+ * because a row with no ASIN has nothing to import there.
  */
-export function readTable(rows) {
+export function readTable(rows, { allowMissingAsin = false } = {}) {
   const grid = Array.isArray(rows) ? rows : []
   const header = (grid[0] || []).map((cell) => fold(cell).toLowerCase())
   const headerLooksRight = header.some((cell) => HEADER_HINTS.includes(cell))
@@ -123,12 +130,19 @@ export function readTable(rows) {
     const [sku, rawAsin, colour, size] = cells
     const missing = []
     if (!sku) missing.push('货号')
-    if (!rawAsin) missing.push('ASIN')
+    if (!allowMissingAsin && !rawAsin) missing.push('ASIN')
     if (!colour) missing.push('颜色')
     if (!size) missing.push('尺寸')
 
     if (missing.length) {
       rejected.push({ row: rowNumber, reason: `空字段：${missing.join('、')}`, cells })
+      continue
+    }
+
+    /* No ASIN → keep the row, but with an empty ASIN. It still contributes its
+     * colour+size to the product's specs, just not to the ASIN map. */
+    if (!rawAsin) {
+      records.push({ row: rowNumber, sku, asin: '', colour, size, asinCased: false })
       continue
     }
 

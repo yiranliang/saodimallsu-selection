@@ -1589,7 +1589,7 @@ export default function ProductsPage() {
                   )}
                   {missingAsins > 0 && (
                     <span
-                      title={`${missingAsins} 个组合还没有 ASIN —— 打开编辑器补上`}
+                      title={`${missingAsins} 个组合还没有 ASIN —— 前台会视为断货（Sold Out），打开编辑器补上`}
                       className="shrink-0 rounded-full bg-red-50 px-1.5 py-0.5 text-[9.5px] font-semibold text-red-600 ring-1 ring-red-200"
                     >
                       ! 缺 {missingAsins}

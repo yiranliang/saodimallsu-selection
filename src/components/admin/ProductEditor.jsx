@@ -2206,6 +2206,20 @@ function AsinSection({ savedSku, draftSku, ready, rows, extras, missing, renames
             <>
               <p className="text-[10px] leading-relaxed text-charcoal-light">每个"颜色 + 尺码"对应一个 ASIN。左边新加的颜色或尺码会实时出现在这里。还没有 listing 的先留空 —— 会一直标成缺失。</p>
 
+              {/* "缺 ASIN = 前台视为断货"——运营得先知道留空的下场，否则会以为
+                  只是"待补"，红人却已经选不到了。 */}
+              {missing > 0 && (
+                <p
+                  data-missing-asin-note="true"
+                  className="mt-2 flex items-start gap-1.5 rounded-lg bg-red-50 px-2 py-1.5 text-[10.5px] leading-relaxed text-red-600 ring-1 ring-red-100"
+                >
+                  <AlertCircle className="mt-0.5 h-3 w-3 shrink-0" />
+                  <span>
+                    缺少 ASIN 的组合在前台会被当作「Sold Out（断货）」处理，红人将无法选择。
+                  </span>
+                </p>
+              )}
+
               {/* A rename is a key migration, not a cosmetic edit: the map is keyed
                   by the option text. Saying so up front is the difference between
                   "did my ASINs just disappear?" and trusting the save. */}

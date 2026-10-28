@@ -5,6 +5,7 @@ import ProductImage from './ProductImage.jsx'
 import { Close, Trash, Sparkle, Bag, AlertCircle } from './icons.jsx'
 import { resolveProductImage } from '../utils/variantImage.js'
 import { isSoldOut } from '../utils/soldOut.js'
+import { listingKnownFor } from '../store/linkStore.js'
 import { sizedImage } from '../utils/image.js'
 import { isTeaser } from '../utils/teaser.js'
 
@@ -53,7 +54,12 @@ export default function CartDrawer({
   }, [open])
 
   const soldOutKeys = useMemo(
-    () => new Set(items.filter((item) => isSoldOut(item.product, item.specs)).map((item) => item.key)),
+    () =>
+      new Set(
+        items
+          .filter((item) => isSoldOut(item.product, item.specs, (c, s) => listingKnownFor(item.product.id, c, s)))
+          .map((item) => item.key),
+      ),
     [items],
   )
 

@@ -108,7 +108,11 @@ const sheet = workbook.Sheets[sheetName]
 if (!sheet) die(`工作簿里没有名为 ${sheetName} 的 sheet（有：${workbook.SheetNames.join('、')}）`)
 
 const grid = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: '' })
-const parsed = readTable(grid)
+/* `allowMissingAsin`：表里某行没有 ASIN 时，不整行拒绝，而是保留颜色+尺码、
+ * 留空 ASIN —— 这样该变体会进产品的 specs（前台能看到这个颜色/尺码），只是
+ * 不写进 asins 表，前台把它判定为 Sold Out。纯 ASIN 导入（import-asins）仍
+ * 保持默认的严格模式。 */
+const parsed = readTable(grid, { allowMissingAsin: true })
 
 out('')
 out(`  ${process.env.BRAND_NAME || 'Catalogue'} → 批量 upsert`)
@@ -192,9 +196,26 @@ const aligned = alignRecords(
 )
 const reDedupe = dedupeExact(aligned.records)
 const resolved = resolveConflicts(reDedupe.records, CONFLICT)
+/* `bySku` 带着空 ASIN 的键（用于推导 specs，让无 ASIN 的颜色/尺码也能出现在
+ * 商品规格里、前台可判 Sold Out）；`asinBySku` 是剥掉空 ASIN 之后的映射，
+ * 只喂给 asins 表，保证空值绝不写进 variants。 */
 const bySku = aggregate(resolved.records)
+const asinBySku = {}
+let missingAsinVariants = 0
+for (const [sku, variants] of Object.entries(bySku)) {
+  const filled = {}
+  for (const [key, asin] of Object.entries(variants)) {
+    if (asin) filled[key] = asin
+    else missingAsinVariants++
+  }
+  asinBySku[sku] = filled
+}
 const skuList = Object.keys(bySku)
 const variantTotal = Object.values(bySku).reduce(
+  (sum, variants) => sum + Object.keys(variants).length,
+  0,
+)
+const asinVariantTotal = Object.values(asinBySku).reduce(
   (sum, variants) => sum + Object.keys(variants).length,
   0,
 )
@@ -246,7 +267,7 @@ const plan = planProducts(dbProducts, bySku, { hideNew: HIDE_NEW })
 const asinPlan = []
 const asinTotals = { added: 0, updated: 0, unchanged: 0, kept: 0 }
 for (const sku of skuList) {
-  const merged = mergeVariants(currentVariants.get(sku) || {}, bySku[sku])
+  const merged = mergeVariants(currentVariants.get(sku) || {}, asinBySku[sku])
   asinTotals.added += merged.added
   asinTotals.updated += merged.updated
   asinTotals.unchanged += merged.unchanged
@@ -267,6 +288,9 @@ out('')
 out('  本次')
 out(`    货号                 ${skuList.length}`)
 out(`    变体键               ${variantTotal}`)
+if (missingAsinVariants > 0) {
+  out(`    无 ASIN 的变体       ${missingAsinVariants} —— 保留颜色/尺码进 specs，但不写 asins（前台视为 Sold Out）`)
+}
 out('')
 out('  计划')
 out(`    asins 新增           ${asinTotals.added}`)

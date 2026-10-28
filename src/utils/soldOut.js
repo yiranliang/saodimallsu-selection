@@ -25,6 +25,17 @@
  * storefront just stops letting a new one be built for that combination.
  *
  * Pure functions only — imported by `scripts/test-sold-out.mjs`.
+ *
+ * NO ASIN = SOLD OUT
+ * ──────────────────
+ * A combination the ASIN table has nothing for cannot be ordered either: ops
+ * would have no listing to place the order against. Every "available" check
+ * below therefore accepts an optional `asinLookup` predicate —
+ * `(colour, size) => boolean`, true when that combination has an ASIN/listing.
+ * When supplied, a combination counts as sold out if it is *either* marked in
+ * `soldOutVariants` *or* has no ASIN. Omitted (as in the Node suites), the
+ * check falls back to the stored marks only — so the pure functions stay free
+ * of Supabase and the storefront injects its own `hasListingFor` lookup.
  */
 
 import { variantKey, specPair } from './sku.js'
@@ -83,12 +94,28 @@ export function soldOutKeysOf(product) {
   return new Set(soldOutListOf(product).map((key) => key.toLowerCase()))
 }
 
-/** Is this exact combination sold out? `specs` is a chosen spec object. */
-export function isSoldOut(product, specs) {
+/**
+ * Is a combination "unavailable" — either marked sold out, or lacking an ASIN.
+ *
+ * `asinLookup` is optional and pure: `(colour, size) => boolean`. When it is
+ * omitted the check is sold-out marks only, so the Node suites need no fixture
+ * ASIN map. When present, "no ASIN" is folded in so a combination that was
+ * never given a listing cannot be picked on the storefront.
+ */
+function comboUnavailable(keys, combo, asinLookup) {
+  if (keys.has(combo.key.toLowerCase())) return true
+  if (asinLookup && !asinLookup(combo.colour, combo.size)) return true
+  return false
+}
+
+/** Is this exact combination sold out? `specs` is a chosen spec object.
+ *  `asinLookup` (optional) folds "no ASIN" into the answer — see the header. */
+export function isSoldOut(product, specs, asinLookup) {
   const keys = soldOutKeysOf(product)
-  if (!keys.size) return false
   const { colour, size } = specPair(specs)
-  return keys.has(variantKey(colour, size).toLowerCase())
+  if (keys.size && keys.has(variantKey(colour, size).toLowerCase())) return true
+  if (asinLookup && !asinLookup(colour, size)) return true
+  return false
 }
 
 /** Is every option of one axis sold out across the whole product? */
@@ -110,7 +137,7 @@ export function isAxisFullySoldOut(product, axis, value) {
  * key is colour+size, so an option on another axis is available if any
  * combination is.
  */
-export function isOptionAvailable(product, specs, type, value) {
+export function isOptionAvailable(product, specs, type, value, asinLookup) {
   const combos = combinationsOf(product)
   if (!combos.length) return true
 
@@ -127,7 +154,7 @@ export function isOptionAvailable(product, specs, type, value) {
 
   // The option is not on either axis (a Length, say) — nothing to narrow down
   if (!matching.length) return true
-  return matching.some((combo) => !keys.has(combo.key.toLowerCase()))
+  return matching.some((combo) => !comboUnavailable(keys, combo, asinLookup))
 }
 
 /* ── the combination grid ────────────────────────────────────────────────── */
@@ -173,12 +200,12 @@ export function combinationsOf(product) {
  *   all   every combination is gone — the card gets a "Sold out" badge
  *   some  at least one, but not all — no badge, the sheet greys them
  */
-export function soldOutSummary(product) {
+export function soldOutSummary(product, asinLookup) {
   const combos = combinationsOf(product)
   const keys = soldOutKeysOf(product)
   if (!combos.length) return { total: 0, soldOut: 0, all: false, some: false }
 
-  const soldOut = combos.filter((combo) => keys.has(combo.key.toLowerCase())).length
+  const soldOut = combos.filter((combo) => comboUnavailable(keys, combo, asinLookup)).length
   return {
     total: combos.length,
     soldOut,

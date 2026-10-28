@@ -9,7 +9,7 @@ import { isSizeType, sortSizes } from '../utils/sizes.js'
 import { isSoldOut, isOptionAvailable } from '../utils/soldOut.js'
 import { specPair } from '../utils/sku.js'
 import { useAmazonLinks } from '../hooks/useAmazonLinks.js'
-import { amazonUrlFor, hasListingFor } from '../store/linkStore.js'
+import { amazonUrlFor, hasListingFor, listingKnownFor } from '../store/linkStore.js'
 import { badgeStyle } from '../utils/badge.js'
 import { sizedImage, imageSrcSet, DETAIL_IMAGE_SIZES } from '../utils/image.js'
 import { isTeaser } from '../utils/teaser.js'
@@ -238,8 +238,18 @@ export default function ProductDetail({
 
   /* Sold out is checked against the *complete* combination, never per option:
    * Green being out of M says nothing about Green in L. `isOptionAvailable`
-   * applies the same rule per button, using whatever is picked so far. */
-  const soldOutNow = complete && isSoldOut(product, spec)
+   * applies the same rule per button, using whatever is picked so far.
+   *
+   * "No ASIN" is folded into the same answer: a combination the ASIN table has
+   * nothing for cannot be ordered either, so it greys out exactly like a
+   * sold-out one. The lookup reuses `hasListingFor`, which reads the public
+   * `product_links` view — the one storefront-safe signal for "does this
+   * colour/size have a listing", since the real ASINs stay behind RLS. */
+  const asinLookup = useMemo(
+    () => (colour, size) => listingKnownFor(product.id, colour, size),
+    [product?.id],
+  )
+  const soldOutNow = complete && isSoldOut(product, spec, asinLookup)
 
   /* The combination currently in the pickers — this is what the footer edits */
   const currentKey = complete ? lineKey(product, spec) : ''
@@ -559,7 +569,7 @@ export default function ProductDetail({
                            * to see her own choice, and the footer explains that
                            * this combination is gone. Greying it would look
                            * like the colour vanished from the product. */
-                          const gone = !active && !isOptionAvailable(product, spec, type, opt)
+                          const gone = !active && !isOptionAvailable(product, spec, type, opt, asinLookup)
                           /* A teaser locks every size, including one that was
                            * selected before the style went on pre-order — there
                            * is no valid combination to add. */
@@ -600,9 +610,11 @@ export default function ProductDetail({
               <p className="mt-4 text-[13px] text-charcoal-light">One size only.</p>
             )}
 
-            {/* No ASIN for this combination — the link above is still useful
-                for the size chart, so it stays; this explains the gap */}
-            {complete && !listingLinked && (
+            {/* No ASIN for this combination — but "no ASIN = sold out" now means
+                the footer already says Sold out for this exact case, so the
+                softer "no listing" hint only shows when the combination is not
+                being blocked as sold out (e.g. the links view is unavailable). */}
+            {complete && !listingLinked && !soldOutNow && (
               <p className="mt-4 rounded-xl bg-cream-dark/70 px-3 py-2 text-[11.5px] leading-relaxed text-charcoal-light">
                 No listing linked for this colour / size yet. Your contact can
                 confirm stock before it ships.
@@ -628,7 +640,7 @@ export default function ProductDetail({
                       >
                         {describe(line)}
                         <span className="ml-1.5 tabular-nums text-charcoal/45">×{line.qty}</span>
-                        {isSoldOut(product, line.specs) && (
+                        {isSoldOut(product, line.specs, asinLookup) && (
                           <span className="ml-1.5 text-[10px] font-medium text-red-500">
                             Sold out
                           </span>

@@ -100,6 +100,18 @@ const noHeader = readTable([['x', 'y', 'z', 'w'], ['P1', 'B0H6XKRR81', 'Black', 
 check('unrecognised header flagged', noHeader.headerLooksRight, false)
 check('rows still read when header is odd', noHeader.records.length, 1)
 
+/* Missing ASIN is rejected by default… */
+const noAsin = readTable([['货号', 'ASIN', '颜色', '尺寸'], ['P9B013', '', 'Navy', 'M']])
+check('empty ASIN rejected by default', noAsin.rejected.length, 1)
+check('reason names ASIN', noAsin.rejected[0].reason, '空字段：ASIN')
+
+/* …but kept (with an empty ASIN) when the batch importer asks for it. */
+const allowAsin = readTable([['货号', 'ASIN', '颜色', '尺寸'], ['P9B013', '', 'Navy', 'M']], { allowMissingAsin: true })
+check('empty ASIN kept when allowed', allowAsin.records.length, 1)
+check('its ASIN is empty string', allowAsin.records[0].asin, '')
+check('its colour and size survive', [allowAsin.records[0].colour, allowAsin.records[0].size], ['Navy', 'M'])
+check('nothing rejected when allowed', allowAsin.rejected.length, 0)
+
 /* ── 3. dedupe + vocabulary ────────────────────────────────────────────── */
 console.log('\n[3] Dedupe and vocabulary')
 const rec = (sku, colour, size, asin) => ({ row: 0, sku, asin, colour, size })

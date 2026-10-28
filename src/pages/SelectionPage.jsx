@@ -17,7 +17,7 @@ import { useAmazonLinks } from '../hooks/useAmazonLinks.js'
 import { getInfluencerRef } from '../utils/storage.js'
 import { generateCodeFromLines, saveRecord } from '../utils/code.js'
 import { UNCATEGORISED, loadProducts, getCatalogueError } from '../store/productStore.js'
-import { amazonUrlFor } from '../store/linkStore.js'
+import { amazonUrlFor, listingKnownFor } from '../store/linkStore.js'
 import { useCategories } from '../hooks/useCategories.js'
 import { useSettings } from '../hooks/useSettings.js'
 import { isComplete } from '../utils/lines.js'
@@ -26,6 +26,16 @@ import { isTeaser } from '../utils/teaser.js'
 import { DEALS_TAB, bucketCountsOf, bucketOf, discountOf, dealsOrder, filterDeals } from '../utils/deal.js'
 import { hasSeenGuide, markGuideSeen, shouldAutoOpen } from '../utils/guide.js'
 import { PAGE_SIZE, storefrontOrder, filterCatalogue, slicePage, nextLimit, hasMore } from '../utils/catalogue.js'
+
+/**
+ * Sold-out check that folds "no ASIN" in, for the storefront.
+ * The storefront cannot read real ASINs (RLS), so `hasListingFor` — the public
+ * `product_links` signal — stands in: a combination with no listing is
+ * unorderable and must behave exactly like a sold-out one.
+ */
+function storefrontSoldOut(product, specs) {
+  return isSoldOut(product, specs, (c, s) => listingKnownFor(product.id, c, s))
+}
 
 /**
  * Creator-facing selection page
@@ -402,7 +412,7 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
      * nobody can fulfil, and the creator would have no idea which line caused
      * it. The button is disabled in the drawer; this is the belt to that
      * brace. */
-    if (cartItems.some((item) => isSoldOut(item.product, item.specs))) {
+    if (cartItems.some((item) => storefrontSoldOut(item.product, item.specs))) {
       showToast('Remove the sold-out items first', 'error')
       return
     }
@@ -444,7 +454,7 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
    * disappearing from the cart is otherwise unexplained.
    */
   const handleRemoveSoldOut = () => {
-    const gone = cartItems.filter((item) => isSoldOut(item.product, item.specs))
+    const gone = cartItems.filter((item) => storefrontSoldOut(item.product, item.specs))
     if (!gone.length) return
     for (const item of gone) remove(item.key)
     showToast(

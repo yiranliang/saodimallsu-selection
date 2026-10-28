@@ -5,6 +5,7 @@ import ProductImage from './ProductImage.jsx'
 import { sizedImage, imageSrcSet, CARD_IMAGE_SIZES } from '../utils/image.js'
 import { PLACEHOLDER_IMAGE } from '../utils/variantImage.js'
 import { soldOutSummary } from '../utils/soldOut.js'
+import { listingKnownFor } from '../store/linkStore.js'
 import { badgeStyle } from '../utils/badge.js'
 import { isTeaser } from '../utils/teaser.js'
 import { BADGE_ZONE, badgeStackFor, dealPhase, dealPriceInfo } from '../utils/deal.js'
@@ -47,6 +48,7 @@ function ProductCard({
 
   const handleToggle = (e) => {
     e.stopPropagation()
+    if (!orderable) return
     if (!selected) {
       setBeat(true)
       setTimeout(() => setBeat(false), 420)
@@ -67,8 +69,14 @@ function ProductCard({
   /* Badge only when the whole piece is gone. A partial sell-out is left off the
    * card on purpose — badging it would read as "this style is unavailable" and
    * the creator would scroll past a piece she can still order in two colours.
-   * The detail sheet greys the individual combinations. */
-  const { all: allSoldOut } = soldOutSummary(product)
+   * The detail sheet greys the individual combinations.
+   *
+   * "No ASIN = sold out" is folded in via `asinLookup`: a piece whose every
+   * combination lacks a listing is unorderable, so it reads as sold out here
+   * and the heart/button below is disabled. */
+  const asinLookup = (colour, size) => listingKnownFor(product.id, colour, size)
+  const { all: allSoldOut } = soldOutSummary(product, asinLookup)
+  const orderable = specTypes.length === 0 || !allSoldOut
 
   /* 左上角的角标栈 —— 最多两行（规则全部在 `badgeStackFor`，卡片和详情
    * 弹层共用，避免两边各写一遍然后漂移）。
@@ -183,10 +191,16 @@ function ProductCard({
         <button
           type="button"
           onClick={handleToggle}
+          disabled={!orderable && !selected}
           aria-pressed={selected}
+          aria-disabled={!orderable && !selected}
           aria-label={selected ? `Remove ${product.name}` : `Select ${product.name}`}
           className={`absolute right-2.5 top-2.5 flex h-8 w-8 items-center justify-center rounded-full backdrop-blur-sm transition-colors duration-200 ${
-            selected ? 'bg-accent text-white' : 'bg-white/85 text-charcoal hover:bg-white'
+            !orderable && !selected
+              ? 'cursor-not-allowed bg-white/60 text-charcoal/35'
+              : selected
+                ? 'bg-accent text-white'
+                : 'bg-white/85 text-charcoal hover:bg-white'
           } ${beat ? 'animate-heartbeat' : ''}`}
         >
           <Heart className="h-4 w-4" filled={selected} />
@@ -301,6 +315,15 @@ function ProductCard({
               Manage
               <span className="tabular-nums text-charcoal/50">{lines.length}</span>
               <ChevronDown className="h-3 w-3" />
+            </button>
+          ) : !orderable ? (
+            <button
+              type="button"
+              disabled
+              aria-disabled="true"
+              className="w-full cursor-not-allowed rounded-full bg-cream-dark/60 px-3 py-1.5 text-[11px] font-medium text-charcoal/40 sm:text-xs"
+            >
+              Sold out
             </button>
           ) : (
             <button

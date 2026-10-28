@@ -198,6 +198,32 @@ check('plain object lookup works too', partitionLines(lines, { p003: tee }).sold
 check('empty selection', partitionLines([], byId), { available: [], soldOut: [] })
 check('nothing is deleted by partitioning', split.available.length + split.soldOut.length, 3)
 
+/* ── 8. no ASIN = sold out ─────────────────────────────────────────────── */
+console.log('\n[8] No ASIN = Sold Out (asinLookup)')
+/* `asinLookup(colour, size)` → true when that combination has an ASIN. */
+const asinMap = {
+  'Black|S': true, 'Black|M': true, 'Black|L': true,
+  'White|S': true, 'White|M': true, 'White|L': true,
+  /* Green has no ASINs at all — every Green combination is unorderable. */
+}
+const asinLookup = (c, s) => Boolean(asinMap[`${c}|${s}`])
+const noAsinTee = { ...tee, soldOutVariants: [] }
+
+check('a combination with an ASIN is not sold out', isSoldOut(noAsinTee, { Colour: 'Black', Size: 'M' }, asinLookup), false)
+check('a combination with no ASIN is sold out', isSoldOut(noAsinTee, { Colour: 'Green', Size: 'L' }, asinLookup), true)
+check('without asinLookup it falls back to marks only', isSoldOut(noAsinTee, { Colour: 'Green', Size: 'L' }), false)
+check('sold-out mark still wins with a lookup', isSoldOut(tee, { Colour: 'Green', Size: 'M' }, asinLookup), true)
+
+check('size blocked when colour has no ASIN for it', isOptionAvailable(noAsinTee, { Colour: 'Green' }, 'Size', 'M', asinLookup), false)
+check('colour fully missing ASIN is blocked', isOptionAvailable(noAsinTee, {}, 'Colour', 'Green', asinLookup), false)
+check('a colour with ASINs stays open', isOptionAvailable(noAsinTee, {}, 'Colour', 'Black', asinLookup), true)
+check('no lookup → option available', isOptionAvailable(noAsinTee, {}, 'Colour', 'Green'), true)
+
+check('summary folds missing ASIN into soldOut', soldOutSummary(noAsinTee, asinLookup).soldOut, 3)
+check('summary reports partial', soldOutSummary(noAsinTee, asinLookup).some, true)
+check('summary all when every combo lacks ASIN', soldOutSummary(noAsinTee, () => false).all, true)
+check('summary untouched without lookup', soldOutSummary(noAsinTee).soldOut, 0)
+
 /* ── summary ───────────────────────────────────────────────────────────── */
 console.log('\n────────────────────────────────────────────')
 console.log(`Passed ${passed}`)

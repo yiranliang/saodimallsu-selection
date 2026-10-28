@@ -65,6 +65,10 @@ export function getLinks() {
   return cache
 }
 
+export function getLinksStatus() {
+  return status
+}
+
 export function subscribeLinks(listener) {
   listeners.add(listener)
   return () => listeners.delete(listener)
@@ -109,6 +113,23 @@ export function hasListingFor(productId, colour, size) {
 
   const lower = key.toLowerCase()
   return Object.keys(entry.linked).some((candidate) => candidate.toLowerCase() === lower)
+}
+
+/**
+ * Storefront "has an ASIN" signal, safe to gate a purchase on.
+ *
+ * `hasListingFor` answers `false` for a product that is simply not in the map
+ * yet — which is indistinguishable from "genuinely no listing". That is fine for
+ * a hint, but wrong for greying a size out: while the links view is still
+ * loading every combination would flash as sold out. So this returns `true`
+ * ("assume it has a listing") until the view has actually been read (`status ===
+ * 'ready'`), and only then falls back to `hasListingFor`. A transient fetch
+ * failure therefore degrades to the old behaviour — sold-out marks only —
+ * instead of blocking the whole storefront.
+ */
+export function listingKnownFor(productId, colour, size) {
+  if (status !== 'ready') return true
+  return hasListingFor(productId, colour, size)
 }
 
 /* ── loading ─────────────────────────────────────────────────────────────── */
