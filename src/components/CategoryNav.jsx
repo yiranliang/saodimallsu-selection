@@ -1,6 +1,12 @@
 import { memo } from 'react'
 import SearchBox from './SearchBox.jsx'
-import { DEALS_TAB, DEAL_BUCKETS } from '../utils/deal.js'
+import {
+  CAMPAIGN_TAB,
+  DEALS_TAB,
+  DEAL_BUCKETS,
+  REGULAR_DEALS_LABEL,
+  campaignTabLabelOf,
+} from '../utils/deal.js'
 import { useDragScroll } from '../hooks/useDragScroll.js'
 import { useSettings } from '../hooks/useSettings.js'
 
@@ -23,17 +29,19 @@ function CategoryNav({
   total,
   query,
   onQueryChange,
-  /* The deals view is not a real category (see DEALS_TAB) — it is a view over
-   * the same catalogue, so it cannot come from `categories`. `dealsCount` of 0
-   * hides the chip entirely: a permanent empty tab is worse than no tab.
+  /* The two deals views are not real categories (see DEALS_TAB / CAMPAIGN_TAB) —
+   * they are slices of the same catalogue, so they cannot come from `categories`.
+   * A count of 0 hides its chip entirely: a permanent empty tab is worse than no
+   * tab.
    *
-   * Its NAME is a setting: during Black Friday ops renames it to
-   * "Black Friday Deals" (from the admin list page) and every open storefront
-   * follows on the next render — see utils/settingsStore.js. */
+   * Regular is fixed at `Limited Deals`; the campaign one is a setting (ops
+   * rename it to `Black Friday`), passed in from SelectionPage. */
   dealsCount = 0,
+  campaignCount = 0,
+  campaignLabel = '',
   bucket = 'all',
   /* `{all, '10-20', …}` for the band chips, computed from the searched deals.
-   * `null` before the tab is opened. */
+   * `null` before the campaign tab is opened. */
   bucketCounts = null,
   onBucketChange,
 }) {
@@ -42,8 +50,9 @@ function CategoryNav({
    * `watchKey` re-measures whether the rail overflows, so the grab cursor only
    * appears when there is actually something to grab. */
   const { dealsTabLabel } = useSettings()
+  const campaignName = campaignLabel || campaignTabLabelOf(dealsTabLabel)
 
-  const categoryRail = useDragScroll(`${categories.length}:${dealsCount}`)
+  const categoryRail = useDragScroll(`${categories.length}:${dealsCount}:${campaignCount}`)
   const bucketRail = useDragScroll(bucketCounts?.all ?? 0)
 
   /** One chip. `accent` is the deals tab: red when idle, charcoal when active,
@@ -99,7 +108,10 @@ function CategoryNav({
           }`}
         >
           {dealsCount > 0 && (
-            <Chip value={DEALS_TAB} label={dealsTabLabel} count={dealsCount} accent />
+            <Chip value={DEALS_TAB} label={REGULAR_DEALS_LABEL} count={dealsCount} accent />
+          )}
+          {campaignCount > 0 && (
+            <Chip value={CAMPAIGN_TAB} label={campaignName} count={campaignCount} accent />
           )}
           <Chip value="All" label="All" count={total} />
           {categories.map((category) => (
@@ -115,10 +127,11 @@ function CategoryNav({
         {/* Right-edge fade hints that the rail scrolls */}
         <div className="pointer-events-none absolute inset-y-0 right-0 w-10 bg-gradient-to-l from-cream to-transparent" />
       </div>
-      {/* Discount buckets — only inside the deals tab. Left-closed, right-open,
-          and a product can only be in one: `bucketOf` reads the SAME number the
-          badge prints, so the chip never disagrees with the card. */}
-      {active === DEALS_TAB && (
+      {/* Discount buckets — only inside 🔥 大促. 常规秒杀按紧迫度排，那一屏的
+          语言是"还差多久"，没有区间可切。Left-closed, right-open, and a product
+          can only be in one: `bucketOf` reads the SAME number the badge prints,
+          so the chip never disagrees with the card. */}
+      {active === CAMPAIGN_TAB && (
         <div className="mx-auto max-w-6xl px-5 pb-2 sm:px-8">
           <div
             ref={bucketRail.ref}

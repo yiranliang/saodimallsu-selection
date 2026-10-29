@@ -84,7 +84,7 @@
 4. **`src/store/mapping.js` 是字段白名单**（在 `store/` 下，不在 `utils/` 下）。新增字段要改**三处**：`shared()`（给前台的驼峰值）、`rowToProduct()`（读）、`productToRow()`（写）。
    只改前后两处、漏了读，结果是「存得进去、永远读出来是空」——存成功了所以没人怀疑。
 5. **可选列必须在「读」和「写」两侧都降级。** PostgREST 遇到不存在的列会把**整条 SELECT 判 400**（不是返回空）。
-   现有可选列：`sold_out_variants`、`badge_color`、`sub_tag` / `sub_badge_color`、`sale_*`、`deal_priority` 等。
+   现有可选列：`sold_out_variants`、`badge_color`、`sub_tag` / `sub_badge_color`、`sale_*`、`is_campaign`、`deal_priority` 等。
    新增可选列要同时加：**`src/store/productStore.js`** 里的 `OPTIONAL_COLUMNS`、`rowFor()` 的摘除清单、以及类似 `badgeColumnAvailable` 的开关（这些都在 productStore，不在 mapping.js）。
 6. **`variantKey(colour, size)` → `` `${colour}|${size}` ``**（`src/utils/sku.js`）是唯一实现。
    `asins.variants`、`product_links`、`sold_out_variants` 三处共用，**别各自拼字符串**。
@@ -161,8 +161,8 @@
 | 功能 | 位置 | 备注 |
 |---|---|---|
 | **极简骨架屏** | `src/pages/SelectionPage.jsx`（`holdSkeleton`）+ `index.html` 的 boot ring | 首屏立刻出骨架，不做固定 450 ms 等待；数据到齐后短暂 hold 再淡出，避免闪一下 |
-| **秒杀系统** | `supabase/09-deal.sql`、`src/utils/deal.js`、`src/utils/dealImport.js` | 表格批量导入档期；`dealPhase` 分 off/scheduled/live/ended；详情与卡片各自倒计时（scheduled 显示 "starts in"）；专区 Tab 名可在设置里改（`12-settings.sql`） |
-| **双角标堆叠** | `src/utils/deal.js` 的 `badgeStackFor()` + `BADGE_ZONE`、`supabase/11-sub-badge-deal-priority.sql` | 第一行是**身份**（大促标 / Limited Deal），第二行是**决定**（运营手填 `sub_tag`）。`sale_*` 是实时算出的状态，`sub_tag` 是人填的决定——所以是两列，不是塞进同一个 `tag`。秒杀专区内卡片不再重复 "Limited Deal"（整区都在秒杀） |
+| **秒杀系统（两个专区）** | `supabase/09-deal.sql`、`supabase/13-campaign.sql`、`src/utils/deal.js`、`src/utils/dealImport.js` | 导入/批量开秒杀时**必选归属**：`is_campaign=false` → ⚡ `Limited Deals`（按紧迫度、卡片带倒计时）；`true` → 🔥 大促 Tab（名字读 `settings.deals_tab_label`，按折扣区间 chip 过滤、按折扣从高到低排）。两个 Tab 计数为 0 时各自隐藏 |
+| **双角标堆叠** | `src/utils/deal.js` 的 `badgeStackFor()` + `BADGE_ZONE`、`supabase/11-sub-badge-deal-priority.sql` | 第一行是**身份**（大促标 / Limited Deal），第二行是**决定**（运营手填 `sub_tag`）。`sale_*` 是实时算出的状态，`sub_tag` 是人填的决定——所以是两列，不是塞进同一个 `tag`。**两个秒杀专区都不挂活动身份**：大促区连 `Limited Deal` 也不挂（整区都在大促），常规区挂 `Limited Deal` 但摘掉 `Black Friday` 这类标（判定见 `isCampaignLabel`） |
 | **后台全中文** | `src/i18n/admin.js` + `scripts/test-admin-i18n.mjs` | 新增后台文案必须中文；漏翻会被测试拦下 |
 | **批量改角标 / 分类** | `src/utils/batchBadge.js`、`src/utils/batchOps.js` | 支持快捷模板（Black Friday / Cyber Monday / 50% OFF）、颜色、批量分类；有 `max 32` 等约束与"会被遮住多少"的预览 |
 | **图片懒加载** | `src/components/ProductImage.jsx`（`loading` / `decoding`）+ `src/utils/image.js`（`sizedImage` / `imageSrcSet`） | 变体图与列表图都走 srcset；详情用大图尺寸 |
@@ -333,7 +333,8 @@ SQL Editor 里**按 01 → 12 依次执行**，全部幂等，可重复跑：
 | 09 | `09-deal.sql` | 秒杀档期字段 |
 | 10 | `10-acc.sql` | ACC 佣金 |
 | 11 | `11-sub-badge-deal-priority.sql` | 副角标 `sub_tag` / `sub_badge_color` + 秒杀专区置顶 `deal_priority` |
-| 12 | `12-settings.sql` | 全局设置（秒杀专区 Tab 名等） |
+| 12 | `12-settings.sql` | 全局设置（大促专区 Tab 名，`deals_tab_label`） |
+| 13 | `13-campaign.sql` | 大促归属 `is_campaign`（两个秒杀 Tab 的切分依据；缺列时全部算常规） |
 
 **批量导入（换季上新）**
 

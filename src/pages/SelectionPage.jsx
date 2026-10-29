@@ -23,7 +23,20 @@ import { useSettings } from '../hooks/useSettings.js'
 import { isComplete } from '../utils/lines.js'
 import { isSoldOut } from '../utils/soldOut.js'
 import { isTeaser } from '../utils/teaser.js'
-import { DEALS_TAB, bucketCountsOf, bucketOf, discountOf, dealsOrder, filterDeals } from '../utils/deal.js'
+import {
+  BADGE_ZONE,
+  CAMPAIGN_TAB,
+  DEALS_TAB,
+  bucketCountsOf,
+  bucketOf,
+  campaignOrder,
+  campaignTabLabelOf,
+  cardTickDelay,
+  discountOf,
+  dealsOrder,
+  filterDeals,
+  soonestDealMs,
+} from '../utils/deal.js'
 import { hasSeenGuide, markGuideSeen, shouldAutoOpen } from '../utils/guide.js'
 import { PAGE_SIZE, storefrontOrder, filterCatalogue, slicePage, nextLimit, hasMore } from '../utils/catalogue.js'
 
@@ -53,9 +66,14 @@ export default function SelectionPage() {
   const catalogueStatus = useCatalogueStatus()
 
   const categoryOrder = useCategories()
-  /* 专区 Tab 的名字（后台可改成 `Black Friday Deals`）。卡片要用它去重：
-   * 进了这个专区，挂"同一场活动"的角标是零信息。 */
+  /* 大促专区的名字（后台可改成 `Black Friday`）。卡片要用它去重：进了这个
+   * 专区，挂"同一场活动"的角标是零信息。
+   *
+   * 这个名字和常规 Tab 的固定名（`Limited Deals`）撞车时退回 `Campaign Deals`
+   * —— 见 `campaignTabLabelOf`：设置里那个 key 是拆分前留下的，历史值可能
+   * 就是旧的默认名。 */
   const { dealsTabLabel } = useSettings()
+  const campaignTabLabel = campaignTabLabelOf(dealsTabLabel)
   // Subscribed so the cards re-render when the ASIN map lands
   useAmazonLinks()
 
@@ -180,17 +198,22 @@ export default function SelectionPage() {
     [products],
   )
 
-  /* ⚡ Limited Deals — a VIEW over the same catalogue, not a category.
+  /* ⚡ / 🔥 两个秒杀专区 —— 同一批 `sale_*` 数据的两个切片，不是两张表。
    *
-   * `filterDeals` keeps live + scheduled windows (an ended deal is just a normal
-   * product again, so it does not belong here). The count drives the chip: at
-   * zero the tab disappears entirely.
+   * 切片跟着商品走：导入/批量开秒杀时运营选的归属写进 `is_campaign`
+   * （13-campaign.sql）。没跑迁移的库全读成 false，于是全部落进常规 Tab ——
+   * 正好等于拆分之前的行为。
    *
-   * Recomputed only when the catalogue changes, so a window opening while a tab
-   * sits open is picked up on the next catalogue load rather than on a timer —
-   * the alternative is a re-render every second for a chip. */
+   * `filterDeals` 只留下进行中 + 排期中（结束的已经是普通商品了）。计数驱动
+   * chip：为 0 的那个 Tab 直接不出现，所以非大促期间不会有半个空专区挂着。 */
   const dealPool = useMemo(() => filterDeals(catalogue), [catalogue])
   const isDeals = activeCategory === DEALS_TAB
+  const isCampaign = activeCategory === CAMPAIGN_TAB
+  const inDealsView = isDeals || isCampaign
+
+  const regularPool = useMemo(() => dealPool.filter((product) => !product.isCampaign), [dealPool])
+  const campaignPool = useMemo(() => dealPool.filter((product) => product.isCampaign), [dealPool])
+  const activePool = isCampaign ? campaignPool : regularPool
 
   /**
    * Align a restored selection with the catalogue.
@@ -237,51 +260,47 @@ export default function SelectionPage() {
 
   /* Filter once, page after — the slice is always the last step, so "load more"
    * keeps counting inside the current category + search, never the whole
-   * catalogue. See utils/catalogue.js.
-   *
-   * The deals tab runs the same search against a narrower pool, then applies the
-   * discount band. Order matters: search first (cheap, and it is what the user
-   * just typed), band second. */
-  /* The deals tab searches a narrower pool, then narrows to one band.
-   *
-   * Split into two steps so the band chips can count the SAME set the grid is
+   * catalogue. See utils/catalogue.js. */
+  /* The deals tabs search their own pool first, then (campaign only) narrow to a
+   * band. Split into two steps so the band chips count the SAME set the grid is
    * showing: counting the whole pool would promise cards that a live search
    * filters away, and that reads as a broken chip. */
   const dealSearch = useMemo(
     () =>
-      isDeals
-        ? filterCatalogue(dealPool, {
+      inDealsView
+        ? filterCatalogue(activePool, {
             category: 'All',
             query: deferredQuery,
             uncategorised: UNCATEGORISED,
           })
         : [],
-    [dealPool, isDeals, deferredQuery],
+    [activePool, inDealsView, deferredQuery],
   )
 
-  /* `all` is the number of deals, not the sum of the bands — the difference is
-   * exactly the deals under 10% (or with no price to compute one), which by
-   * decision live only in All. Showing the numbers makes that legible instead
-   * of looking like a bug. */
+  /* `all` is the number of deals in this view, not the sum of the bands — the
+   * difference is exactly the deals under 10% (or with no price to compute one),
+   * which by decision live only in All. Showing the numbers makes that legible
+   * instead of looking like a bug. */
   const dealBucketCounts = useMemo(
-    () => (isDeals ? bucketCountsOf(dealSearch) : null),
-    [isDeals, dealSearch],
+    () => (isCampaign ? bucketCountsOf(dealSearch) : null),
+    [isCampaign, dealSearch],
   )
 
   const filtered = useMemo(() => {
-    if (isDeals) {
+    if (isCampaign) {
       if (dealBucket === 'all') return dealSearch
       /* `bucketOf` reads the number the badge prints (`discountOf`), so the
        * chip and the card can never disagree about a product. */
       return dealSearch.filter((product) => bucketOf(discountOf(product).max) === dealBucket)
     }
+    if (isDeals) return dealSearch
 
     return filterCatalogue(catalogue, {
       category: activeCategory,
       query: deferredQuery,
       uncategorised: UNCATEGORISED,
     })
-  }, [catalogue, dealSearch, isDeals, dealBucket, activeCategory, deferredQuery])
+  }, [catalogue, dealSearch, isDeals, isCampaign, dealBucket, activeCategory, deferredQuery])
 
   /* Badge first, THEN page. The order of those two steps is the whole feature:
  * slicing first would only shuffle the 24 cards already on screen, so a badged
@@ -300,13 +319,36 @@ export default function SelectionPage() {
  * The first batch is now all shoppable, and a teaser is still published — it
  * shows up as you scroll, which is what a preview is for. */
 const ordered = useMemo(
-  () => (isDeals ? dealsOrder(filtered) : storefrontOrder(filtered)),
-  [filtered, isDeals],
+  () =>
+    isCampaign
+      ? /* 🔥 大促：折扣从高到低，时间在这里没有意义。 */
+        campaignOrder(filtered)
+      : isDeals
+        ? /* ⚡ 常规：紧迫度（进行中 → 排期中），和拆分之前一致。 */
+          dealsOrder(filtered)
+        : storefrontOrder(filtered),
+  [filtered, isCampaign, isDeals],
 )
 
 const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit])
 
   const more = hasMore(limit, filtered.length)
+
+  /* 常规秒杀卡片的倒计时：一个 timer 服务整屏，间隔由"最快结束/开始的那件"
+   * 决定（一小时内每秒跳、之外半分钟一次）。只有这一屏才转 —— 别的面不传
+   * `now`，卡片就不会因为时间流逝而重渲染。 */
+  const [dealNow, setDealNow] = useState(() => Date.now())
+  useEffect(() => {
+    if (!isDeals) return undefined
+    let timer = 0
+    const tick = () => {
+      const at = Date.now()
+      setDealNow(at)
+      timer = setTimeout(tick, cardTickDelay(soonestDealMs(regularPool, at)))
+    }
+    timer = setTimeout(tick, cardTickDelay(soonestDealMs(regularPool, Date.now())))
+    return () => clearTimeout(timer)
+  }, [isDeals, regularPool])
 
   /* A new filter means a new result set: start from one batch again, and take
    * her back to the top if she had scrolled deep into the previous one. */
@@ -503,7 +545,9 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
         onChange={setActiveCategory}
         query={query}
         onQueryChange={setQuery}
-        dealsCount={dealPool.length}
+        dealsCount={regularPool.length}
+        campaignCount={campaignPool.length}
+        campaignLabel={campaignTabLabel}
         bucket={dealBucket}
         bucketCounts={dealBucketCounts}
         onBucketChange={setDealBucket}
@@ -524,11 +568,21 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
           onIncrement={increment}
           onDecrement={decrement}
           onOpenDetail={setDetailProduct}
-          showPrice={isDeals}
-          /* 专区自己叫什么：`badgeStackFor` 用它比对**自定义**活动名（词表认得
-             的 Black Friday / Cyber Monday 不用它也摘得掉）。只在专区里传，
-             常规货架上 Black Friday 不是重复，是这件商品的关键信息。 */
-          campaign={isDeals ? dealsTabLabel : ''}
+          /* 这张网格在哪个面上：决定价格行、角标栈和倒计时。
+             大促的角标一律不挂活动身份，常规秒杀挂 Limited Deal（见 badgeStackFor）。 */
+          zone={
+            isCampaign
+              ? BADGE_ZONE.CAMPAIGN
+              : isDeals
+                ? BADGE_ZONE.REGULAR
+                : BADGE_ZONE.CATALOGUE
+          }
+          /* 只有常规秒杀那屏需要跟着时钟走。 */
+          now={isDeals ? dealNow : undefined}
+          /* 大促专区的名字：`badgeStackFor` 用它比对**自定义**活动名（词表认得
+             的 Black Friday / Cyber Monday 不用它也摘得掉）。常规货架上
+             Black Friday 不是重复，是这件商品的关键信息。 */
+          campaign={isCampaign ? campaignTabLabel : ''}
         />
 
         {/* Paging lives here, not inside the grid, so the footer below it is
@@ -607,6 +661,11 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
       <ProductDetail
         product={detailProduct}
         open={!!detailProduct}
+        /* 从 🔥 大促专区点开的详情页，活动身份同样不挂（见 badgeStackFor
+           ／ ProductDetail 的注释）。弹层打开时分类栏被遮住，所以当前 tab
+           就是它被点开时的 tab。 */
+        inCampaign={isCampaign}
+        campaign={isCampaign ? campaignTabLabel : ''}
         lines={detailLines}
         onAdd={handleAddFromDetail}
         onIncrement={increment}

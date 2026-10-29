@@ -396,6 +396,8 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
       /* Coming Soon is a transaction lock, not a badge — it travels with the
        * product row so the storefront and code generator can trust one field. */
       isTeaser: Boolean(draft.isTeaser),
+      /* 大促归属：原样带回去（见 toDraft 里的说明）。 */
+      isCampaign: Boolean(draft.isCampaign),
       /* Flash sale — the five strings exactly as typed. No Date, no timezone,
        * no `parseFloat`: 09-deal.sql stores text and deal.js parses it on the
        * reader's clock. `dealArmed` is form-only, so turning the card off
@@ -1438,6 +1440,10 @@ function toDraft(product) {
     image: product?.image || '',
     hidden: Boolean(product?.hidden),
     isTeaser: Boolean(product?.isTeaser),
+    /* 大促归属（13-campaign.sql）。编辑器里**不改**它 —— 归属由导入弹窗 /
+     * 批量开秒杀整批选定，这里只负责原样带回去。漏了它，编辑一次商品就会
+     * 把大促款悄悄打回常规（`productToRow` 写的是 `=== true`）。 */
+    isCampaign: Boolean(product?.isCampaign),
     /* ACC —— 开关只存布尔，ID 不跟开关联动（关掉时保留，理由见 utils/acc.js）。 */
     hasAcc: Boolean(product?.hasAcc),
     accId: product?.accId || '',

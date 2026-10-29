@@ -34,6 +34,7 @@ import {
   loadProducts,
   getBadgeColumnStatus,
   getDealColumnStatus,
+  getCampaignColumnStatus,
   getSubBadgeStatus,
   getPriorityColumnStatus,
   UNCATEGORISED,
@@ -47,7 +48,7 @@ import { combinationsOf, soldOutListOf } from '../../utils/soldOut.js'
 import { readSheetGrid } from '../../utils/sheetFile.js'
 import { planImport, executeImport, planIsEmpty } from '../../utils/bulkImport.js'
 import { planDealImport, resolveDealTargets } from '../../utils/dealImport.js'
-import { dropsCampaignTag } from '../../utils/deal.js'
+import { dropsCampaignTag, DEALS_TAB_DEFAULT_LABEL } from '../../utils/deal.js'
 import {
   CATEGORY_MODES,
   buildDealFromDates,
@@ -201,6 +202,9 @@ export default function ProductsPage() {
    * 各自有自己的 grid、preview 和 confirm，互不串。 */
   const [dealSheet, setDealSheet] = useState(null) // { grid, fileName }
   const [dealBusy, setDealBusy] = useState(false)
+  /* 这批表格的归属（'regular' | 'campaign'）。空 = 还没选，导入按钮禁用。
+   * 换一份表格就清空：上一份的答案不该成为下一份的默认。 */
+  const [dealKind, setDealKind] = useState('')
   const [dealResult, setDealResult] = useState(null)
   const dealFileInputRef = useRef(null)
 
@@ -570,6 +574,8 @@ export default function ProductsPage() {
       showToast?.(error, 'error')
       return
     }
+    /* 归属必选（弹窗里那个单选），没选就不写。 */
+    if (!draft.dealKind) return
 
     const priority = parsePriorityInput(draft.priority)
     /* 先说清楚会清掉几枚活动标 —— 静默删掉运营自己打的字，比不删更糟。 */
@@ -577,12 +583,16 @@ export default function ProductsPage() {
     try {
       const count = await setProductsDeals(
         selectedProducts.map((product) => ({ id: product.id, deal })),
-        priority === null ? {} : { priority },
+        {
+          ...(priority === null ? {} : { priority }),
+          isCampaign: draft.dealKind === 'campaign',
+        },
       )
       setBatchDealOpen(false)
       clearSelection()
       showToast?.(
-        `已给 ${count} 件商品设置秒杀${priority ? ` · 置顶权重 ${priority}` : ''}` +
+        `已给 ${count} 件商品设置${draft.dealKind === 'campaign' ? '大促' : '常规'}秒杀` +
+          (priority ? ` · 置顶权重 ${priority}` : '') +
           (droppedTags ? ` · 清除了 ${droppedTags} 个旧活动标` : ''),
         'success',
       )
@@ -1052,13 +1062,14 @@ export default function ProductsPage() {
     try {
       const grid = await readSheetGrid(file)
       setDealSheet({ grid, fileName: file.name })
+      setDealKind('')
     } catch (err) {
       showToast?.(`Could not read ${file.name}: ${err.message}`, 'error', 6000)
     }
   }
 
   const runDealImport = async () => {
-    if (!dealTargets || !dealTargets.matched.length || dealBusy) return
+    if (!dealTargets || !dealTargets.matched.length || dealBusy || !dealKind) return
     setDealBusy(true)
     /* 这份表会把多少件商品身上的旧活动标换掉（只清活动类，见 deal.js）。 */
     const byId = new Map(products.map((product) => [String(product.id), product]))
@@ -1066,7 +1077,9 @@ export default function ProductsPage() {
       dropsCampaignTag(byId.get(String(id)), deal),
     ).length
     try {
-      const count = await setProductsDeals(dealTargets.matched)
+      const count = await setProductsDeals(dealTargets.matched, {
+        isCampaign: dealKind === 'campaign',
+      })
       await loadProducts({ silent: true })
       setDealSheet(null)
       setDealResult({
@@ -1075,7 +1088,9 @@ export default function ProductsPage() {
         problems: dealPlan.problems,
       })
       showToast?.(
-        `Deals set on ${count} product${count === 1 ? '' : 's'}` +
+        `${dealKind === 'campaign' ? 'Campaign' : 'Regular'} deals set on ${count} product${
+          count === 1 ? '' : 's'
+        }` +
           (droppedTags ? ` · ${droppedTags} old campaign label${droppedTags === 1 ? '' : 's'} cleared` : ''),
         'success',
         4000,
@@ -1157,10 +1172,11 @@ export default function ProductsPage() {
         />
       </div>
 
-      {/* ── 前台秒杀专区的展示名 ──
+      {/* ── 前台大促专区的展示名 ──
           一个站点级设置，存在 `settings` 表（12-settings.sql）。放这里是因为
           改名的人就是"正在整理这批秒杀商品"的人 —— 改完角标顺手就能把 Tab
-          一起改成 Black Friday Deals，不用去别的页面找。 */}
+          一起改成 Black Friday。常规秒杀那个 Tab 的名字是固定的
+          （`Limited Deals`），不跟这个设置走。 */}
       <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl bg-white px-3.5 py-2.5 ring-1 ring-charcoal/[0.07]">
         <span className="text-[10px] font-medium uppercase tracking-wider text-charcoal-light">{t('Deals tab')}</span>
         <input
@@ -1172,7 +1188,7 @@ export default function ProductsPage() {
             if (event.key === 'Escape') setTabLabelDraft(settings.dealsTabLabel)
           }}
           maxLength={32}
-          placeholder="Limited Deals"
+          placeholder={DEALS_TAB_DEFAULT_LABEL}
           aria-label="Deals tab label"
           className="min-w-0 flex-1 rounded-lg bg-cream px-2.5 py-1.5 text-[12px] text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-1 focus:ring-charcoal/25"
         />
@@ -1190,7 +1206,7 @@ export default function ProductsPage() {
         <button
           type="button"
           onClick={handleResetTabLabel}
-          disabled={tabLabelSaving || settings.dealsTabLabel === 'Limited Deals'}
+          disabled={tabLabelSaving || settings.dealsTabLabel === DEALS_TAB_DEFAULT_LABEL}
           className="shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-charcoal-light transition hover:bg-cream-dark hover:text-charcoal disabled:cursor-not-allowed disabled:opacity-40"
         >{t('Reset')}</button>
         <span className="text-[10px] text-charcoal-light/70">{t('the chip at the top of the storefront')}</span>
@@ -1883,6 +1899,7 @@ export default function ProductsPage() {
         products={selectedProducts}
         columnMissing={getDealColumnStatus() === 'missing'}
         priorityColumnMissing={getPriorityColumnStatus() === 'missing'}
+        campaignColumnMissing={getCampaignColumnStatus() === 'missing'}
         onClose={() => setBatchDealOpen(false)}
         onApply={handleBatchDeal}
         onClear={handleBatchDealClear}
@@ -1915,7 +1932,7 @@ export default function ProductsPage() {
         onClose={() => setImportResult(null)}
       />
 
-      {/* Deal import — matched by 货号, writes the five sale_* columns only. */}
+      {/* Deal import — matched by 货号, writes the five sale_* columns + 归属. */}
       <DealImportPreviewDialog
         open={!!dealSheet && !!dealPlan && !!dealTargets}
         plan={dealPlan}
@@ -1923,6 +1940,9 @@ export default function ProductsPage() {
         fileName={dealSheet?.fileName}
         busy={dealBusy}
         columnMissing={getDealColumnStatus() === 'missing'}
+        campaignColumnMissing={getCampaignColumnStatus() === 'missing'}
+        dealKind={dealKind}
+        onDealKindChange={setDealKind}
         onCancel={() => setDealSheet(null)}
         onConfirm={runDealImport}
       />
@@ -2919,6 +2939,69 @@ function ImportResultDialog({ open, stats, onClose }) {
  * 因为格式问题被跳过（缺列 / 日期解析失败 / 价格解析失败）。确认才写库，
  * 取消零副作用。
  */
+/* 导入 / 批量开秒杀时**必选**的一项。纯文字、不带图标 —— 这两类不是
+ * "更好看 / 更醒目"的选择，而是决定这批商品进前台的哪个 Tab：
+ * 常规秒杀按紧迫度、卡片带倒计时；大促按折扣区间、按折扣从高到低。 */
+const DEAL_KINDS = [
+  { id: 'regular', label: 'Regular Deals', hint: '常规秒杀 · 按紧迫度排序，卡片带倒计时' },
+  { id: 'campaign', label: 'Campaign Deals', hint: '大促 · 按折扣区间浏览，按折扣从高到低' },
+]
+
+/**
+ * 归属单选。`value` 为空 = 还没选，调用方的确认按钮应当禁用 ——
+ * "必须选择"是需求原文，给个默认值等于让运营在不知情时把大促表导成常规。
+ */
+function DealTypeChoice({ value, onChange, disabled = false, missing = false }) {
+  return (
+    <fieldset className="mt-4" disabled={disabled}>
+      <legend className="text-[10px] font-medium tracking-wider text-charcoal-light">
+        这批属于哪一类
+      </legend>
+      <div className="mt-1.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
+        {DEAL_KINDS.map((option) => {
+          const on = value === option.id
+          return (
+            <label
+              key={option.id}
+              className={`flex cursor-pointer items-start gap-2 rounded-xl px-3 py-2.5 transition ${
+                on
+                  ? 'bg-accent/[0.08] ring-1 ring-accent/40'
+                  : 'bg-cream-dark/50 ring-1 ring-charcoal/5 hover:ring-charcoal/15'
+              }`}
+            >
+              <input
+                type="radio"
+                name="deal-kind"
+                value={option.id}
+                checked={on}
+                onChange={() => onChange(option.id)}
+                className="mt-0.5 h-3.5 w-3.5 shrink-0"
+              />
+              <span className="min-w-0">
+                <span className="block text-[12px] font-medium text-charcoal">{option.label}</span>
+                <span className="mt-0.5 block text-[10px] leading-snug text-charcoal-light">
+                  {option.hint}
+                </span>
+              </span>
+            </label>
+          )
+        })}
+      </div>
+      {!value && (
+        <p className="mt-1.5 text-[10px] text-amber-700">
+          选择后才能继续 —— 它决定这批商品进哪个 Tab。
+        </p>
+      )}
+      {missing && (
+        <p className="mt-1.5 text-[10px] leading-relaxed text-amber-700">
+          数据库没有 is_campaign 列，选「Campaign Deals」也会存成常规。
+          先在 Supabase 跑一次 supabase/13-campaign.sql。
+        </p>
+      )}
+    </fieldset>
+  )
+}
+
 function DealImportPreviewDialog({
   open,
   plan,
@@ -2926,6 +3009,9 @@ function DealImportPreviewDialog({
   fileName,
   busy,
   columnMissing,
+  campaignColumnMissing,
+  dealKind,
+  onDealKindChange,
   onCancel,
   onConfirm,
 }) {
@@ -2943,8 +3029,15 @@ function DealImportPreviewDialog({
         <p className="text-[11.5px] leading-relaxed text-charcoal-light">
           <span className="font-medium text-charcoal">{fileName}</span> · 按主卖货号 / 货号
           匹配，写入开始/结束时间（补全 00:00:00 与 23:59:59）、秒杀价、原价（可选）
-          与折扣率（可选）。只碰秒杀五列。
+          与折扣率（可选），以及这批商品的归属。
         </p>
+
+        <DealTypeChoice
+          value={dealKind}
+          onChange={onDealKindChange}
+          disabled={busy}
+          missing={campaignColumnMissing}
+        />
 
         <div className="mt-4 grid grid-cols-3 gap-2">
           <div className="rounded-xl bg-emerald-50 px-3 py-3 ring-1 ring-emerald-200/60">
@@ -3019,7 +3112,7 @@ function DealImportPreviewDialog({
           <button
             type="button"
             onClick={onConfirm}
-            disabled={busy || matchedCount === 0 || columnMissing}
+            disabled={busy || matchedCount === 0 || columnMissing || !dealKind}
             className="ml-auto rounded-full bg-accent px-4 py-2.5 text-[12.5px] font-medium text-white transition hover:bg-accent-dark active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {busy ? '保存中…' : `应用到 ${matchedCount} 个`}
@@ -3099,6 +3192,7 @@ function BatchDealDialog({
   products,
   columnMissing,
   priorityColumnMissing,
+  campaignColumnMissing,
   onClose,
   onApply,
   onClear,
@@ -3109,6 +3203,8 @@ function BatchDealDialog({
     startDate: '',
     endDate: '',
     priority: '',
+    /* 归属必选：这一批进常规 Tab 还是大促 Tab。空 = 还没选。 */
+    dealKind: '',
   })
   const [busy, setBusy] = useState(false)
 
@@ -3116,7 +3212,14 @@ function BatchDealDialog({
   /* 每次打开都从空白开始：上一次的窗口不该成为下一次的默认值。 */
   useEffect(() => {
     if (!open) return
-    setForm({ originalPrice: '', salePrice: '', startDate: '', endDate: '', priority: '' })
+    setForm({
+      originalPrice: '',
+      salePrice: '',
+      startDate: '',
+      endDate: '',
+      priority: '',
+      dealKind: '',
+    })
     setBusy(false)
   }, [open])
 
@@ -3136,7 +3239,7 @@ function BatchDealDialog({
   }
 
   const apply = async () => {
-    if (error || busy) return
+    if (error || busy || !form.dealKind) return
     setBusy(true)
     /* 失败由调用方 toast，弹窗自己保持打开、把按钮解回可点状态。 */
     try {
@@ -3161,8 +3264,8 @@ function BatchDealDialog({
       <div className="px-5 pb-5 pt-5 sm:px-6">
         <p className="text-[11.5px] leading-relaxed text-charcoal-light">
           给 <span className="font-medium text-charcoal">{count} 件商品</span>
-          设置同一个时间窗。只写秒杀那五个字段（外加你填了的置顶权重）——
-          价格、库存、角标、排序都原样保留。
+          设置同一个时间窗。只写秒杀那五个字段、这批的归属（外加你填了的置顶
+          权重）—— 价格、库存、角标、排序都原样保留。
         </p>
 
         <div className="mt-4 grid grid-cols-2 gap-2">
@@ -3211,6 +3314,13 @@ function BatchDealDialog({
             />
           </label>
         </div>
+
+        <DealTypeChoice
+          value={form.dealKind}
+          onChange={(id) => setForm((prev) => ({ ...prev, dealKind: id }))}
+          disabled={busy}
+          missing={campaignColumnMissing}
+        />
 
         <div className="mt-2 flex items-center gap-1.5">
           <button
@@ -3294,7 +3404,7 @@ function BatchDealDialog({
           <button
             type="button"
             onClick={apply}
-            disabled={Boolean(error) || busy || columnMissing}
+            disabled={Boolean(error) || busy || columnMissing || !form.dealKind}
             className="rounded-full bg-charcoal px-4 py-2.5 text-[12.5px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
           >
             {busy ? '保存中…' : `应用到 ${count} 件`}

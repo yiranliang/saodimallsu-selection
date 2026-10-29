@@ -70,10 +70,12 @@ end $$;
 
 alter table public.settings replica identity full;
 
--- 默认值：没有这一行时前端也会退回 'Limited Deals'，这里写进来只是让运营
+-- 默认值：没有这一行时前端也会退回 'Campaign Deals'，这里写进来只是让运营
 -- 第一次打开后台就看到当前生效的名字，而不是一个空输入框。
+-- 注意：这个 key 命名的是**大促专区**（🔥），常规秒杀 Tab 的名字固定为
+-- `Limited Deals`，不跟这个设置走。
 insert into public.settings (key, value)
-values ('deals_tab_label', 'Limited Deals')
+values ('deals_tab_label', 'Campaign Deals')
 on conflict (key) do nothing;
 
 -- 检查

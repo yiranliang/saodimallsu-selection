@@ -30,9 +30,11 @@ export default function ProductGrid({
   onIncrement,
   onDecrement,
   onOpenDetail,
-  /* 只在 ⚡ Limited Deals 专区里为 true：那一屏的重点是价格，普通目录的重点
-   * 是"这一屏有多少款"。同一个卡片组件，两个信息密度。 */
-  showPrice = false,
+  /* 这张网格在哪个面上：`catalogue` / `regular`（常规秒杀）/ `campaign`（大促）。
+   * 卡片的价格行、角标栈和倒计时都跟着它走。 */
+  zone,
+  /* 常规秒杀那屏的"现在"（父组件一个 timer 服务整屏）；其他面不传。 */
+  now,
   /* 这个专区的活动名（后台改的 Tab 名）。专区内部不重复挂同名角标，
    * 见 `badgeStackFor`。普通目录传空串。 */
   campaign = '',
@@ -106,7 +108,8 @@ export default function ProductGrid({
             onIncrement={onIncrement}
             onDecrement={onDecrement}
             onOpenDetail={onOpenDetail}
-            showPrice={showPrice}
+            zone={zone}
+            now={now}
             campaign={campaign}
           />
         ))}

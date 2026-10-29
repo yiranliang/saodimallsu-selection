@@ -105,11 +105,16 @@ const ACC_COLUMNS = ['acc_id', 'has_acc']
  * 迁移，但语义无关 —— 一个数据库跑到一半（只加了 sub_*）也该让置顶降级
  * 而不是整块失效。 */
 const SUB_BADGE_COLUMNS = ['sub_tag', 'sub_badge_color']
+/* 大促归属（13-campaign.sql）。和秒杀五列是两次迁移，所以单独一个状态：
+ * 只跑过 09 的库照样能开秒杀，只是这批全部算常规 —— 前台两个 Tab 里
+ * 大促那个为空、自动隐藏，"少了一个 Tab"不会看起来像坏了。 */
+const CAMPAIGN_COLUMN = 'is_campaign'
 const OPTIONAL_COLUMNS = [
   'sold_out_variants',
   'badge_color',
   'is_teaser',
   ...DEAL_COLUMNS,
+  CAMPAIGN_COLUMN,
   ...ACC_COLUMNS,
   ...SUB_BADGE_COLUMNS,
   'deal_priority',
@@ -122,6 +127,7 @@ const ABSENT_HINTS = {
   sold_out_variants: { meaning: '「全部有货」', sql: 'supabase/05-sold-out.sql' },
   badge_color: { meaning: '「角标无自定义颜色」', sql: 'supabase/07-badge-color.sql' },
   is_teaser: { meaning: '「全部不是预告」', sql: 'supabase/08-teaser.sql' },
+  is_campaign: { meaning: '「全部算常规秒杀」', sql: 'supabase/13-campaign.sql' },
   sale_start: { meaning: '「全部没有秒杀」', sql: 'supabase/09-deal.sql' },
   sale_end: { meaning: '「全部没有秒杀」', sql: 'supabase/09-deal.sql' },
   sale_price: { meaning: '「全部没有秒杀」', sql: 'supabase/09-deal.sql' },
@@ -143,6 +149,8 @@ let badgeColumnAvailable = false
 let badgeColumnStatus = 'unknown'
 let teaserColumnAvailable = false
 let teaserColumnStatus = 'unknown'
+let campaignColumnAvailable = false
+let campaignColumnStatus = 'unknown'
 let dealColumnStatus = 'unknown'
 let accColumnAvailable = false
 let accColumnStatus = 'unknown'
@@ -180,6 +188,19 @@ export function getBadgeColumnStatus() {
  */
 export function getTeaserColumnStatus() {
   return teaserColumnStatus
+}
+
+/**
+ * 大促归属能不能存？（`supabase/13-campaign.sql`）
+ *
+ * `'missing'` 表示那条迁移没跑：`is_campaign` 从每次写入里剔掉，导入弹窗里
+ * 选的「Campaign Deals」会静默变成「常规」—— 前台不会报错，只是所有秒杀都
+ * 挤在常规 Tab 里。所以导入/批量弹窗要能问出这个状态并说出来。
+ *
+ * @returns {'unknown' | 'ok' | 'missing'}
+ */
+export function getCampaignColumnStatus() {
+  return campaignColumnStatus
 }
 
 /**
@@ -346,6 +367,7 @@ function rowFor(product, options) {
   const row = productToRow(product, options)
   if (!badgeColumnAvailable) delete row.badge_color
   if (!teaserColumnAvailable) delete row.is_teaser
+  if (!campaignColumnAvailable) delete row.is_campaign
   if (missingColumns.has('sold_out_variants')) delete row.sold_out_variants
   for (const column of DEAL_COLUMNS) if (missingColumns.has(column)) delete row[column]
   if (!accColumnAvailable) {
@@ -398,6 +420,8 @@ export async function loadProducts({ silent = false } = {}) {
       badgeColumnStatus = badgeColumnAvailable ? 'ok' : 'missing'
       teaserColumnAvailable = columns.includes('is_teaser')
       teaserColumnStatus = teaserColumnAvailable ? 'ok' : 'missing'
+      campaignColumnAvailable = columns.includes('is_campaign')
+      campaignColumnStatus = campaignColumnAvailable ? 'ok' : 'missing'
       /* All five or none: a partially migrated database is exactly the case the
        * editor must refuse to pretend about. */
       dealColumnStatus = DEAL_COLUMNS.every((column) => columns.includes(column)) ? 'ok' : 'missing'
@@ -698,7 +722,7 @@ export async function setProductsBadge(ids, badge, { sub, touchTag = true } = {}
  * @param {{ priority?: number }} [options]
  * @returns {Promise<number>} 实际提交的商品数
  */
-export async function setProductsDeals(targets, { priority } = {}) {
+export async function setProductsDeals(targets, { priority, isCampaign } = {}) {
   const list = (Array.isArray(targets) ? targets : []).filter(
     (t) => t && t.id && (t.deal === null || typeof t.deal === 'object'),
   )
@@ -718,6 +742,11 @@ export async function setProductsDeals(targets, { priority } = {}) {
   const setsPriority =
     priority !== undefined && Number.isFinite(Number(priority))
   const priorityValue = setsPriority ? Math.max(0, Math.trunc(Number(priority))) : 0
+
+  /* 归属：整批同一个值（导入弹窗 / 批量开秒杀里运营选的那一项）。
+   * `undefined` = 不动这一列 —— 单独改个价格不该把大促商品打回常规。 */
+  const setsCampaign = typeof isCampaign === 'boolean' && campaignColumnAvailable
+  const campaignValue = Boolean(isCampaign)
 
   /* 写入前的商品：清活动标要看它当前挂的是什么、窗口到底有没有变。 */
   const byId = new Map(cache.map((product) => [String(product.id), product]))
@@ -741,6 +770,7 @@ export async function setProductsDeals(targets, { priority } = {}) {
       discount_label: text(deal?.discountLabel),
     }
     if (setsPriority) row.deal_priority = priorityValue
+    if (setsCampaign) row.is_campaign = campaignValue
 
     /* 秒杀一改（或一清），上一场活动的标就该让位 —— 否则货架上显示的是
      * `Black Friday` 而不是 `Limited Deal`，而导入表格里没有"活动标"这一列，

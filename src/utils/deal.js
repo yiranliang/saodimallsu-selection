@@ -51,21 +51,51 @@ export const DEAL_BADGE = {
 }
 
 /**
- * 秒杀专区的分类哨兵值。
+ * 两个秒杀专区的分类哨兵值。
  *
  * 不是真分类：`filterCatalogue` 按 `product.category` 精确比对，用 `__deals__`
  * 这种不可能撞上真实分类名的值，SelectionPage 里分支处理。用 '⚡ Limited Deals'
  * 当值的话，运营真建一个同名分类就会串。
+ *
+ * 为什么是两个而不是一个：
+ *   - 常规秒杀：要讲紧迫度（进行中 / 即将开始）、卡片挂倒计时、按时间排；
+ *   - 大促：时间固定，红人只关心折扣多狠 —— 按折扣区间浏览、按折扣从高到低排。
+ * 两屏的顶部控件都不一样（只有大促有区间 chip），塞进同一个 Tab 做二级切换
+ * 等于让同一行 chip 在不同状态下变含义，所以是两个入口。
  */
 export const DEALS_TAB = '__deals__'
+export const CAMPAIGN_TAB = '__campaign__'
+
+/** 常规秒杀 Tab 的名字：**固定**，不跟设置走（设置里那个名字属于大促）。 */
+export const REGULAR_DEALS_LABEL = 'Limited Deals'
 
 /**
- * 秒杀专区 Tab 的默认展示名。
+ * 大促专区 Tab 没有名字时的兜底，也是「Reset」按钮的目标值。
  *
- * 运营可以在后台改它（黑五期间叫 `Black Friday Deals`），存 `settings` 表；
- * 这个常量是**没有那一行时的兜底**，也是「Reset」按钮的目标值。
+ * 运营在黑五期间把它改成 `🔥Black Friday`，存 `settings.deals_tab_label`；
+ * 前台一律读那一行，没有才退回这里。
  */
-export const DEALS_TAB_DEFAULT_LABEL = 'Limited Deals'
+export const DEALS_TAB_DEFAULT_LABEL = 'Campaign Deals'
+
+/**
+ * `settings.deals_tab_label` → 大促专区实际显示的名字。
+ *
+ * 为什么要过一道函数：这个 key 是拆分前就存在的，历史值可能是
+ * `Limited Deals`（等于常规 Tab 的固定名）—— 两个 Tab 撞名谁也认不出谁。
+ * 所以空值、以及"仍然是旧默认名"都退回 `Campaign Deals`；运营真填过
+ * （`🔥Black Friday`）则原样使用。
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function campaignTabLabelOf(value) {
+  const text = String(value ?? '')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!text) return DEALS_TAB_DEFAULT_LABEL
+  if (text.toLowerCase() === REGULAR_DEALS_LABEL.toLowerCase()) return DEALS_TAB_DEFAULT_LABEL
+  return text
+}
 
 /** 名字长度上限。Tab 是一枚药丸，超过这个长度会把整条分类栏挤出一屏。 */
 export const DEALS_TAB_LABEL_MAX = 32
@@ -567,6 +597,75 @@ export function countdownDisplay(phase, ms) {
 }
 
 /**
+ * 卡片上的倒计时 —— 详情页那套的**紧凑形态**。
+ *
+ * 卡片只有 169px 宽，`Deal ends in 6 days` 放不下，也读不完；所以前缀压成
+ * `Ends in` / `Starts in`，超过一天用 `2d 4h` 而不是 `2 days`。
+ *
+ * 顺序不要和 `countdownDisplay` 搞混：那个给详情页（有整行空间、要读得懂），
+ * 这个给货架（一眼扫过、只要紧迫感）。
+ *
+ * @param {'live'|'scheduled'|'ended'|'off'} phase
+ * @param {number} ms
+ * @returns {{ mode:'days'|'clock', lead:string, value:string }|null}
+ */
+export function cardCountdown(phase, ms) {
+  if (phase !== 'live' && phase !== 'scheduled') return null
+
+  const remaining = Math.max(0, Number(ms) || 0)
+  const lead = phase === 'scheduled' ? 'Starts in' : 'Ends in'
+
+  if (remaining > COUNTDOWN_DAY_MS) {
+    const days = Math.floor(remaining / COUNTDOWN_DAY_MS)
+    const hours = Math.floor((remaining % COUNTDOWN_DAY_MS) / 3_600_000)
+    return { mode: 'days', lead, value: `${days}d ${hours}h` }
+  }
+
+  return { mode: 'clock', lead, value: formatCountdown(remaining) }
+}
+
+/** 卡片倒计时的 tick：一小时以内每秒跳，之外半分钟——防视觉疲劳，也省渲染。 */
+export const CARD_TICK_FAST_MS = 1000
+export const CARD_TICK_SLOW_MS = 30_000
+export const CARD_TICK_URGENT_MS = 60 * 60 * 1000
+
+/**
+ * 下一次重算该等多久。看着"最快结束/开始的那一件"决定：
+ * 只有快结束的商品才值得每秒刷新，否则一屏 24 张卡每秒重渲染一次。
+ *
+ * @param {number|null} ms 最近的截止（见 `soonestDealMs`）
+ * @returns {number}
+ */
+export function cardTickDelay(ms) {
+  /* `null` 是"池子里没有可倒计时的商品"，不是"还剩 0 毫秒" —— Number(null)
+   * 是 0，会被下面判成最紧急，于是空池子也每秒醒一次。 */
+  if (ms === null || ms === undefined) return CARD_TICK_SLOW_MS
+  const n = Number(ms)
+  if (!Number.isFinite(n) || n > CARD_TICK_URGENT_MS) return CARD_TICK_SLOW_MS
+  return CARD_TICK_FAST_MS
+}
+
+/**
+ * 常规秒杀里"下一个值得重算的时刻"（毫秒）。
+ * 进行中看还剩多久结束，排期中看还有多久开始；都没有返回 null。
+ *
+ * @param {object[]} list
+ * @param {number} [now]
+ * @returns {number|null}
+ */
+export function soonestDealMs(list, now = Date.now()) {
+  let best = null
+  for (const product of Array.isArray(list) ? list : []) {
+    const window = dealWindow(product, now)
+    if (!window) continue
+    const ms = window.active ? window.msLeft : window.msUntilStart
+    if (!Number.isFinite(ms) || ms <= 0) continue
+    if (best === null || ms < best) best = ms
+  }
+  return best
+}
+
+/**
  * 角标要贴在哪个面上。三个面各有各的规矩，写成常量而不是散落的字符串，
  * 免得某处把 `catalogue` 拼成 `catalog`（那会静默退回默认值）。
  */
@@ -574,11 +673,16 @@ export const BADGE_ZONE = {
   /** 常规货架（All / Tops / …）的卡片：身份 + 强推，**不显示折扣**。 */
   CATALOGUE: 'catalogue',
   /**
-   * ⚡ 秒杀专区的卡片：整区都在秒杀，**任何活动身份都不挂**（Limited Deal
+   * ⚡ 常规秒杀专区的卡片：挂 `Limited Deal` 讲身份与紧迫度；运营手填的
+   * 活动标（`Black Friday`）不挂 —— 那属于大促专区那一边。
+   */
+  REGULAR: 'regular',
+  /**
+   * 🔥 大促专区的卡片：整区都在大促，**任何活动身份都不挂**（`Limited Deal`
    * 和运营手填的 `Black Friday` 一样不挂）。只留非活动类的运营标
    * （`NEW` / `Highly Recommend` …），判定见 `isCampaignLabel`。
    */
-  DEALS: 'deals',
+  CAMPAIGN: 'campaign',
   /** 详情弹层：身份 + ACC。**折扣同样不进角标**，价格在下方价格区。 */
   DETAIL: 'detail',
 }
@@ -597,23 +701,25 @@ export const BADGE_ZONE = {
  * | 面 | 第一行 | 第二行 | ACC |
  * | --- | --- | --- | --- |
  * | `catalogue` 卡片 | campaign / Limited Deal / Coming Soon / tag | tag | 不显示 |
- * | `deals` 卡片 | **只留非活动类标签**（NEW / Highly Recommend …），活动身份全不挂 | tag（同样过滤） | 不显示 |
+ * | `regular` 常规秒杀卡片 | **Limited Deal**（活动标被摘掉） | tag | 不显示 |
+ * | `campaign` 大促卡片 | **只留非活动类标签**（NEW / Highly Recommend …），活动身份全不挂 | tag（同样过滤） | 不显示 |
  * | `detail` | 同 catalogue（+ ACC） | tag | 显示 |
  *
  * 为什么折扣不再是角标：它在手机上是**第二行**，正好压在商品图上 —— 卡片只有
  * 169px 宽、照片是主体，一枚 `50% OFF` 换来的信息量抵不上它遮住的东西。
  * 折扣本身没有消失：它仍在专区的价格区（`dealPriceInfo`）、详情页的价格区，
- * 以及专区顶部的折扣分桶里。这里只是**不再把它画成角标**。
- * 为什么专区里不显示 Limited Deal 和黑五大标：整个专区都是秒杀，再强调一遍
- * 身份是零信息（就是"点进 Black Friday 目录，卡片上还顶着一枚 Black Friday"）。
+ * 以及大促专区顶部的折扣分桶里。这里只是**不再把它画成角标**。
+ * 为什么大促专区里连 `Limited Deal` 都不显示：整区都是大促，再强调一遍身份
+ * 是零信息（就是"点进 Black Friday 目录，卡片上还顶着一枚 Black Friday"）。
  * 为什么卡片上不再有 ACC：佣金是红人**点进去**才需要判断的事，详情页有
  * 一整块 ACC 卡片（含 Campaign ID 和复制按钮），卡片上那枚只是噪音。
  *
- * 专区里不挂任何活动身份
- * ───────────────────────
+ * 两个秒杀专区里都不挂活动身份
+ * ─────────────────────────────
  * 进了 `🔥Black Friday` 专区，整屏都是黑五 —— 每张卡再挂一枚 `Black Friday`
- * 是零信息，和"专区里不写 Limited Deal"是同一个理由。所以 `deals` 面里
- * `sub_tag` 与 `tag` 只要**看着像活动**就当没有，两条判据取并集：
+ * 是零信息。常规秒杀区同理：那一屏的语言是"还差多久"，不是"哪场活动"。
+ * 所以 `regular` / `campaign` 两面里 `sub_tag` 与 `tag` 只要**看着像活动**就
+ * 当没有，两条判据取并集：
  *
  *   1. `isCampaignLabel(text)` —— 词表认得的活动（Black Friday、Cyber Monday、
  *      `50% OFF`、Flash Sale …），与专区叫什么无关。这条是"批量打了黑五标，
@@ -625,6 +731,9 @@ export const BADGE_ZONE = {
  * 正常顺序算 —— 一件挂了 `Highly Recommend` 的秒杀款，进专区后角标变成它，
  * 而不是整枚消失。
  *
+ * 两个专区的**唯一区别**：常规区允许系统派生的 `Limited Deal` 顶上来，
+ * 大促区不允许（整区都在大促）。`!inCampaign` 就是这一句。
+ *
  * 常规货架（`catalogue`）不参与这套去重：在那里 `Black Friday` 不是重复，
  * 是这件商品的关键信息。
  *
@@ -632,38 +741,42 @@ export const BADGE_ZONE = {
  *
  * @param {object} product
  * @param {number} [now]
- * @param {{ zone?: 'catalogue'|'deals'|'detail', campaign?: string }} [options]
- *   `campaign` 是当前专区的活动名（前台传 `settings.dealsTabLabel`），只在
- *   `deals` 面用于识别**自定义**活动名；词表认得的活动名不传也会被摘掉。
+ * @param {{ zone?: 'catalogue'|'regular'|'campaign'|'detail', campaign?: string, inCampaign?: boolean }} [options]
+ *   `campaign` 是当前专区的活动名（前台传 `settings.dealsTabLabel`），在两个
+ *   秒杀面里用于识别**自定义**活动名；词表认得的活动名不传也会被摘掉。
+ *   `inCampaign` 只给详情页用：这个弹层是从大促专区点开的，活动身份同样不挂。
  * @returns {Array<{ text:string, value:string, kind:'teaser'|'campaign'|'deal'|'acc'|'tag' }>}
  */
 export function badgeStackFor(
   product,
   now = Date.now(),
-  { zone = BADGE_ZONE.CATALOGUE, campaign: zoneCampaign = '' } = {},
+  { zone = BADGE_ZONE.CATALOGUE, campaign: zoneCampaign = '', inCampaign: viewInCampaign = false } = {},
 ) {
   const teaser = isTeaser(product)
   /* 预告期间的秒杀窗口仍然参与**身份判定**（需求把 Coming Soon 排在秒杀之后）。 */
   const phase = dealPhase(product, now)
   const dealing = phase === 'live' || phase === 'scheduled'
-  const inDeals = zone === BADGE_ZONE.DEALS
+  /* `inCampaign` 让**详情页**也能表明"我是在大促专区里被点开的"：整区都在
+   * 大促，详情页再挂一枚 `Black Friday` 是同一句废话。ACC 不受影响。 */
+  const inCampaignZone = zone === BADGE_ZONE.CAMPAIGN || viewInCampaign === true
+  const inDealTab = inCampaignZone || zone === BADGE_ZONE.REGULAR
   const rawTag = String(product?.tag ?? '').trim()
   const rawCampaign = String(product?.subTag ?? '').trim()
 
-  /* 专区自己的名字：只在这一面、且调用方给了名字时才比对（自定义活动名）。 */
-  const ownName = inDeals ? String(zoneCampaign ?? '').trim() : ''
+  /* 专区自己的名字：只在这两个面、且调用方给了名字时才比对（自定义活动名）。 */
+  const ownName = inDealTab ? String(zoneCampaign ?? '').trim() : ''
   const repeatsOwnName = (text) => ownName !== '' && isSameCampaign(text, ownName)
-  /* 专区内：活动身份一律当没有 —— 词表认得的，或者和专区同名的。 */
-  const dropInDeals = (text) => inDeals && (repeatsOwnName(text) || isCampaignLabel(text))
+  /* 秒杀专区里：活动身份一律当没有 —— 词表认得的，或者和专区同名的。 */
+  const dropInDealTab = (text) => inDealTab && (repeatsOwnName(text) || isCampaignLabel(text))
 
-  const tag = dropInDeals(rawTag) ? '' : rawTag
-  const campaign = dropInDeals(rawCampaign) ? '' : rawCampaign
+  const tag = dropInDealTab(rawTag) ? '' : rawTag
+  const campaign = dropInDealTab(rawCampaign) ? '' : rawCampaign
 
   /* ── 第一行：身份 ── */
   let identity = null
   if (campaign) {
     identity = { text: campaign, value: product?.subBadgeColor || '', kind: 'campaign' }
-  } else if (dealing && !teaser && !inDeals) {
+  } else if (dealing && !teaser && !inCampaignZone) {
     /* `!teaser`：预告款不领"Limited Deal"这个身份。需求把秒杀排在 Coming Soon
      * 之前，但那是假设商品在卖 —— 一个买不了的款挂上"限时秒杀"，比挂"省 40%"
      * 更误导（点进去发现尺码全锁着）。大促标仍然可以盖过 Coming Soon，因为
@@ -927,7 +1040,7 @@ export function filterDeals(list, now = Date.now()) {
 }
 
 /**
- * 专区内部的顺序：
+ * 常规秒杀专区的顺序：
  *   1. **置顶权重**（`deal_priority` 降序）—— 黑五这类活动要的"主推排前面"；
  *   2. 进行中早于排期中（还能买的排在还没开始的之前）；
  *   3. 组内**越急的越前** —— 进行中按"最快结束"，排期中按"最快开始"；
@@ -973,4 +1086,33 @@ export function dealsOrder(list, now = Date.now()) {
   scheduled.sort(byPriorityThenTime)
 
   return live.concat(scheduled).map((entry) => entry.product)
+}
+
+/**
+ * 大促专区的顺序：**折扣从高到低**。
+ *
+ * 时间在这里没有意义 —— 大促的窗口是固定的（黑五就是那几天），红人不需要
+ * "还有几小时结束"这种紧迫感，她要的是"哪件最划算"。所以这一屏不排序时间，
+ * 只排序折扣：40% 的排在 10% 的前面。
+ *
+ * 三条规则：
+ *  - 按 `discountOf(product).max` 降序 —— 和区间 chip 读的是**同一个数字**，
+ *    所以"40%+ 里排第一"的那件，一定在 40%+ 那档里。
+ *  - 折扣相同看 `min`（区间价则是"最深的那一档"）。
+ *  - 再相同保持传入顺序（= 后台拖拽序）。算不出折扣（没有价格）的 max 是 0，
+ *    自然沉到最后一档 —— 它们仍然在 All 里，只是排在后面。
+ *
+ * @param {object[]} list
+ * @returns {object[]}
+ */
+export function campaignOrder(list) {
+  return (Array.isArray(list) ? list : [])
+    .map((product, index) => ({ product, index, discount: discountOf(product) }))
+    .sort(
+      (a, b) =>
+        b.discount.max - a.discount.max ||
+        b.discount.min - a.discount.min ||
+        a.index - b.index,
+    )
+    .map((entry) => entry.product)
 }

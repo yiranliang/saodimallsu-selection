@@ -8,7 +8,14 @@ import { soldOutSummary } from '../utils/soldOut.js'
 import { listingKnownFor } from '../store/linkStore.js'
 import { badgeStyle } from '../utils/badge.js'
 import { isTeaser } from '../utils/teaser.js'
-import { BADGE_ZONE, badgeStackFor, dealPhase, dealPriceInfo } from '../utils/deal.js'
+import {
+  BADGE_ZONE,
+  badgeStackFor,
+  cardCountdown,
+  dealPhase,
+  dealPriceInfo,
+  dealWindow,
+} from '../utils/deal.js'
 
 /**
  * Product card
@@ -37,7 +44,12 @@ function ProductCard({
   onIncrement,
   onDecrement,
   onOpenDetail,
-  showPrice = false,
+  /* 这张卡在哪个面上：`catalogue` / `regular` / `campaign`。价格行和角标栈
+   * 都跟着它走 —— 三个值比"两个布尔"更难对错（见 badgeStackFor 的注释）。 */
+  zone = BADGE_ZONE.CATALOGUE,
+  /* 常规秒杀那屏的"现在"。父组件一个 timer 服务整屏，只有那一屏才传；
+   * 常规货架不传，卡片就不会因为倒计时一秒一刷。 */
+  now,
 }) {
   const [beat, setBeat] = useState(false)
   const selected = lines.length > 0
@@ -81,37 +93,35 @@ function ProductCard({
   /* 左上角的角标栈 —— 最多两行（规则全部在 `badgeStackFor`，卡片和详情
    * 弹层共用，避免两边各写一遍然后漂移）。
    *
-   * **面不同，内容不同**（这是本版的重点）：
-   *   - 常规货架（这里）：身份 + 强推标，**永不出现折扣** —— 折扣在手机上是
-   *     第二行，正好压住商品图；而且货架上每件都在被比较，把视线从"这是
-   *     什么"拉到"多少钱"是不划算的。
-   *   - ⚡ 专区（`showPrice` 为真）：**所有活动身份都不挂** —— `Limited Deal`
-   *     不挂，运营手填的 `Black Friday` / `Cyber Monday` 也不挂（整区都在
-   *     秒杀，再强调一遍是零信息）。只留 `NEW` / `Highly Recommend` 这类
-   *     非活动类运营标；一件都没有的卡片就干净地不戴角标。
+   * **面不同，内容不同**：
+   *   - 常规货架：身份 + 强推标，**永不出现折扣** —— 折扣在手机上是第二行，
+   *     正好压住商品图。
+   *   - ⚡ 常规秒杀：`Limited Deal` 讲身份与紧迫度，活动标（Black Friday）不挂。
+   *   - 🔥 大促：**所有活动身份都不挂**（Limited Deal 也不挂，整区都在大促），
+   *     只留 `NEW` / `Highly Recommend` 这类非活动类运营标。
    *   - ACC 在卡片上不出现 —— 佣金是点进去才判断的事，详情页有一整块。
-   *
-   * `showPrice` 就是"这张卡在不在秒杀专区"，所以直接拿它当 zone，不另加
-   * 一个 prop（两个布尔值迟早会有一个忘记同步）。
    *
    * `campaign` 是这个专区的活动名（后台可改的那个 Tab 名）。词表认得的活动名
    * 不用它也摘得掉，它负责的是**自定义**活动（`Spring Refresh`）—— 那种名字
    * 只能靠和当前 Tab 比对。判定在 `badgeStackFor` 里，卡片只负责把名字带过去。 */
   const teaser = isTeaser(product)
-  const badges = badgeStackFor(product, undefined, {
-    zone: showPrice ? BADGE_ZONE.DEALS : BADGE_ZONE.CATALOGUE,
-    campaign,
-  })
+  const nowValue = now ?? Date.now()
+  const badges = badgeStackFor(product, nowValue, { zone, campaign })
+  /* 价格行只在两个秒杀专区出现：货架上每件都在被比较，价格要到专区里才有意义。 */
+  const showPrice = zone !== BADGE_ZONE.CATALOGUE
 
-  /* Flash sale. The price row only exists in the deals tab (`showPrice`) —
-   * in the normal catalogue a card is ~169px wide, so the number waits for the
-   * tab where prices are the point.
-   *
-   * `Date.now()` is read at render, not on a timer: 24 interval timers for 24
-   * cards is not worth it, so a deal that expires while the grid sits untouched
-   * updates on the next render. The sheet does tick — see ProductDetail. */
-  const phase = dealPhase(product)
+  /* Flash sale. `Date.now()` is read at render, not on a timer: in the catalogue
+   * 24 interval timers for 24 cards is not worth it, so a deal that expires while
+   * the grid sits untouched updates on the next render. The regular deals tab is
+   * the one place that DOES tick — see the `now` prop and SelectionPage. */
+  const phase = dealPhase(product, nowValue)
   const priceInfo = !teaser && (phase === 'live' || phase === 'scheduled') ? dealPriceInfo(product) : null
+
+  /* 倒计时只挂在常规秒杀那屏：大促的时间是固定的，红人关心的是折扣。 */
+  const saleWindow = zone === BADGE_ZONE.REGULAR ? dealWindow(product, nowValue) : null
+  const countdown = saleWindow
+    ? cardCountdown(phase, phase === 'scheduled' ? saleWindow.msUntilStart : saleWindow.msLeft)
+    : null
 
   return (
     <article
@@ -251,6 +261,18 @@ function ProductCard({
           </div>
         )}
 
+        {/* 常规秒杀的紧迫感：`Ends in 05:12:33` / `Starts in 2d 4h`。
+            大促那屏没有这一行 —— 大促的时间是固定的，数字只会占地方。 */}
+        {countdown && (
+          <p
+            data-deal-countdown={countdown.mode}
+            className="mt-0.5 text-[10.5px] leading-tight tabular-nums text-charcoal-light"
+          >
+            {countdown.lead}{' '}
+            <span className="font-medium text-red-600">{countdown.value}</span>
+          </p>
+        )}
+
         {/* Amazon — stops propagation so tapping it does not open the sheet */}
         {amazonUrl ? (
           <a
@@ -356,7 +378,8 @@ function ProductCard({
  */
 function sameCard(prev, next) {
   if (prev.product !== next.product) return false
-  if (prev.showPrice !== next.showPrice) return false
+  if (prev.zone !== next.zone) return false
+  if (prev.now !== next.now) return false
   if (prev.campaign !== next.campaign) return false
   if (prev.amazonUrl !== next.amazonUrl) return false
   if (prev.onToggle !== next.onToggle) return false

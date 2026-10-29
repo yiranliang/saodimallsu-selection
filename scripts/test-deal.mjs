@@ -48,6 +48,11 @@ import {
   formatPriceText,
   isDealActive,
   isCampaignLabel,
+  campaignOrder,
+  campaignTabLabelOf,
+  cardCountdown,
+  cardTickDelay,
+  soonestDealMs,
   dealChanged,
   dealFieldsOf,
   dropsCampaignTag,
@@ -270,7 +275,8 @@ console.log('\n[6] badgeStackFor — two rows, three surfaces')
 
 const texts = (product, now = START, opts) => badgeStackFor(product, now, opts).map((e) => e.text)
 const onCard = (product, now = START) => texts(product, now, { zone: BADGE_ZONE.CATALOGUE })
-const onDeals = (product, now = START) => texts(product, now, { zone: BADGE_ZONE.DEALS })
+const onRegular = (product, now = START) => texts(product, now, { zone: BADGE_ZONE.REGULAR })
+const onCampaign = (product, now = START) => texts(product, now, { zone: BADGE_ZONE.CAMPAIGN })
 const onDetail = (product, now = START) => texts(product, now, { zone: BADGE_ZONE.DETAIL })
 
 /* ── 常规货架：身份 + 强推，不出折扣 ── */
@@ -283,32 +289,52 @@ check(
   ['Limited Deal', 'Highly Recommend'],
 )
 
-/* ── 专区：活动身份全不挂，只留非活动类运营标 ── */
-check('deals: a deal wears no badge at all', onDeals(deal), [])
-check('deals: no discount badge to fall back on', onDeals(deal).length, 0)
+/* ── ⚡ 常规秒杀：身份还是 Limited Deal，活动标被摘掉 ── */
+check('regular: the derived identity stays', onRegular(deal), ['Limited Deal'])
 check(
-  'deals: a hand-applied campaign label is hidden too',
-  onDeals({ ...deal, tag: 'Black Friday' }),
+  'regular: a campaign label does not take the line',
+  onRegular({ ...deal, subTag: 'Black Friday' }),
+  ['Limited Deal'],
+)
+check(
+  'regular: nor does one in the plain slot',
+  onRegular({ ...deal, tag: 'Cyber Monday' }),
+  ['Limited Deal'],
+)
+check('regular: a hand-typed percentage is dropped too', onRegular({ ...deal, tag: '50% OFF' }), [
+  'Limited Deal',
+])
+check('regular: NEW survives as the second line', onRegular({ ...deal, tag: 'NEW' }), [
+  'Limited Deal',
+  'NEW',
+])
+
+/* ── 🔥 大促：活动身份全不挂，只留非活动类运营标 ── */
+check('campaign: a deal wears no badge at all', onCampaign(deal), [])
+check('campaign: no discount badge to fall back on', onCampaign(deal).length, 0)
+check(
+  'campaign: a hand-applied campaign label is hidden too',
+  onCampaign({ ...deal, tag: 'Black Friday' }),
   [],
 )
 check(
-  'deals: and in the campaign slot as well',
-  onDeals({ ...deal, subTag: 'Cyber Monday' }),
+  'campaign: and in the campaign slot as well',
+  onCampaign({ ...deal, subTag: 'Cyber Monday' }),
   [],
 )
-check('deals: a hand-typed percentage is not a way back in', onDeals({ ...deal, tag: '50% OFF' }), [])
+check('campaign: a hand-typed percentage is not a way back in', onCampaign({ ...deal, tag: '50% OFF' }), [])
 check(
-  'deals: a non-campaign label still shows',
-  onDeals({ ...deal, tag: 'Highly Recommend' }),
+  'campaign: a non-campaign label still shows',
+  onCampaign({ ...deal, tag: 'Highly Recommend' }),
   ['Highly Recommend'],
 )
-check('deals: NEW survives', onDeals({ ...deal, tag: 'NEW' }), ['NEW'])
+check('campaign: NEW survives', onCampaign({ ...deal, tag: 'NEW' }), ['NEW'])
 check(
-  'deals: the campaign is dropped, the label takes the line',
-  onDeals({ ...deal, subTag: 'Black Friday', tag: 'Highly Recommend' }),
+  'campaign: the campaign is dropped, the label takes the line',
+  onCampaign({ ...deal, subTag: 'Black Friday', tag: 'Highly Recommend' }),
   ['Highly Recommend'],
 )
-check('deals: a campaign label on a plain product is empty', onDeals({ tag: 'Black Friday' }), [])
+check('campaign: a campaign label on a plain product is empty', onCampaign({ tag: 'Black Friday' }), [])
 
 /* ── 详情：身份 + 标签，折扣不进角标（它在下面的价格区） ── */
 check('detail: identity only', onDetail(deal), ['Limited Deal'])
@@ -325,6 +351,23 @@ check(
 check('detail: no discount text anywhere', onDetail(deal).some((v) => v.includes('OFF')), false)
 check('detail: no emoji anywhere', onDetail(deal).some((v) => /[⚡🔥💰]/.test(v)), false)
 
+/* 从大促专区点开的详情页：卡片上怎么去重，它就怎么去重。 */
+check(
+  'detail opened inside the campaign tab drops the campaign label too',
+  texts({ ...deal, subTag: 'Black Friday' }, START, { zone: BADGE_ZONE.DETAIL, inCampaign: true }),
+  [],
+)
+check(
+  'while the plain detail keeps it',
+  texts({ ...deal, subTag: 'Black Friday' }, START, { zone: BADGE_ZONE.DETAIL }),
+  ['Black Friday'],
+)
+check(
+  'ACC survives that — it is a payment concern, not an identity',
+  texts(dealProduct({ hasAcc: true }), START, { zone: BADGE_ZONE.DETAIL, inCampaign: true })[0],
+  ACC_BADGE.text,
+)
+
 /* ── Coming Soon 独占 ── */
 check(
   'a teaser beats a plain label',
@@ -335,7 +378,7 @@ check('and it never gets a second line', onCard({ ...deal, isTeaser: true }).len
 
 /* ── ACC 只在详情出现 ── */
 check('ACC is not on catalogue cards', onCard({ hasAcc: true, tag: 'New' }), ['New'])
-check('nor on deal cards', onDeals({ ...deal, hasAcc: true }), [])
+check('nor on deal cards', onCampaign({ ...deal, hasAcc: true }), [])
 check('but it does show in the detail sheet', onDetail({ hasAcc: true })[0], ACC_BADGE.text)
 
 /* Scheduled deals are not an afterthought: the deals tab shows them, so their
@@ -463,17 +506,17 @@ check(
 )
 check(
   'inside the tab a spelled-out name is redundant even without the tab arg',
-  texts({ ...deal, subTag: 'Black Friday' }, START, { zone: BADGE_ZONE.DEALS }),
+  texts({ ...deal, subTag: 'Black Friday' }, START, { zone: BADGE_ZONE.CAMPAIGN }),
   [],
 )
 check(
   'a custom name survives the word list…',
-  texts({ ...deal, tag: SPRING }, START, { zone: BADGE_ZONE.DEALS }),
+  texts({ ...deal, tag: SPRING }, START, { zone: BADGE_ZONE.CAMPAIGN }),
   [SPRING],
 )
 check(
   '…until the tab name says it is this campaign',
-  texts({ ...deal, tag: SPRING }, START, { zone: BADGE_ZONE.DEALS, campaign: SPRING }),
+  texts({ ...deal, tag: SPRING }, START, { zone: BADGE_ZONE.CAMPAIGN, campaign: SPRING }),
   [],
 )
 check(
@@ -699,18 +742,18 @@ check('but it is still a deal', bucketCountsOf([countPool[3]]).all, 1)
 check('empty list', bucketCountsOf([]), { all: 0, '10-20': 0, '20-30': 0, '30-40': 0, '40+': 0 })
 check('non-array in', bucketCountsOf(null).all, 0)
 
-/* ── 10. the deals tab label ── */
-console.log('\n[10] normaliseDealsTabLabel — what the chip is allowed to say')
+/* ── 10. the campaign tab label ── */
+console.log('\n[10] 大促 Tab 的名字 — 默认、清洗、与常规 Tab 不撞名')
 
-check('the default', DEALS_TAB_DEFAULT_LABEL, 'Limited Deals')
+check('the default', DEALS_TAB_DEFAULT_LABEL, 'Campaign Deals')
 check('unchanged when already clean', normaliseDealsTabLabel('Black Friday Deals'), 'Black Friday Deals')
 check('collapses pasted whitespace', normaliseDealsTabLabel('  Black   Friday  '), 'Black Friday')
 check('an emoji is kept, not stripped', normaliseDealsTabLabel('🔥 Black Friday'), '🔥 Black Friday')
-check('empty means "back to default"', normaliseDealsTabLabel(''), 'Limited Deals')
-check('whitespace only means the same', normaliseDealsTabLabel('   '), 'Limited Deals')
+check('empty means "back to default"', normaliseDealsTabLabel(''), 'Campaign Deals')
+check('whitespace only means the same', normaliseDealsTabLabel('   '), 'Campaign Deals')
 check('null and undefined too', [normaliseDealsTabLabel(null), normaliseDealsTabLabel(undefined)], [
-  'Limited Deals',
-  'Limited Deals',
+  'Campaign Deals',
+  'Campaign Deals',
 ])
 check(
   'capped at the pill length',
@@ -724,6 +767,47 @@ check(
   Array.from(normaliseDealsTabLabel('🔥'.repeat(40))).length,
   DEALS_TAB_LABEL_MAX,
 )
+
+/* 历史值可能是拆分前的默认名 `Limited Deals` —— 那正好是常规 Tab 的固定名，
+ * 两个 Tab 撞名谁也认不出谁，所以退回 `Campaign Deals`。 */
+check('a stored name is used verbatim', campaignTabLabelOf('🔥Black Friday'), '🔥Black Friday')
+check('the legacy default falls back', campaignTabLabelOf('Limited Deals'), 'Campaign Deals')
+check('case does not matter for that check', campaignTabLabelOf('limited deals'), 'Campaign Deals')
+check('empty falls back', campaignTabLabelOf(''), 'Campaign Deals')
+check('and so does null', campaignTabLabelOf(null), 'Campaign Deals')
+check('whitespace is trimmed', campaignTabLabelOf('  Black Friday  '), 'Black Friday')
+
+/* ── 11. campaign order ── */
+console.log('\n[11] campaignOrder — 大促按折扣从高到低，时间不参与')
+
+const priced = (id, discountLabel) => ({ id, discountLabel })
+check(
+  'the deepest discount is first',
+  campaignOrder([priced('ten', '10% OFF'), priced('fifty', '50% OFF'), priced('thirty', '30% OFF')]).map(
+    (p) => p.id,
+  ),
+  ['fifty', 'thirty', 'ten'],
+)
+/* 时间在这里没有意义：早开始的不该排到前面。 */
+check(
+  'the window does not influence it',
+  campaignOrder([
+    dealProduct({ id: 'early', saleStart: '2026-10-28T10:00', discountLabel: '15% OFF' }),
+    dealProduct({ id: 'late', saleStart: '2026-11-20T10:00', discountLabel: '45% OFF' }),
+  ]).map((p) => p.id),
+  ['late', 'early'],
+)
+check(
+  'a product with no price to compute a discount sinks',
+  campaignOrder([{ id: 'unknown' }, priced('ten', '10% OFF')]).map((p) => p.id),
+  ['ten', 'unknown'],
+)
+check(
+  'equal discounts keep the incoming order',
+  campaignOrder([priced('a', '20% OFF'), priced('b', '20% OFF')]).map((p) => p.id),
+  ['a', 'b'],
+)
+check('null in, empty out', campaignOrder(null), [])
 
 /* ── 12. the countdown label ── */
 console.log('\n[12] countdownDisplay — days far away, seconds up close')
@@ -759,6 +843,34 @@ check('negative clamps', countdownDisplay('live', -5000).value, '00:00:00')
 check('NaN clamps', countdownDisplay('live', Number.NaN).value, '00:00:00')
 check('an ended deal has no countdown', countdownDisplay('ended', 1000), null)
 check('nor does a product with no window', countdownDisplay('off', 1000), null)
+
+/* ── 13. the card countdown ── */
+console.log('\n[13] cardCountdown / cardTickDelay — 常规秒杀卡片那一行')
+
+check('live under a day is a clock', cardCountdown('live', 5000), {
+  mode: 'clock',
+  lead: 'Ends in',
+  value: '00:00:05',
+})
+check('scheduled says starts', cardCountdown('scheduled', 90 * 60000).lead, 'Starts in')
+check('over a day is compact', cardCountdown('scheduled', 2 * DD + 4 * 3600000), {
+  mode: 'days',
+  lead: 'Starts in',
+  value: '2d 4h',
+})
+check('exactly 24h is still a clock', cardCountdown('live', DD).mode, 'clock')
+check('an ended deal has none', cardCountdown('ended', 1000), null)
+check('nor does a product with no window', cardCountdown('off', 1000), null)
+check('negative clamps to zero', cardCountdown('live', -1000).value, '00:00:00')
+
+check('an hour or less ticks every second', cardTickDelay(60 * 60000), 1000)
+check('further out waits half a minute', cardTickDelay(2 * 3600000), 30000)
+check('unknown waits half a minute', cardTickDelay(null), 30000)
+
+check('the soonest end drives the tick', soonestDealMs([deal], START), END - START)
+check('a scheduled deal counts to its start', soonestDealMs([deal], START - 1000), 1000)
+check('empty pool', soonestDealMs([], START), null)
+check('products without a window are ignored', soonestDealMs([{ id: 'x' }], START), null)
 
 console.log(
   `\n${failed === 0 ? '✓ ALL PASSED' : '✗ FAILURES'}: ${passed} passed, ${failed} failed\n`,

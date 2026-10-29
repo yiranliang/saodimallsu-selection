@@ -86,6 +86,11 @@ function shared(product) {
   // be ordered. Only emitted when true, so exports stay clean.
   if (product?.isTeaser === true) out.isTeaser = true
 
+  /* 大促归属（13-campaign.sql）：true = 归 🔥 大促专区，false / 缺省 = 常规
+   * 秒杀。只在 true 时出现，和 isTeaser 同一个约定 —— 导出里不会多出 273 个
+   * `isCampaign: false`。 */
+  if (product?.isCampaign === true) out.isCampaign = true
+
   /* Flash sale — five plain-text columns, carried verbatim. No `new Date()`,
    * no timezone, no rounding: the string the admin typed is the string the
    * storefront parses (see utils/deal.js for why that is deliberate).
@@ -146,6 +151,9 @@ export function rowToProduct(row) {
       soldOutVariants: row.sold_out_variants,
       badgeColor: row.badge_color,
       isTeaser: row.is_teaser,
+      /* 13-*.sql。没跑过迁移的库读回来是 `undefined` → `false`（常规秒杀），
+       * 正好等于拆分之前的行为：所有秒杀都在同一个 Tab 里。 */
+      isCampaign: row.is_campaign === true,
       /* The five sale columns are `text` on purpose — nothing parses them on
        * the way in. A `null` column simply does not reach the product shape,
        * so `product.saleStart` is `undefined` and every consumer's falsy check
@@ -191,6 +199,9 @@ export function productToRow(product, { id, sortOrder } = {}) {
      * state end up in the table. */
     badge_color: normaliseBadgeColor(product?.badgeColor) || null,
     is_teaser: product?.isTeaser === true,
+    /* 大促归属（13-*.sql）。永远是布尔，`not null default false`：写 `false`
+     * 才让"在编辑器里把它改回常规"真的落到行上，而不是靠默认值。 */
+    is_campaign: product?.isCampaign === true,
     /* `null`, not '': same reasoning as badge_color. An empty string and a
      * missing value would mean the same thing to the storefront but would look
      * like two different states in the table. */

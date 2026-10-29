@@ -58,6 +58,10 @@ export default function ProductDetail({
   product,
   open,
   lines = [],
+  /* 这个弹层是从 🔥 大促专区点开的吗？整区都在大促，详情页再挂一枚
+   * `Black Friday` 是同一句废话。常规货架 / ⚡ 常规秒杀传 false。 */
+  inCampaign = false,
+  campaign = '',
   onAdd,
   onIncrement,
   onDecrement,
@@ -285,10 +289,16 @@ export default function ProductDetail({
   // Re-renders on every pick, so choosing a colour swaps the photo in place
   const resolved = resolveProductImage(product, spec)
   /* 角标栈 —— 和卡片同一个函数，但用的是 `detail` 面：身份 + ACC，**没有
-   * 折扣行**（折扣在下面的价格区，画成角标只会压住图片）。它不跟着用户从
-   * 哪个 tab 点进来变，这是刻意的：卡片是"扫"，详情是"判断"，同一个商品在
-   * 两个面上的差异必须只跟位置有关，不能跟来路有关。 */
-  const badges = badgeStackFor(product, now, { zone: BADGE_ZONE.DETAIL })
+   * 折扣行**（折扣在下面的价格区，画成角标只会压住图片）。
+   *
+   * 从 🔥 大促专区点开时（`inCampaign`）连活动身份也不挂 —— 那一屏整区都在
+   * 大促，卡片上怎么去重，详情页就怎么去重；否则"点进 Black Friday 卡片是
+   * 干净的，再点开又冒出一枚 Black Friday"。ACC 不受影响（那是付款相关的事）。 */
+  const badges = badgeStackFor(product, now, {
+    zone: BADGE_ZONE.DETAIL,
+    campaign,
+    inCampaign,
+  })
   const countdown = dealShown ? countdownDisplay(phase, countdownMs) : null
 
   /* Link is product-level (the first ASIN); "has a listing" is per combination,
