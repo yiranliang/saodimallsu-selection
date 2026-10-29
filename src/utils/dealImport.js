@@ -6,8 +6,9 @@
  * same identifier every other import and the CLI key on. Purely a planner: it
  * turns a grid into a list of per-product writes and a list of "why this row
  * was skipped". `productStore.setProductsDeals` is the only thing that talks to
- * Supabase, and it writes the five `sale_*` columns and nothing else (same
- * isolation argument as `setProductsBadge`).
+ * Supabase, and it writes the five `sale_*` columns (plus, in one narrow case,
+ * clears a stale campaign `sub_tag` — see `deal.js`'s `dropsCampaignTag`: a
+ * re-imported window must not keep showing the previous campaign's name).
  *
  * Columns (order-insensitive, matched by header word):
  *   主卖货号 / 货号 | 原价(可选) | 秒杀价/折后价 | 折扣率(可选) | 开始日期 | 结束日期

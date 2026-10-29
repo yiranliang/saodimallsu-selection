@@ -48,6 +48,9 @@ import {
   formatPriceText,
   isDealActive,
   isCampaignLabel,
+  dealChanged,
+  dealFieldsOf,
+  dropsCampaignTag,
   legacyDealTimes,
   numbersOf,
   parseLocalTime,
@@ -371,6 +374,59 @@ check('empty', isCampaignLabel(''), false)
 check('null', isCampaignLabel(null), false)
 /* 非拉丁活动名留给 isSameCampaign —— 词表不该去猜。 */
 check('a Chinese campaign name is not guessed here', isCampaignLabel('黑五'), false)
+
+/* ── 清空/改写秒杀时，旧活动标该不该一起清 ── */
+console.log('\n[6c] dropsCampaignTag — 秒杀一改，上一场活动的名字就让位')
+
+const bfProduct = {
+  id: 'p1',
+  saleStart: '2026-10-28T00:00',
+  saleEnd: '2026-10-30T23:59:59',
+  salePrice: '19.99',
+  originalPrice: '39.99',
+  discountLabel: '',
+  subTag: 'Black Friday',
+  subBadgeColor: '#C08A2E',
+}
+const NEXT_DEAL = {
+  saleStart: '2026-11-27T00:00',
+  saleEnd: '2026-11-30T23:59:59',
+  salePrice: '15',
+  originalPrice: '30',
+  discountLabel: '',
+}
+
+check('fields are trimmed and blanks become null', dealFieldsOf({ saleStart: ' x ', salePrice: '' }), [
+  'x',
+  null,
+  null,
+  null,
+  null,
+])
+check('the same values are not a change', dealChanged(bfProduct, { ...bfProduct }), false)
+check('nor is whitespace', dealChanged(bfProduct, { ...bfProduct, saleStart: ' 2026-10-28T00:00 ' }), false)
+check('a new window is', dealChanged(bfProduct, NEXT_DEAL), true)
+check('a price-only edit is', dealChanged(bfProduct, { ...bfProduct, salePrice: '9.99' }), true)
+check('clearing is', dealChanged(bfProduct, {}), true)
+
+check('a campaign label yields to a new window', dropsCampaignTag(bfProduct, NEXT_DEAL), true)
+check('and to a cleared window', dropsCampaignTag(bfProduct, {}), true)
+check('re-importing the same window keeps it', dropsCampaignTag(bfProduct, { ...bfProduct }), false)
+check(
+  'a lower-case name is recognised',
+  dropsCampaignTag({ ...bfProduct, subTag: 'cyber monday' }, {}),
+  true,
+)
+check('NEW is not a campaign label', dropsCampaignTag({ ...bfProduct, subTag: 'NEW' }, {}), false)
+check(
+  'nor is Highly Recommend',
+  dropsCampaignTag({ ...bfProduct, subTag: 'Highly Recommend' }, {}),
+  false,
+)
+check('no tag at all', dropsCampaignTag({ ...bfProduct, subTag: '' }, NEXT_DEAL), false)
+/* 批量"清空秒杀"容易误伤：没有窗口的商品本来就没东西可变，标必须留着。 */
+check('a product with no deal keeps its tag', dropsCampaignTag({ subTag: 'Black Friday' }, {}), false)
+check('a new product has nothing to drop', dropsCampaignTag(null, NEXT_DEAL), false)
 
 /* ── 落位：批量角标弹窗要回答"新标排第几" ── */
 check('a plain product puts a new tag first', tagPlacementOf({}), 'first')

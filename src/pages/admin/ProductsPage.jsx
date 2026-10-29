@@ -47,6 +47,7 @@ import { combinationsOf, soldOutListOf } from '../../utils/soldOut.js'
 import { readSheetGrid } from '../../utils/sheetFile.js'
 import { planImport, executeImport, planIsEmpty } from '../../utils/bulkImport.js'
 import { planDealImport, resolveDealTargets } from '../../utils/dealImport.js'
+import { dropsCampaignTag } from '../../utils/deal.js'
 import {
   CATEGORY_MODES,
   buildDealFromDates,
@@ -411,11 +412,21 @@ export default function ProductsPage() {
           const moved = await moveAsins(previousSku, nextSku)
           if (moved) showToast?.(`ASIN 已从 ${previousSku} 迁到 ${nextSku}`, 'default', 3000)
         }
-        await updateProduct(draft.id, draft)
+        /* 秒杀被清空时，旧活动标一起让位 —— 否则货架上还是上一场活动的
+         * 名字，而不是 Limited Deal。（编辑器里改日期不从这条清：那是同一场
+         * 活动的改期，运营没说这枚标过期了。批量导入走的是"表格即真相"，
+         * 所以那边任何窗口变化都算。） */
+        const dealNowOff =
+          !String(draft.saleStart || '').trim() && !String(draft.saleEnd || '').trim()
+        const droppedTag =
+          dealNowOff && dropsCampaignTag(editing, draft) ? String(editing?.subTag || '').trim() : ''
+        const payload = droppedTag ? { ...draft, subTag: '', subBadgeColor: '' } : draft
+        await updateProduct(payload.id, payload)
+        const savedMsg = droppedTag ? `已保存 · 旧活动标「${droppedTag}」已清除` : '已保存'
         showToast?.(
-          badgeDropped ? badgeWarning : '已保存',
+          badgeDropped ? `${badgeWarning}${droppedTag ? ` 旧活动标「${droppedTag}」已清除。` : ''}` : savedMsg,
           badgeDropped ? 'error' : 'success',
-          badgeDropped ? 6000 : 3000,
+          badgeDropped ? 6000 : droppedTag ? 4000 : 3000,
         )
 
         /* A renamed colour re-keys its ASINs (the map is keyed by the text). Say
@@ -542,7 +553,12 @@ export default function ProductsPage() {
   }
 
   /**
-   * 批量开秒杀 —— 写五个 sale_* 列（+ 可选置顶权重），别的一律不碰。
+   * 批量开秒杀 —— 写五个 sale_* 列（+ 可选置顶权重），别的不碰。
+   *
+   * **唯一的例外**：这些商品原来挂着活动标（`Black Friday`…）而这次写入
+   * 改动了窗口时，`sub_tag` / `sub_badge_color` 会被一起清掉 —— 否则货架上
+   * 显示的还是上一场活动的名字，而不是 `Limited Deal`（见 deal.js 的
+   * `dropsCampaignTag`）。清的是活动类文字，运营标（NEW…）不动。
    *
    * 时间在 `buildDealFromDates` 里补成整天边界，和单件编辑器的规则逐字一致：
    * 手填日期不可能精确到秒，所以开始就是 00:00:00、结束就是 23:59:59，
@@ -556,6 +572,8 @@ export default function ProductsPage() {
     }
 
     const priority = parsePriorityInput(draft.priority)
+    /* 先说清楚会清掉几枚活动标 —— 静默删掉运营自己打的字，比不删更糟。 */
+    const droppedTags = selectedProducts.filter((product) => dropsCampaignTag(product, deal)).length
     try {
       const count = await setProductsDeals(
         selectedProducts.map((product) => ({ id: product.id, deal })),
@@ -564,7 +582,8 @@ export default function ProductsPage() {
       setBatchDealOpen(false)
       clearSelection()
       showToast?.(
-        `已给 ${count} 件商品设置秒杀${priority ? ` · 置顶权重 ${priority}` : ''}`,
+        `已给 ${count} 件商品设置秒杀${priority ? ` · 置顶权重 ${priority}` : ''}` +
+          (droppedTags ? ` · 清除了 ${droppedTags} 个旧活动标` : ''),
         'success',
       )
     } catch (err) {
@@ -575,11 +594,15 @@ export default function ProductsPage() {
 
   /** 清空秒杀（活动结束后那一下）：五个字段 + 置顶一起归零。 */
   const handleBatchDealClear = async () => {
+    const droppedTags = selectedProducts.filter((product) => dropsCampaignTag(product, {})).length
     try {
       const count = await clearProductsDeals(selectedProducts.map((product) => product.id))
       setBatchDealOpen(false)
       clearSelection()
-      showToast?.(`已清空 ${count} 件商品的秒杀`, 'default')
+      showToast?.(
+        `已清空 ${count} 件商品的秒杀` + (droppedTags ? ` · 清除了 ${droppedTags} 个旧活动标` : ''),
+        'default',
+      )
     } catch (err) {
       showToast?.(err.message, 'error')
     }
@@ -1037,6 +1060,11 @@ export default function ProductsPage() {
   const runDealImport = async () => {
     if (!dealTargets || !dealTargets.matched.length || dealBusy) return
     setDealBusy(true)
+    /* 这份表会把多少件商品身上的旧活动标换掉（只清活动类，见 deal.js）。 */
+    const byId = new Map(products.map((product) => [String(product.id), product]))
+    const droppedTags = dealTargets.matched.filter(({ id, deal }) =>
+      dropsCampaignTag(byId.get(String(id)), deal),
+    ).length
     try {
       const count = await setProductsDeals(dealTargets.matched)
       await loadProducts({ silent: true })
@@ -1046,7 +1074,12 @@ export default function ProductsPage() {
         missing: dealTargets.missing,
         problems: dealPlan.problems,
       })
-      showToast?.(`Deals set on ${count} product${count === 1 ? '' : 's'}`, 'success', 4000)
+      showToast?.(
+        `Deals set on ${count} product${count === 1 ? '' : 's'}` +
+          (droppedTags ? ` · ${droppedTags} old campaign label${droppedTags === 1 ? '' : 's'} cleared` : ''),
+        'success',
+        4000,
+      )
     } catch (err) {
       showToast?.(err.message, 'error', 6000)
     } finally {

@@ -26,6 +26,7 @@ import { products as DEFAULT_PRODUCTS } from '../data/products.js'
 import { normalizeProduct, rowToProduct, productToRow, UNCATEGORISED } from './mapping.js'
 import { normaliseBadgeColor } from '../utils/badge.js'
 import { BATCH_CHUNK, chunk } from '../utils/batchOps.js'
+import { dropsCampaignTag } from '../utils/deal.js'
 
 export { UNCATEGORISED }
 
@@ -676,6 +677,13 @@ export async function setProductsBadge(ids, badge, { sub, touchTag = true } = {}
  * 不该有机会把商品名、库存、角标、排序一起写回去。`planDealImport` /
  * `buildDealFromDates` 已经把时间补全成了整天的边界，这里只负责落库。
  *
+ * **唯一的例外**：这次写入真的改动了窗口、而商品原来挂着**活动标**
+ * （`Black Friday` / `Cyber Monday` / `50% OFF`…）时，`sub_tag` 与
+ * `sub_badge_color` 会被一起置空 —— 见 `deal.js` 的 `dropsCampaignTag`。
+ * 不清的话，清空秒杀再导新表，货架上显示的还是上一场活动的名字，而表格里
+ * 没有"活动标"这一列，运营无从发现。运营自己的标（`NEW` /
+ * `Highly Recommend`）不属于活动类，原样保留。
+ *
  * `discount_label` 现在会被写入：表格里的「折扣率」比两个价格更权威 ——
  * 尤其是**没有原价**的那种表，除了它没有任何东西能说明便宜了多少。
  * 空值仍然写 null，前台就会退回"从价格算"，算不出来就不显示标签：
@@ -711,7 +719,17 @@ export async function setProductsDeals(targets, { priority } = {}) {
     priority !== undefined && Number.isFinite(Number(priority))
   const priorityValue = setsPriority ? Math.max(0, Math.trunc(Number(priority))) : 0
 
-  const rows = list.map(({ id, deal }) => {
+  /* 写入前的商品：清活动标要看它当前挂的是什么、窗口到底有没有变。 */
+  const byId = new Map(cache.map((product) => [String(product.id), product]))
+
+  /* 两组分开写。PostgREST 的批量 upsert 要求**同一批对象键完全一致**
+   * （PGRST102），所以"要清活动标"的行不能和"不动它"的行混在一批：
+   * 前者多出 `sub_tag` / `sub_badge_color` 两个键。分开写也顺带保证
+   * 不清的那些行连碰都不碰这两列。 */
+  const plainRows = []
+  const clearRows = []
+
+  for (const { id, deal } of list) {
     const row = {
       id,
       sale_start: text(deal?.saleStart),
@@ -723,11 +741,21 @@ export async function setProductsDeals(targets, { priority } = {}) {
       discount_label: text(deal?.discountLabel),
     }
     if (setsPriority) row.deal_priority = priorityValue
-    return row
-  })
+
+    /* 秒杀一改（或一清），上一场活动的标就该让位 —— 否则货架上显示的是
+     * `Black Friday` 而不是 `Limited Deal`，而导入表格里没有"活动标"这一列，
+     * 运营根本无从发现（见 deal.js 的 `dropsCampaignTag`）。只清活动类的
+     * 文字，`NEW` / `Highly Recommend` 原样保留；副角标列不存在时整段跳过，
+     * 因为那个功能此刻本来就没生效。 */
+    if (subBadgeAvailable && dropsCampaignTag(byId.get(String(id)), deal || {})) {
+      clearRows.push({ ...row, sub_tag: null, sub_badge_color: null })
+    } else {
+      plainRows.push(row)
+    }
+  }
 
   if (setsPriority && !priorityColumnAvailable) {
-    for (const row of rows) delete row.deal_priority
+    for (const row of [...plainRows, ...clearRows]) delete row.deal_priority
     console.warn(
       '[products] deal_priority 列不存在，置顶未保存。先跑 supabase/11-sub-badge-deal-priority.sql。',
     )
@@ -735,24 +763,29 @@ export async function setProductsDeals(targets, { priority } = {}) {
 
   /* 分批 upsert：每批自带 select，回传的行直接刷新缓存 —— 后台列表上的
    * "⚡ 25% OFF" 在第一批回来时就变了，不必等整批。 */
-  let written = 0
-  for (const part of chunk(rows, BATCH_CHUNK)) {
-    const { data, error } = await requireClient()
-      .from('products')
-      .upsert(part, { onConflict: 'id' })
-      .select()
+  const write = async (batch) => {
+    let done = 0
+    for (const part of chunk(batch, BATCH_CHUNK)) {
+      const { data, error } = await requireClient()
+        .from('products')
+        .upsert(part, { onConflict: 'id' })
+        .select()
 
-    if (error) throw new Error(error.message)
+      if (error) throw new Error(error.message)
 
-    if (data) {
-      const patched = new Map(data.map((row) => [String(row.id), rowToProduct(row)]))
-      cache = cache.map((product) => patched.get(String(product.id)) || product)
+      if (data) {
+        const patched = new Map(data.map((row) => [String(row.id), rowToProduct(row)]))
+        cache = cache.map((product) => patched.get(String(product.id)) || product)
+      }
+      done += part.length
+      notify()
     }
-    written += part.length
-    notify()
+    return done
   }
 
-  return written
+  /* 先写不动角标的那批，再写要清的 —— 两批互不依赖，顺序只是让"常规写入"
+   * 先落地，万一第二批失败，第一批的秒杀已经是新的了。 */
+  return (await write(plainRows)) + (await write(clearRows))
 }
 
 /**

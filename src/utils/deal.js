@@ -244,6 +244,59 @@ export function isCampaignLabel(text) {
 }
 
 /**
+ * 五个秒杀字段的归一形态：去空白、空串 → null。只用于比较，不写入任何东西。
+ *
+ * @param {object} product
+ * @returns {Array<string|null>} 顺序与 `DEAL_FIELDS` 一致
+ */
+export function dealFieldsOf(product) {
+  return DEAL_FIELDS.map((key) => {
+    const text = String(product?.[key] ?? '').trim()
+    return text || null
+  })
+}
+
+/**
+ * 这次写入会不会改动秒杀窗口 —— 五个字段里任何一个变了就算。
+ *
+ * 按字段比而不是按"有没有窗口"比：只改价格的导入也算改写；而"重导同一份
+ * 表"（数值逐字相同）不该触发任何副作用。
+ *
+ * @param {object} prev 写入前
+ * @param {object} next 即将写入的值（`{}` = 清空）
+ * @returns {boolean}
+ */
+export function dealChanged(prev, next) {
+  const before = dealFieldsOf(prev)
+  const after = dealFieldsOf(next)
+  return before.some((value, index) => value !== after[index])
+}
+
+/**
+ * 秒杀被改写或清空之后，商品身上那枚**活动标**该不该一起清掉。
+ *
+ * 真实事故：给一批商品批量打了 `Black Friday`，活动结束后清空秒杀、再导
+ * 新一期的秒杀表 —— 因为 `sub_tag` 还留着，货架上显示的是 `Black Friday`
+ * 而不是 `Limited Deal`。而导入表格里**根本没有"活动标"这一列**，运营
+ * 无从发现，只会觉得"秒杀没生效"。
+ *
+ * 只有**活动类**的文字会被清（`Black Friday` / `Cyber Monday` / `50% OFF`…，
+ * 见 `isCampaignLabel`）。`NEW` / `Highly Recommend` 是运营对商品本身的判断，
+ * 和秒杀无关，必须留下。想再挂活动标，导入完用批量角标打一次就行 ——
+ * 这也是推荐的流程（先导入，再打标）。
+ *
+ * 判定要求"窗口真的变了"：给一件**没有秒杀**的商品点批量"清空秒杀"，不会
+ * 顺手抹掉它的活动标（没东西可变）。
+ *
+ * @param {object} prev 写入前的商品（`subTag` + 五个 `sale*` 字段）
+ * @param {object} next 即将写入的秒杀值（`{}` = 清空）
+ * @returns {boolean}
+ */
+export function dropsCampaignTag(prev, next) {
+  return dealChanged(prev, next) && isCampaignLabel(prev?.subTag)
+}
+
+/**
  * 专区顶部的折扣区间。左闭右开，和日期窗口同一套约定：
  * 恰好 20% 属于 20–30，不属于 10–20。
  *
