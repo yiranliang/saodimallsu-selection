@@ -93,9 +93,9 @@ check('a live deal takes the identity line', detailBadge(liveDeal, MID), {
   value: DEAL_BADGE.value,
   kind: 'deal',
 })
-check('the discount sits underneath it', detail(liveDeal, MID).map((b) => b.text), [
+check('the ops label takes the second line — not a discount', detail(liveDeal, MID).map((b) => b.text), [
   'Limited Deal',
-  '50% OFF',
+  'New',
 ])
 check(
   'a scheduled deal beats ACC too',

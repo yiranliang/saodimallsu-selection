@@ -1770,7 +1770,8 @@ function DealSection({ value, onChange, open: initiallyOpen, teaser, legacy, col
           </div>
 
           <p className="text-[10px] leading-relaxed text-charcoal-light">
-            卡片上显示 <span className="font-medium text-charcoal/70">{auto || '折扣'}</span>。
+            详情页价格区显示 <span className="font-medium text-charcoal/70">{auto || '折扣'}</span>，
+            角标上不再出现折扣（手机端第二行会压住商品图）。
             两个价格都可以写区间（`30-50`），数字按你填的原样展示 ——
             前台不会用自己的算法改写它。
           </p>

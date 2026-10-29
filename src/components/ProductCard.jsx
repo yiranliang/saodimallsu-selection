@@ -82,18 +82,21 @@ function ProductCard({
    * 弹层共用，避免两边各写一遍然后漂移）。
    *
    * **面不同，内容不同**（这是本版的重点）：
-   *   - 常规货架（这里）：身份 + 强推标，**不出折扣**。货架上每一件都在被
-   *     比较，一行 `50% OFF` 会把视线从"这是什么"拉到"多少钱"。
-   *   - ⚡ 专区（`showPrice` 为真）：第一行不写 `Limited Deal`（整区都在秒杀，
-   *     写它等于零信息），第二行才是折扣。
-   *   - ACC 在卡片上不再出现 —— 佣金是点进去才判断的事，详情页有一整块。
+   *   - 常规货架（这里）：身份 + 强推标，**永不出现折扣** —— 折扣在手机上是
+   *     第二行，正好压住商品图；而且货架上每件都在被比较，把视线从"这是
+   *     什么"拉到"多少钱"是不划算的。
+   *   - ⚡ 专区（`showPrice` 为真）：**所有活动身份都不挂** —— `Limited Deal`
+   *     不挂，运营手填的 `Black Friday` / `Cyber Monday` 也不挂（整区都在
+   *     秒杀，再强调一遍是零信息）。只留 `NEW` / `Highly Recommend` 这类
+   *     非活动类运营标；一件都没有的卡片就干净地不戴角标。
+   *   - ACC 在卡片上不出现 —— 佣金是点进去才判断的事，详情页有一整块。
    *
    * `showPrice` 就是"这张卡在不在秒杀专区"，所以直接拿它当 zone，不另加
    * 一个 prop（两个布尔值迟早会有一个忘记同步）。
    *
-   * `campaign` 是这个专区的活动名（后台可改的那个 Tab 名）。专区内部不重复
-   * 挂同一场活动的角标 —— 那正是"点进 Black Friday 目录，卡片上还顶着一枚
-   * Black Friday"的来源。判定在 `badgeStackFor` 里，卡片只负责把名字带过去。 */
+   * `campaign` 是这个专区的活动名（后台可改的那个 Tab 名）。词表认得的活动名
+   * 不用它也摘得掉，它负责的是**自定义**活动（`Spring Refresh`）—— 那种名字
+   * 只能靠和当前 Tab 比对。判定在 `badgeStackFor` 里，卡片只负责把名字带过去。 */
   const teaser = isTeaser(product)
   const badges = badgeStackFor(product, undefined, {
     zone: showPrice ? BADGE_ZONE.DEALS : BADGE_ZONE.CATALOGUE,

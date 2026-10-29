@@ -47,6 +47,7 @@ import {
   formatPrice,
   formatPriceText,
   isDealActive,
+  isCampaignLabel,
   legacyDealTimes,
   numbersOf,
   parseLocalTime,
@@ -279,32 +280,46 @@ check(
   ['Limited Deal', 'Highly Recommend'],
 )
 
-/* ── 专区：不重复 Limited Deal，第二行才是折扣 ── */
-check('deals: the identity line is suppressed', onDeals(deal), ['50% OFF'])
-check('deals: kind says it is the discount', badgeStackFor(deal, START, { zone: BADGE_ZONE.DEALS })[0].kind, 'discount')
+/* ── 专区：活动身份全不挂，只留非活动类运营标 ── */
+check('deals: a deal wears no badge at all', onDeals(deal), [])
+check('deals: no discount badge to fall back on', onDeals(deal).length, 0)
 check(
-  'deals: a campaign takes the first line, the number the second',
-  onDeals({ ...deal, subTag: 'Black Friday', subBadgeColor: '#2B2B2B' }),
-  ['Black Friday', '50% OFF'],
+  'deals: a hand-applied campaign label is hidden too',
+  onDeals({ ...deal, tag: 'Black Friday' }),
+  [],
 )
 check(
-  'deals: a plain label also takes the first line',
+  'deals: and in the campaign slot as well',
+  onDeals({ ...deal, subTag: 'Cyber Monday' }),
+  [],
+)
+check('deals: a hand-typed percentage is not a way back in', onDeals({ ...deal, tag: '50% OFF' }), [])
+check(
+  'deals: a non-campaign label still shows',
   onDeals({ ...deal, tag: 'Highly Recommend' }),
-  ['Highly Recommend', '50% OFF'],
+  ['Highly Recommend'],
 )
+check('deals: NEW survives', onDeals({ ...deal, tag: 'NEW' }), ['NEW'])
 check(
-  'deals: no campaign and no label leaves just the number',
-  onDeals(deal).length,
-  1,
+  'deals: the campaign is dropped, the label takes the line',
+  onDeals({ ...deal, subTag: 'Black Friday', tag: 'Highly Recommend' }),
+  ['Highly Recommend'],
 )
+check('deals: a campaign label on a plain product is empty', onDeals({ tag: 'Black Friday' }), [])
 
-/* ── 详情：完整信息 ── */
-check('detail: identity then discount', onDetail(deal), ['Limited Deal', '50% OFF'])
+/* ── 详情：身份 + 标签，折扣不进角标（它在下面的价格区） ── */
+check('detail: identity only', onDetail(deal), ['Limited Deal'])
 check(
   'detail: a campaign outranks the derived deal',
   onDetail({ ...deal, subTag: 'Black Friday', subBadgeColor: '#2B2B2B' }),
-  ['Black Friday', '50% OFF'],
+  ['Black Friday'],
 )
+check(
+  'detail: a label rides underneath instead of the discount',
+  onDetail(dealProduct({ tag: 'Best-seller' })),
+  ['Limited Deal', 'Best-seller'],
+)
+check('detail: no discount text anywhere', onDetail(deal).some((v) => v.includes('OFF')), false)
 check('detail: no emoji anywhere', onDetail(deal).some((v) => /[⚡🔥💰]/.test(v)), false)
 
 /* ── Coming Soon 独占 ── */
@@ -317,7 +332,7 @@ check('and it never gets a second line', onCard({ ...deal, isTeaser: true }).len
 
 /* ── ACC 只在详情出现 ── */
 check('ACC is not on catalogue cards', onCard({ hasAcc: true, tag: 'New' }), ['New'])
-check('nor on deal cards', onDeals({ ...deal, hasAcc: true }), ['50% OFF'])
+check('nor on deal cards', onDeals({ ...deal, hasAcc: true }), [])
 check('but it does show in the detail sheet', onDetail({ hasAcc: true })[0], ACC_BADGE.text)
 
 /* Scheduled deals are not an afterthought: the deals tab shows them, so their
@@ -326,6 +341,36 @@ check('a scheduled deal still counts as a deal', onCard(deal, START - 1000), ['L
 check('an ended deal is a normal product again', badgeStackFor(deal, END + 1000), [])
 check('no badge at all', badgeStackFor({}), [])
 check('never more than two rows', onCard({ ...deal, tag: 'New', subTag: 'Black Friday' }).length, 2)
+
+/* ── 活动标识别：专区内该摘掉的"活动身份" ── */
+console.log('\n[6b] isCampaignLabel — 什么算活动，什么算运营判断')
+
+check('a spelled-out holiday', isCampaignLabel('Black Friday'), true)
+check('an emoji does not hide it', isCampaignLabel('🔥Cyber Monday'), true)
+check('a noun after it does not either', isCampaignLabel('Black Friday Doorbuster'), true)
+check('the acronym', isCampaignLabel('BFCM'), true)
+check('a percentage', isCampaignLabel('50% OFF'), true)
+check('lower case off', isCampaignLabel('20% off'), true)
+check('a bare off', isCampaignLabel('Everything Off'), true)
+check('a generic sale phrase', isCampaignLabel('Flash Sale'), true)
+check('a holiday on its own', isCampaignLabel('Thanksgiving'), true)
+check('a discount noun', isCampaignLabel('Clearance'), true)
+
+/* 这六枚是需求点名要留下来的（"专区里只能显示非活动类的运营标签"）。 */
+check('NEW is an ops decision, not a campaign', isCampaignLabel('NEW'), false)
+check('nor is Highly Recommend', isCampaignLabel('Highly Recommend'), false)
+check('nor Best-seller', isCampaignLabel('Best-seller'), false)
+check(
+  'nor Trending / Restock / Must-have',
+  ['Trending', 'Restock', 'Must-have'].map((t) => isCampaignLabel(t)),
+  [false, false, false],
+)
+check('Limited Edition is a product attribute', isCampaignLabel('Limited Edition'), false)
+check('a colour name is not a campaign', isCampaignLabel('Oatmeal'), false)
+check('empty', isCampaignLabel(''), false)
+check('null', isCampaignLabel(null), false)
+/* 非拉丁活动名留给 isSameCampaign —— 词表不该去猜。 */
+check('a Chinese campaign name is not guessed here', isCampaignLabel('黑五'), false)
 
 /* ── 落位：批量角标弹窗要回答"新标排第几" ── */
 check('a plain product puts a new tag first', tagPlacementOf({}), 'first')
@@ -352,58 +397,45 @@ check('so it never matches its own number', isSameCampaign('50% OFF', '50'), fal
 check('two different campaigns stay different', isSameCampaign('Black Friday', 'Cyber Monday'), false)
 check('empty never matches', isSameCampaign('', 'Black Friday'), false)
 
-/* ── 专区里不重复挂自己的名字 ── */
+/* ── 自定义活动名：词表认不出来的，只能靠专区名比对 ── */
 const BF = '🔥Black Friday'
+const SPRING = 'Spring Refresh'
 check(
   'the catalogue keeps the campaign badge',
-  texts({ ...deal, subTag: 'Black Friday' }, START, {
-    zone: BADGE_ZONE.CATALOGUE,
-    campaign: BF,
-  }),
+  texts({ ...deal, subTag: 'Black Friday' }, START, { zone: BADGE_ZONE.CATALOGUE, campaign: BF }),
   ['Black Friday'],
 )
 check(
-  'inside its own tab the name is redundant',
-  texts({ ...deal, subTag: 'Black Friday' }, START, { zone: BADGE_ZONE.DEALS, campaign: BF }),
-  ['50% OFF'],
-)
-check(
-  'the plain tag equal to the tab is dropped too',
-  texts({ ...deal, tag: 'Black Friday' }, START, { zone: BADGE_ZONE.DEALS, campaign: BF }),
-  ['50% OFF'],
-)
-check(
-  'a different label still takes the first line',
-  texts({ ...deal, tag: 'Highly Recommend', subTag: 'Black Friday' }, START, {
-    zone: BADGE_ZONE.DEALS,
-    campaign: BF,
-  }),
-  ['Highly Recommend', '50% OFF'],
-)
-check(
-  'without the tab name nothing is dropped',
+  'inside the tab a spelled-out name is redundant even without the tab arg',
   texts({ ...deal, subTag: 'Black Friday' }, START, { zone: BADGE_ZONE.DEALS }),
-  ['Black Friday', '50% OFF'],
+  [],
+)
+check(
+  'a custom name survives the word list…',
+  texts({ ...deal, tag: SPRING }, START, { zone: BADGE_ZONE.DEALS }),
+  [SPRING],
+)
+check(
+  '…until the tab name says it is this campaign',
+  texts({ ...deal, tag: SPRING }, START, { zone: BADGE_ZONE.DEALS, campaign: SPRING }),
+  [],
 )
 check(
   'the tab name is ignored on the catalogue',
-  texts({ ...deal, subTag: 'Black Friday' }, START, {
-    zone: BADGE_ZONE.CATALOGUE,
-    campaign: BF,
-  }),
-  ['Black Friday'],
+  texts({ ...deal, subTag: SPRING }, START, { zone: BADGE_ZONE.CATALOGUE, campaign: SPRING }),
+  [SPRING],
 )
 
-/* ── 范围 / 手填文案 ── */
+/* ── 折扣文案不再有"角标"这一站 ── */
 check(
-  'a range deal puts the range on the discount line',
+  'a range deal shows the identity only',
   onDetail(dealProduct({ salePrice: '15-25', originalPrice: '30-50', discountLabel: '' })),
-  ['Limited Deal', '50% OFF'],
+  ['Limited Deal'],
 )
 check(
-  'a manual label is the discount line, word for word',
+  'a hand-typed label is not rendered as a badge either',
   onDetail(dealProduct({ discountLabel: '70% OFF' })),
-  ['Limited Deal', '70% OFF'],
+  ['Limited Deal'],
 )
 
 /* Contrast: the deal pill is white text on #C62828, the same bar the five

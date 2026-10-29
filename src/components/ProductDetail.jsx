@@ -284,10 +284,10 @@ export default function ProductDetail({
 
   // Re-renders on every pick, so choosing a colour swaps the photo in place
   const resolved = resolveProductImage(product, spec)
-  /* 角标栈 —— 和卡片同一个函数，但用的是 `detail` 面：**详情页永远给完整信息**
-   * （折扣行 + ACC 身份），不跟着用户从哪个 tab 点进来变。这是刻意的：
-   * 卡片是"扫"，详情是"判断"，同一个商品在两个面上的差异必须只跟位置有关，
-   * 不能跟来路有关。 */
+  /* 角标栈 —— 和卡片同一个函数，但用的是 `detail` 面：身份 + ACC，**没有
+   * 折扣行**（折扣在下面的价格区，画成角标只会压住图片）。它不跟着用户从
+   * 哪个 tab 点进来变，这是刻意的：卡片是"扫"，详情是"判断"，同一个商品在
+   * 两个面上的差异必须只跟位置有关，不能跟来路有关。 */
   const badges = badgeStackFor(product, now, { zone: BADGE_ZONE.DETAIL })
   const countdown = dealShown ? countdownDisplay(phase, countdownMs) : null
 

@@ -525,8 +525,9 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
           onDecrement={decrement}
           onOpenDetail={setDetailProduct}
           showPrice={isDeals}
-          /* 专区自己叫什么：`badgeStackFor` 用它判断"这枚角标是不是在重复
-             页面标题"。只在专区里传，常规货架上 Black Friday 不是重复。 */
+          /* 专区自己叫什么：`badgeStackFor` 用它比对**自定义**活动名（词表认得
+             的 Black Friday / Cyber Monday 不用它也摘得掉）。只在专区里传，
+             常规货架上 Black Friday 不是重复，是这件商品的关键信息。 */
           campaign={isDeals ? dealsTabLabel : ''}
         />
 

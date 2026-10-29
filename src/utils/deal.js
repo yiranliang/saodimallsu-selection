@@ -43,8 +43,8 @@ export const DEAL_FIELDS = [
  */
 export const DEAL_BADGE = {
   /* 身份文案，不含图标：`⚡`/`🔥` 这类符号在 10px 的药丸上既抢眼又占宽，
-   * 黑五期间一枚「Limited Deal」已经说明了一切。折扣数字单独一行
-   * （见 `badgeStackFor`），所以这里不需要再暗示"这是个 deal"。 */
+   * 黑五期间一枚「Limited Deal」已经说明了一切。折扣**不进角标**（手机端
+   * 第二行会压住商品图，见 `badgeStackFor`），这里更不需要暗示"这是个 deal"。 */
   text: 'Limited Deal',
   value: '#C62828',
   label: 'Deal red',
@@ -128,6 +128,119 @@ export function isSameCampaign(a, b) {
   const kb = campaignKey(right)
   if (ka && kb) return ka === kb
   return left.toLowerCase() === right.toLowerCase()
+}
+
+/**
+ * 整串归一后**以某个活动名开头**就算活动标。
+ *
+ * 用"开头"而不是"相等"：运营会写 `Black Friday Doorbuster`、`Cyber Monday
+ * 2026`，归一后是 `blackfridaydoorbuster` / `cybermonday2026` —— 逐字比较
+ * 一个都认不出来，而它们显然都是活动。
+ */
+const CAMPAIGN_NAMES = [
+  'blackfriday',
+  'cybermonday',
+  'bfcm',
+  'primeday',
+  'primedeal',
+  'laborday',
+  'memorialday',
+  'thanksgiving',
+  'christmas',
+  'xmas',
+  'newyear',
+  'valentines',
+  'mothersday',
+  'fathersday',
+  'easter',
+  'halloween',
+  'backtoschool',
+  'flashsale',
+  'doorbuster',
+  'limiteddeal',
+  'dealoftheday',
+  'lastchance',
+  'midseason',
+]
+
+/**
+ * 逐词命中的活动名词。**只收"这个词只可能指活动"的**，所以
+ * `Highly Recommend` / `NEW` / `Best-seller` / `Trending` / `Restock` /
+ * `Must-have` 一个都不在里面 —— 它们是运营对商品的判断，不是活动身份。
+ *
+ * 故意不收的两个词：
+ *   - `new`  → `NEW` 必须在专区里照常显示（需求原文点名了它）
+ *   - `limited` → `Limited Edition` 是商品属性，不是活动
+ */
+const CAMPAIGN_WORDS = new Set([
+  'sale',
+  'sales',
+  'deal',
+  'deals',
+  'promo',
+  'promos',
+  'promotion',
+  'promotions',
+  'discount',
+  'discounts',
+  'markdown',
+  'markdowns',
+  'clearance',
+  'doorbuster',
+  'doorbusters',
+  'flash',
+  'off',
+  'offers',
+  'bfcm',
+  'xmas',
+  'holiday',
+  'holidays',
+  'christmas',
+  'thanksgiving',
+  'halloween',
+  'easter',
+  'valentine',
+  'valentines',
+  'cyber',
+  'blackfriday',
+  'primeday',
+])
+
+/**
+ * 这枚文字是不是「活动身份」。
+ *
+ * 三层判定，任何一层命中就算，从强到弱：
+ *
+ *   1. **折扣语言**：带 `%` 或独立的 `off`（`50% OFF`、`2 FOR 50% OFF`）
+ *   2. **活动名**：归一后以 `CAMPAIGN_NAMES` 之一开头（`Black Friday`、
+ *      `🔥Cyber Monday`、`Black Friday Doorbuster`）
+ *   3. **活动名词**：逐词命中 `CAMPAIGN_WORDS`（`Thanksgiving`、`Flash Sale`）
+ *
+ * 为什么是词表而不是白名单：白名单要穷举运营可能写的每个词，漏一个的表现是
+ * 「我在专区里挂了一枚新标，前台没有」—— 运营会以为坏了。词表漏一个的表现
+ * 只是多显示一枚活动标，可接受。而 `NEW` / `Highly Recommend` 这类词本来
+ * 就不在词表里，天然放行。
+ *
+ * 非拉丁文案（「黑五」）归一后为空，三层都不会命中 —— 那种情况交给
+ * `isSameCampaign` 与专区自己的名字比对，别在这里猜。
+ *
+ * @param {unknown} text
+ * @returns {boolean}
+ */
+export function isCampaignLabel(text) {
+  const raw = String(text ?? '').trim()
+  if (!raw) return false
+
+  /* 1. 折扣语言。`\boff\b` 不会误伤 `offer`（f 后面要有词边界）。 */
+  if (/\d\s*%/.test(raw) || /\boff\b/i.test(raw)) return true
+
+  /* 2. 活动名。`campaignKey` 已经把 `Deals` / `Sale` 这类尾巴剥掉了。 */
+  const key = campaignKey(raw)
+  if (key && CAMPAIGN_NAMES.some((name) => key.startsWith(name))) return true
+
+  /* 3. 逐词。复数靠剥 `s` 兜一下（`Deals`、`Sales` 已在表里，`Doorbusters` 不一定）。 */
+  const words = raw.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
+  return words.some((word) => CAMPAIGN_WORDS.has(word) || CAMPAIGN_WORDS.has(word.replace(/s$/, '')))
 }
 
 /**
@@ -407,54 +520,69 @@ export function countdownDisplay(phase, ms) {
 export const BADGE_ZONE = {
   /** 常规货架（All / Tops / …）的卡片：身份 + 强推，**不显示折扣**。 */
   CATALOGUE: 'catalogue',
-  /** ⚡ 秒杀专区的卡片：整区都在秒杀，所以第一行不再重复 Limited Deal。 */
+  /**
+   * ⚡ 秒杀专区的卡片：整区都在秒杀，**任何活动身份都不挂**（Limited Deal
+   * 和运营手填的 `Black Friday` 一样不挂）。只留非活动类的运营标
+   * （`NEW` / `Highly Recommend` …），判定见 `isCampaignLabel`。
+   */
   DEALS: 'deals',
-  /** 详情弹层：完整信息，包括折扣和 ACC。 */
+  /** 详情弹层：身份 + ACC。**折扣同样不进角标**，价格在下方价格区。 */
   DETAIL: 'detail',
 }
 
 /**
  * 角标栈 —— 卡片和详情共用这一处，避免两边各写一遍然后漂移。
  *
- * 最多两行，**第一行身份、第二行促销**：
+ * 最多两行，**第一行身份、第二行仍是身份**（标签），**折扣永远不进角标**：
  *
  *   第一行  campaign(`sub_tag`)  >  Limited Deal  >  Coming Soon  >  `tag`
  *          （Coming Soon 与秒杀同时存在时 Coming Soon 胜出，见下面的 `!teaser`）
- *   第二行  折扣（`50% OFF`）    >  `tag`（手填的强推标）
+ *   第二行  `tag`（手填的强推标）
  *
- * 四个面的差异（这是本版的重点）：
+ * 三个面的差异（这是本版的重点）：
  *
  * | 面 | 第一行 | 第二行 | ACC |
  * | --- | --- | --- | --- |
- * | `catalogue` 卡片 | campaign / Limited Deal / Coming Soon / tag | 只放 tag | 不显示 |
- * | `deals` 卡片 | campaign / tag（**不出现 Limited Deal**，与专区同名的也不挂） | 折扣 | 不显示 |
- * | `detail` | 同上 + ACC | 折扣 / tag | 显示 |
+ * | `catalogue` 卡片 | campaign / Limited Deal / Coming Soon / tag | tag | 不显示 |
+ * | `deals` 卡片 | **只留非活动类标签**（NEW / Highly Recommend …），活动身份全不挂 | tag（同样过滤） | 不显示 |
+ * | `detail` | 同 catalogue（+ ACC） | tag | 显示 |
  *
- * 为什么目录里不显示折扣：货架上的每一件都在被比较，一行 `50% OFF` 会把
- * 视线从「这是什么」拉到「多少钱」，而价格要到专区里才有意义。
- * 为什么专区里不显示 Limited Deal：整个专区都是秒杀，再写一遍是零信息。
+ * 为什么折扣不再是角标：它在手机上是**第二行**，正好压在商品图上 —— 卡片只有
+ * 169px 宽、照片是主体，一枚 `50% OFF` 换来的信息量抵不上它遮住的东西。
+ * 折扣本身没有消失：它仍在专区的价格区（`dealPriceInfo`）、详情页的价格区，
+ * 以及专区顶部的折扣分桶里。这里只是**不再把它画成角标**。
+ * 为什么专区里不显示 Limited Deal 和黑五大标：整个专区都是秒杀，再强调一遍
+ * 身份是零信息（就是"点进 Black Friday 目录，卡片上还顶着一枚 Black Friday"）。
  * 为什么卡片上不再有 ACC：佣金是红人**点进去**才需要判断的事，详情页有
  * 一整块 ACC 卡片（含 Campaign ID 和复制按钮），卡片上那枚只是噪音。
  *
- * 活动自己的专区里不重复挂活动名
- * ─────────────────────────────────
+ * 专区里不挂任何活动身份
+ * ───────────────────────
  * 进了 `🔥Black Friday` 专区，整屏都是黑五 —— 每张卡再挂一枚 `Black Friday`
- * 是零信息，和当初"专区里不写 Limited Deal"是同一个理由。所以在 `deals` 面
- * 里，`sub_tag` 与 `tag` 只要和专区名是同一场活动（`isSameCampaign`）就当作
- * **没有**，让位给折扣。判定放在身份选择**之前**，这样"大促标被摘掉之后
- * 普通标能不能顶上来"仍然按正常顺序算，不会凭空少一行。
+ * 是零信息，和"专区里不写 Limited Deal"是同一个理由。所以 `deals` 面里
+ * `sub_tag` 与 `tag` 只要**看着像活动**就当没有，两条判据取并集：
+ *
+ *   1. `isCampaignLabel(text)` —— 词表认得的活动（Black Friday、Cyber Monday、
+ *      `50% OFF`、Flash Sale …），与专区叫什么无关。这条是"批量打了黑五标，
+ *      但专区名还叫 Limited Deals"那个 case 的修复。
+ *   2. `isSameCampaign(text, 专区名)` —— 词表认不出来的**自定义**活动名
+ *      （`Spring Refresh`），靠和当前 Tab 名比对兜底。
+ *
+ * 判定放在身份选择**之前**，这样"活动标被摘掉之后普通标能不能顶上来"仍然按
+ * 正常顺序算 —— 一件挂了 `Highly Recommend` 的秒杀款，进专区后角标变成它，
+ * 而不是整枚消失。
  *
  * 常规货架（`catalogue`）不参与这套去重：在那里 `Black Friday` 不是重复，
  * 是这件商品的关键信息。
  *
- * `Coming Soon` 独占一行：一个不能买的款，"省 40%" 是没有意义的承诺。
+ * `Coming Soon` 独占一行：一个不能买的款，任何"强推"都不该替它说话。
  *
  * @param {object} product
  * @param {number} [now]
  * @param {{ zone?: 'catalogue'|'deals'|'detail', campaign?: string }} [options]
- *   `campaign` 是当前专区的活动名（前台传 `settings.dealsTabLabel`），
- *   只在 `deals` 面用于去重；不传就退回旧行为。
- * @returns {Array<{ text:string, value:string, kind:'teaser'|'campaign'|'deal'|'acc'|'tag'|'discount' }>}
+ *   `campaign` 是当前专区的活动名（前台传 `settings.dealsTabLabel`），只在
+ *   `deals` 面用于识别**自定义**活动名；词表认得的活动名不传也会被摘掉。
+ * @returns {Array<{ text:string, value:string, kind:'teaser'|'campaign'|'deal'|'acc'|'tag' }>}
  */
 export function badgeStackFor(
   product,
@@ -462,26 +590,27 @@ export function badgeStackFor(
   { zone = BADGE_ZONE.CATALOGUE, campaign: zoneCampaign = '' } = {},
 ) {
   const teaser = isTeaser(product)
-  /* 预告期间的秒杀窗口仍然参与**身份判定**（需求把 Coming Soon 排在秒杀之后），
-   * 但它的折扣行会被下面挡掉 —— 一个锁着的款不该宣称省多少钱。 */
+  /* 预告期间的秒杀窗口仍然参与**身份判定**（需求把 Coming Soon 排在秒杀之后）。 */
   const phase = dealPhase(product, now)
   const dealing = phase === 'live' || phase === 'scheduled'
+  const inDeals = zone === BADGE_ZONE.DEALS
   const rawTag = String(product?.tag ?? '').trim()
   const rawCampaign = String(product?.subTag ?? '').trim()
 
-  /* 专区自己的名字：只在这一面、且调用方给了名字时才去重。 */
-  const ownName = zone === BADGE_ZONE.DEALS ? String(zoneCampaign ?? '').trim() : ''
+  /* 专区自己的名字：只在这一面、且调用方给了名字时才比对（自定义活动名）。 */
+  const ownName = inDeals ? String(zoneCampaign ?? '').trim() : ''
   const repeatsOwnName = (text) => ownName !== '' && isSameCampaign(text, ownName)
+  /* 专区内：活动身份一律当没有 —— 词表认得的，或者和专区同名的。 */
+  const dropInDeals = (text) => inDeals && (repeatsOwnName(text) || isCampaignLabel(text))
 
-  const tag = repeatsOwnName(rawTag) ? '' : rawTag
-  const campaign = repeatsOwnName(rawCampaign) ? '' : rawCampaign
-  const discount = dealing ? discountOf(product) : { label: '' }
+  const tag = dropInDeals(rawTag) ? '' : rawTag
+  const campaign = dropInDeals(rawCampaign) ? '' : rawCampaign
 
   /* ── 第一行：身份 ── */
   let identity = null
   if (campaign) {
     identity = { text: campaign, value: product?.subBadgeColor || '', kind: 'campaign' }
-  } else if (dealing && !teaser && zone !== BADGE_ZONE.DEALS) {
+  } else if (dealing && !teaser && !inDeals) {
     /* `!teaser`：预告款不领"Limited Deal"这个身份。需求把秒杀排在 Coming Soon
      * 之前，但那是假设商品在卖 —— 一个买不了的款挂上"限时秒杀"，比挂"省 40%"
      * 更误导（点进去发现尺码全锁着）。大促标仍然可以盖过 Coming Soon，因为
@@ -500,17 +629,12 @@ export function badgeStackFor(
   /* Coming Soon 独占：第二行留空（需求原文"独占，不显示第二行"）。 */
   if (identity?.kind === 'teaser') return [identity]
 
-  /* ── 第二行：促销，其次是运营的强推标 ── */
-  let secondary = null
-  const discountAllowed = zone !== BADGE_ZONE.CATALOGUE && !teaser
-  if (discountAllowed && discount.label) {
-    secondary = { text: discount.label, value: DEAL_BADGE.value, kind: 'discount' }
-  } else if (tag && tag !== identity?.text) {
-    secondary = { text: tag, value: product?.badgeColor || '', kind: 'tag' }
-  }
+  /* ── 第二行：只剩运营的强推标。折扣不再进角标，所以这里没有折扣分支。 ── */
+  const secondary =
+    tag && tag !== identity?.text
+      ? { text: tag, value: product?.badgeColor || '', kind: 'tag' }
+      : null
 
-  /* 专区里既没有 campaign 也没有 tag 的商品：第一行是空的，把折扣提到
-   * 第一行 —— 空着一行再画第二行，视觉上就是"少了点什么"。 */
   if (!identity) return secondary ? [secondary] : []
 
   return secondary ? [identity, secondary] : [identity]
