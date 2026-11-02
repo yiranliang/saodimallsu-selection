@@ -1400,10 +1400,12 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
                                   <button
                                     type="button"
                                     onClick={() => requestRemoveOption(gi, oi)}
-                                    aria-label="Remove option"
-                                    className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-charcoal-light/50 transition hover:bg-white hover:text-red-500"
+                                    aria-label={`删除 ${option || '这个颜色'}`}
+                                    title="删除这个颜色（有 ASIN 时会先确认）"
+                                    data-remove-option
+                                    className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-white text-charcoal/55 ring-1 ring-charcoal/10 transition hover:bg-red-500 hover:text-white hover:ring-red-500 active:scale-95"
                                   >
-                                    <Close className="h-2.5 w-2.5" />
+                                    <Close className="h-3.5 w-3.5" />
                                   </button>
                                 </div>
 
@@ -1433,7 +1435,11 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
                           return (
                             <div
                               key={oi}
-                              className="group flex items-center gap-1 rounded-full bg-cream-dark pl-2.5 pr-1 py-1"
+                              /* 胶囊本身就是一个输入框（点文字直接改名），右侧的 ×
+                                 是一个**看得见**的按钮：以前那个 10px、50% 透明度的
+                                 图标在手机和笔记本上几乎等于不存在，运营反馈"根本没有
+                                 删除按钮"。现在它有底色、有描边、有 24px 的点击区。 */
+                              className="flex items-center gap-0.5 rounded-full bg-white py-0.5 pl-2.5 pr-0.5 ring-1 ring-charcoal/10 transition focus-within:ring-charcoal/30 hover:ring-charcoal/25"
                             >
                               <input
                                 type="text"
@@ -1441,15 +1447,18 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
                                 onChange={(e) => setOption(gi, oi, e.target.value)}
                                 placeholder="M"
                                 aria-label={`${group.type || 'Option'} value ${oi + 1}`}
-                                className="w-[72px] bg-transparent text-[11px] text-charcoal placeholder:text-charcoal-light/50 focus:outline-none"
+                                title="点这里改名；改成已有的尺码（2XL → XXL）会合并两者的 ASIN"
+                                className="w-[64px] bg-transparent text-[11px] text-charcoal placeholder:text-charcoal-light/50 focus:outline-none"
                               />
                               <button
                                 type="button"
                                 onClick={() => requestRemoveOption(gi, oi)}
-                                aria-label="Remove option"
-                                className="flex h-4 w-4 items-center justify-center rounded-full text-charcoal-light/50 transition hover:bg-white hover:text-red-500"
+                                aria-label={`删除 ${option || '这个选项'}`}
+                                title="删除这个尺码（有 ASIN 时会先确认）"
+                                data-remove-option
+                                className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-charcoal/[0.06] text-charcoal/60 transition hover:bg-red-500 hover:text-white active:scale-95"
                               >
-                                <Close className="h-2.5 w-2.5" />
+                                <Close className="h-3.5 w-3.5" />
                               </button>
                             </div>
                           )
@@ -1462,6 +1471,15 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
                         >
                           <Plus className="h-2.5 w-2.5" />{t('Add')}</button>
                       </div>
+                    )}
+
+                    {/* 说清楚这一排胶囊能做什么 —— 删除和"改名即合并"都是不容易
+                        自己发现的操作，藏在一个 10px 的图标后面没人会去试。 */}
+                    {!colourGroup && (
+                      <p className="mt-1.5 text-[10px] leading-relaxed text-charcoal-light/80">
+                        点 × 删除这个尺码（有 ASIN 时会先确认）；把 2XL 改成已有的 XXL，会自动把两者的
+                        ASIN 合并成一个。
+                      </p>
                     )}
 
                     {/* Says out loud what the reshuffle is, so a list that

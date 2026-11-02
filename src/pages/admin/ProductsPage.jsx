@@ -721,24 +721,25 @@ export default function ProductsPage() {
   }
 
   /**
-   * Rename in one step: products first, then the list. Doing both here keeps
-   * the two from drifting apart (a category in the list with no products, or
-   * products pointing at a name that no longer exists).
+   * 改名 / 合并走一条路径（判定见 utils/categoryRename.js）。
+   *
+   * 纯改名是**一条 UPDATE**：外键 `ON UPDATE CASCADE` 会把商品带过去，而且
+   * `sort_order` 不动，所以分类留在原位。这里绝不再"先搬商品再改名"——那条路
+   * 会先触发 `ensure_category` 新建一行（排在最底），随后改名撞主键失败。
    */
   const handleRenameCategory = async (from, to) => {
     const next = to.trim()
     if (!next || next === from) return
 
+    /* 只是提示用：改名不再逐行写商品，所以"几件跟着走"从本地目录里数。 */
+    const affected = products.filter((product) => product.category === from).length
+
     try {
-      // renameCategory moves the products itself — the foreign key would
-      // otherwise block the rename, and a merge would need the move anyway.
       const { moved, merged } = await renameCategory(from, next)
       showToast?.(
         merged
           ? `已合并到「${next}」 · 迁移了 ${moved} 件商品`
-          : moved
-            ? `已改名为「${next}」 · 更新了 ${moved} 件商品`
-            : `已改名为「${next}」`,
+          : `已改名为「${next}」${affected ? ` · ${affected} 件商品跟着改` : ''}`,
         'success',
       )
     } catch (err) {
