@@ -45,54 +45,52 @@ export default function FeaturedSection({
       data-featured
       className="mx-auto mb-10 max-w-6xl px-5 sm:mb-14 sm:px-8"
     >
-      <div className="mb-4 flex flex-wrap items-end justify-between gap-3 sm:mb-5">
-        <div className="min-w-0">
-          {/* 标题 + 微型全大写小标签。手机上小标签落到下一行（320px 放不下），
-              从 sm 起贴回标题右边 —— 那个位置的"高级感"全靠这一行 9.5px 的
-              letter-spacing，拉宽到 0.22em 才有杂志目录的味道。 */}
-          <div className="flex flex-col gap-1 sm:flex-row sm:items-baseline sm:gap-3">
-            <h2 className="text-2xl font-bold leading-tight tracking-tight text-charcoal sm:text-3xl">
-              Featured <span className="text-accent">for You</span>
-            </h2>
-            <span className="text-[9.5px] font-semibold uppercase leading-none tracking-[0.22em] text-charcoal-light/55">
-              Curated for you
-            </span>
-          </div>
-          <p className="mt-1.5 text-[11.5px] leading-snug text-charcoal-light">
+      <div className="mb-4 sm:mb-5">
+        {/* 标题独占一行；副标题和右侧的操作区共用一行，并且 `items-center` ——
+            按钮的垂直中线跟着副标题走，而不是贴着整块的底边（原来 `items-end`
+            在标题变高之后会让按钮看起来"掉下去"）。 */}
+        <h2 className="text-2xl font-bold leading-tight tracking-tight text-charcoal sm:text-3xl">
+          Featured <span className="text-accent">for You</span>
+        </h2>
+
+        <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
+          <p className="min-w-0 text-[11.5px] leading-snug text-charcoal-light">
             A rotating pick from every category — shuffle for a different mix.
           </p>
-        </div>
 
-        <div className="flex shrink-0 items-center gap-2.5">
-          <span className="hidden text-[10.5px] tabular-nums text-charcoal-light/70 sm:inline">
-            {products.length} styles
-          </span>
-          {/* 换一批：纯本地重算（换种子重跑 `pickFeatured`），不 fetch、不打
-              Supabase、不碰 sort_order。样式上从"文字链接"改成实心胶囊 ——
-              淡底 + 描边是常态，hover 翻成深色，箭头转 180°。 */}
-          {onShuffle && (
-            <button
-              type="button"
-              onClick={onShuffle}
-              aria-label="Shuffle featured picks"
-              className="group inline-flex items-center gap-1.5 rounded-full bg-charcoal/[0.06] px-3.5 py-2 text-[11.5px] font-semibold text-charcoal ring-1 ring-charcoal/10 transition-all duration-200 hover:bg-charcoal hover:text-cream hover:ring-charcoal active:scale-95"
-            >
-              <svg
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden="true"
-                className="h-3.5 w-3.5 transition-transform duration-500 ease-out group-hover:rotate-180"
+          {/* `ml-auto`：手机上副标题换行后按钮落到第二行，仍然贴右边而不是回到
+              行首 —— 否则它看起来像另一个段落的一部分。 */}
+          <div className="ml-auto flex shrink-0 items-center gap-2.5">
+            <span className="hidden text-[10.5px] tabular-nums text-charcoal-light/70 sm:inline">
+              {products.length} styles
+            </span>
+            {/* 换一批：纯本地重算（换种子重跑 `pickFeatured`），不 fetch、不打
+                Supabase、不碰 sort_order。样式上从"文字链接"改成实心胶囊 ——
+                淡底 + 描边是常态，hover 翻成深色，箭头转 180°。 */}
+            {onShuffle && (
+              <button
+                type="button"
+                onClick={onShuffle}
+                aria-label="Shuffle featured picks"
+                className="group inline-flex items-center gap-1.5 rounded-full bg-charcoal/[0.06] px-3.5 py-2 text-[11.5px] font-semibold text-charcoal ring-1 ring-charcoal/10 transition-all duration-200 hover:bg-charcoal hover:text-cream hover:ring-charcoal active:scale-95"
               >
-                <path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2" />
-                <path d="M17.4 3.6v3.2h-3.2" />
-              </svg>
-              Shuffle
-            </button>
-          )}
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden="true"
+                  className="h-3.5 w-3.5 transition-transform duration-500 ease-out group-hover:rotate-180"
+                >
+                  <path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2" />
+                  <path d="M17.4 3.6v3.2h-3.2" />
+                </svg>
+                Shuffle
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
