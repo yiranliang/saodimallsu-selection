@@ -161,6 +161,7 @@
 | 功能 | 位置 | 备注 |
 |---|---|---|
 | **极简骨架屏** | `src/pages/SelectionPage.jsx`（`holdSkeleton`）+ `index.html` 的 boot ring | 首屏立刻出骨架，不做固定 450 ms 等待；数据到齐后短暂 hold 再淡出，避免闪一下 |
+| **首页推荐位 Featured for You** | `src/utils/featured.js`、`src/components/FeaturedSection.jsx` | 网格上方 24 件；种子在挂载时取一次，只有「Shuffle」按钮会换（纯本地重算，不发请求），滚动/加购不重洗。按分类加权：每类先保 1–2 件，余量随机补齐，保证小类目有曝光。**只读目录、不碰 `sort_order`**，下方网格顺序不变；只在 All + 无搜索时出现 |
 | **秒杀系统（两个专区）** | `supabase/09-deal.sql`、`supabase/13-campaign.sql`、`src/utils/deal.js`、`src/utils/dealImport.js` | 导入/批量开秒杀时**必选归属**：`is_campaign=false` → ⚡ `Limited Deals`（按紧迫度、卡片带倒计时）；`true` → 🔥 大促 Tab（名字读 `settings.deals_tab_label`，按折扣区间 chip 过滤、按折扣从高到低排）。两个 Tab 计数为 0 时各自隐藏 |
 | **双角标堆叠** | `src/utils/deal.js` 的 `badgeStackFor()` + `BADGE_ZONE`、`supabase/11-sub-badge-deal-priority.sql` | 第一行是**身份**（大促标 / Limited Deal），第二行是**决定**（运营手填 `sub_tag`）。`sale_*` 是实时算出的状态，`sub_tag` 是人填的决定——所以是两列，不是塞进同一个 `tag`。**两个秒杀专区都不挂活动身份**：大促区连 `Limited Deal` 也不挂（整区都在大促），常规区挂 `Limited Deal` 但摘掉 `Black Friday` 这类标（判定见 `isCampaignLabel`） |
 | **后台全中文** | `src/i18n/admin.js` + `scripts/test-admin-i18n.mjs` | 新增后台文案必须中文；漏翻会被测试拦下 |
@@ -168,6 +169,7 @@
 | **图片懒加载** | `src/components/ProductImage.jsx`（`loading` / `decoding`）+ `src/utils/image.js`（`sizedImage` / `imageSrcSet`） | 变体图与列表图都走 srcset；详情用大图尺寸 |
 | 商品拖拽排序 | `src/pages/admin/ProductsPage.jsx` + `reorder_products` RPC | 主路径是拖拽，另有置顶/置底/上移/下移/批量；筛选状态下拖拽关闭 |
 | 改名迁移 | `src/utils/variantRename.js` | 改颜色/尺码名连带迁移 asins / sold_out_variants / variant_images |
+| **删除 / 合并规格选项** | `src/utils/variantMerge.js`、`ProductEditor.jsx` | 点 X 删除一个有 ASIN 的尺码会先弹确认，确认后连带删掉 `Colour|2XL` 那些键；把 `2XL` 改名成已存在的 `XXL` 会弹合并弹窗（两边 ASIN 不同时让运营选）。两处都只写 `asinEdits` 补丁，保存仍走 `saveVariantAsins`。网页导入也把 `2XL` 归一成 `XXL`（和 CLI 同一张别名表） |
 | Coming Soon（teaser） | `src/utils/teaser.js`、`supabase/08-teaser.sql` | 锁购买不锁浏览：颜色可选、尺码不可选、不显示价格与倒计时 |
 | ACC 佣金 | `src/utils/acc.js`、`supabase/10-acc.sql` | 生成码时可带 campaign id，一键复制 |
 | 选款码查询/解码 | `src/pages/admin/LookupPage.jsx`、`src/components/admin/AdminResult.jsx` | 三个出口：复制清单 / 逐条复制 ASIN / 查看明细 |
@@ -335,6 +337,7 @@ SQL Editor 里**按 01 → 12 依次执行**，全部幂等，可重复跑：
 | 11 | `11-sub-badge-deal-priority.sql` | 副角标 `sub_tag` / `sub_badge_color` + 秒杀专区置顶 `deal_priority` |
 | 12 | `12-settings.sql` | 全局设置（大促专区 Tab 名，`deals_tab_label`） |
 | 13 | `13-campaign.sql` | 大促归属 `is_campaign`（两个秒杀 Tab 的切分依据；缺列时全部算常规） |
+| 14 | `14-tag-nulls.sql` | 放开 `sub_tag` / `tag` 的 NOT NULL 并清掉 `sub_tag` 的 `''::text` 默认值（清活动标会写空串，不再撞 400） |
 
 **批量导入（换季上新）**
 

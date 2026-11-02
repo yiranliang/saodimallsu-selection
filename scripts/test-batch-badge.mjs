@@ -261,10 +261,18 @@ console.log('\n[5] the real regression — a live deal must show the campaign, n
  * 统一设成 Black Friday，回到目录却只看到 Limited Deal。 */
 {
   const now = Date.now()
+  /* 窗口跟着"今天"走，**不写死日期**：写死过一次（2026-10-28 → 10-29），
+   * 两天后这条断言就变成"昨天还过、今天突然红"的定时炸弹 —— 它测的是角标
+   * 优先级，不是日历。 */
+  const day = (date, endOfDay) => {
+    const pad = (n) => String(n).padStart(2, '0')
+    const clock = endOfDay ? '23:59:59' : '00:00:00'
+    return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${clock}`
+  }
   /* 一件正在秒杀的商品（有窗口、有价格、非预告）。 */
   const liveDeal = {
-    saleStart: '2026-10-28T00:00:00',
-    saleEnd: '2026-10-29T23:59:59',
+    saleStart: day(new Date(now), false),
+    saleEnd: day(new Date(now), true),
     salePrice: '19.99',
     originalPrice: '39.99',
     isTeaser: false,

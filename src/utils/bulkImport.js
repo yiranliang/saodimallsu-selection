@@ -36,7 +36,27 @@ import {
   splitVariantKey,
   variantKey,
   HEADER_HINTS,
+  alignValue,
+  VALUE_ALIASES,
 } from './asinsImportCore.js'
+
+/* 导入时只做**固定换算**（`2XL → XXL`），不做"像目录里哪个"的模糊匹配 ——
+ * 浏览器这条路径拿不到一份可信的目录词表，而模糊匹配猜错会把两个尺码并成
+ * 一个。空词表让 `alignValue` 只走别名表那一支。
+ *
+ * 这也是 CLI（`npm run batch:upsert`）一直在做的事：同一个别名表，两条导入
+ * 路径就不会再各自孵出 `2XL` 和 `XXL` 两个尺码。 */
+const EMPTY_VOCAB = { lower: new Map(), bySlug: new Map() }
+
+/**
+ * 表格里的尺码 → 目录里的拼写（目前只有 `2XL → XXL`）。
+ *
+ * @param {unknown} raw
+ * @returns {string}
+ */
+export function normaliseImportedSize(raw) {
+  return alignValue(raw, EMPTY_VOCAB, VALUE_ALIASES).value
+}
 
 /** Same shape as `ASIN_PATTERN` in amazon.js, inlined so this module stays
  *  importable by Node with nothing but the pure core behind it. */
@@ -88,7 +108,10 @@ export function parseSheetGrid(rows) {
       continue
     }
 
-    const [sku, rawAsin, colour, size] = cells
+    const [sku, rawAsin, colour, rawSize] = cells
+    /* 2XL → XXL：同一个尺码两种拼写，在 variants 里就是**两套键** —— 一旦
+     * 导进来，同一件衣服会多出一个"看起来一样、ASIN 却是空的"尺码。 */
+    const size = normaliseImportedSize(rawSize)
     const missing = []
     if (!sku) missing.push('货号')
     if (!colour) missing.push('颜色')

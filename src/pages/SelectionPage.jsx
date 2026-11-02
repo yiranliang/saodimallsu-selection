@@ -4,6 +4,7 @@ import { brandConfig } from '../data/products.js'
 import CategoryNav from '../components/CategoryNav.jsx'
 import ProductGrid from '../components/ProductGrid.jsx'
 import ProductDetail from '../components/ProductDetail.jsx'
+import FeaturedSection from '../components/FeaturedSection.jsx'
 import CartDrawer from '../components/CartDrawer.jsx'
 import BottomBar from '../components/BottomBar.jsx'
 import CodeModal from '../components/CodeModal.jsx'
@@ -38,6 +39,7 @@ import {
   soonestDealMs,
 } from '../utils/deal.js'
 import { hasSeenGuide, markGuideSeen, shouldAutoOpen } from '../utils/guide.js'
+import { mulberry32, nextSeed, pickFeatured } from '../utils/featured.js'
 import { PAGE_SIZE, storefrontOrder, filterCatalogue, slicePage, nextLimit, hasMore } from '../utils/catalogue.js'
 
 /**
@@ -257,6 +259,27 @@ export default function SelectionPage() {
    * The *deferred* value drives the list, the live one drives the input — so
    * what she typed is always what she sees in the field. */
   const deferredQuery = useDeferredValue(query)
+
+  /* ── 首页推荐位（Featured for You）──
+   * 24 件、按分类加权，纯前端采样（见 utils/featured.js）：每个分类先保 1–2 件，
+   * 剩下的名额随机补满。**只读目录**，不碰 `sort_order`，所以下方网格的顺序
+   * 仍然完全由后台拖拽决定。
+   *
+   * 只在 All + 没搜索 + 不在秒杀专区时出现：搜索时她要的是结果，不是又一次
+   * 随机；专区里已经按紧迫度 / 折扣排好了，再叠一层推荐会互相打架。
+   *
+   * 种子在挂载时取一次，之后只有「Shuffle」按钮会换：同一次访问里滚动、加购、
+   * 改数量都不会让推荐位重洗 —— 那些操作每变一次就重排一次卡片，等于让她
+   * 找不到刚看到的那件。换种子是纯本地状态更新，不触发任何请求。 */
+  const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Math.random() * 0x7fffffff))
+  const showFeatured = activeCategory === 'All' && !deferredQuery.trim() && !inDealsView
+  const featured = useMemo(
+    () => (showFeatured ? pickFeatured(catalogue, { random: mulberry32(featuredSeed) }) : []),
+    [showFeatured, catalogue, featuredSeed],
+  )
+  const shuffleFeatured = useCallback(() => {
+    setFeaturedSeed((prev) => nextSeed(prev))
+  }, [])
 
   /* Filter once, page after — the slice is always the last step, so "load more"
    * keeps counting inside the current category + search, never the whole
@@ -555,6 +578,21 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
 
       {/* Bottom padding keeps the sticky bar off the last row */}
       <main className="pb-32 pt-5 sm:pb-36 sm:pt-7">
+        {/* 推荐位：只在 All + 无搜索时出现在网格上方，下方目录顺序不受影响。 */}
+        {showFeatured && (
+          <FeaturedSection
+            products={featured}
+            seed={featuredSeed}
+            onShuffle={shuffleFeatured}
+            linesFor={linesFor}
+            amazonUrlFor={amazonUrlFor}
+            onToggle={handleToggle}
+            onIncrement={increment}
+            onDecrement={decrement}
+            onOpenDetail={setDetailProduct}
+          />
+        )}
+
         <ProductGrid
           products={visibleProducts}
           loading={loading}

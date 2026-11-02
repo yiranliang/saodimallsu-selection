@@ -16,6 +16,7 @@ import {
   rekeyVariants,
   splitVariantKey,
 } from '../../utils/variantRename.js'
+import { diffVariants, keysForOption, mergeOptionAsins } from '../../utils/variantMerge.js'
 import {
   BADGE_COLOR_PRESETS,
   BADGE_TEMPLATES,
@@ -86,6 +87,10 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
   const [asinBlurred, setAsinBlurred] = useState({})
   const asinMap = useAsins()
 
+  /* 删除 / 合并一个规格选项时的确认弹窗载荷（null = 没开）。
+   * 声明在顶部，是因为"换商品时重置"的那段逻辑在上面的渲染分支里也要用它。 */
+  const [optionPrompt, setOptionPrompt] = useState(null)
+
   /* "New category…" mode. `beforeNew` lets Cancel put the previous value back
    * instead of leaving the product uncategorised. */
   const [newCategory, setNewCategory] = useState(false)
@@ -124,6 +129,7 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
     setAsinEdits({})
     setAsinBlurred({})
     setFrozenOrder(null)
+    setOptionPrompt(null)
   }
 
   /* Drag a colour photo onto the main image — or click the arrow on the card,
@@ -242,6 +248,26 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
   }
 
   const setOption = (groupIndex, optionIndex, value) => {
+    const group = draft.specs[groupIndex]
+    const current = String(group?.options[optionIndex] ?? '').trim()
+    const next = String(value ?? '').trim()
+
+    /* 改名撞上同组已有选项（`2XL` → `XXL`）→ 合并，而不是留下两个同名尺码。
+     *
+     * 只在"当前已经有名字"时拦截：刚点 Add 的空选项没有 ASIN 挂上去，直接改名
+     * 就行。比较是大小写不敏感的 —— `xxl` 和 `XXL` 在 variants 里也是同一个键，
+     * 允许它们并存才是真的制造重复。 */
+    if (current && next && next.toLowerCase() !== current.toLowerCase()) {
+      const clash = group.options.findIndex(
+        (option, index) =>
+          index !== optionIndex && String(option ?? '').trim().toLowerCase() === next.toLowerCase(),
+      )
+      if (clash !== -1) {
+        requestMergeOption(groupIndex, optionIndex, current, String(group.options[clash]).trim())
+        return
+      }
+    }
+
     patch(
       'specs',
       draft.specs.map((group, i) =>
@@ -302,6 +328,142 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
     )
   }
 
+  /* ── 删除 / 合并一个选项（会动 `asins.variants`）──
+   *
+   * 规格数组是按**位置**编辑的（每色图片也是），所以删掉或改名一个尺码不会
+   * 自己带上 `Colour|2XL` 那些键。不处理的话：删除 → 键变成编辑器里"早先导入
+   * 留下的行"（肉眼看不见的垃圾）；改名 → 两条记录指向同一个组合，其中一条
+   * 的 ASIN 永远显示不出来。
+   *
+   * 两条路径都**不新增写库入口**：改动只是往 `asinEdits` 里塞补丁，保存时仍走
+   * 原来的 `saveVariantAsins`。 */
+
+  /** 这个规格组是颜色轴还是尺码轴（自定义组两个都不是 → null）。 */
+  const axisOfGroup = (group) =>
+    isColourType(group?.type) ? 'colour' : isSizeType(group?.type) ? 'size' : null
+
+  const closeOptionPrompt = () => setOptionPrompt(null)
+
+  /**
+   * 点 X：这个选项底下有 ASIN 就先确认，没有就直接删。
+   * 没有 ASIN 的选项不值得打断一次；**有** ASIN 时必须说清楚"会一起删"。
+   */
+  const requestRemoveOption = (groupIndex, optionIndex) => {
+    const group = draft.specs[groupIndex]
+    const value = String(group?.options[optionIndex] ?? '').trim()
+    const axis = axisOfGroup(group)
+    const keys = axis ? keysForOption(mergedAsins, axis, value) : []
+
+    if (!keys.length) {
+      removeOption(groupIndex, optionIndex)
+      return
+    }
+
+    setOptionPrompt({ kind: 'delete', groupIndex, optionIndex, value, axis, keys })
+  }
+
+  /** 改名撞到已有选项：合并到那个拼写上，而不是留下两个同名尺码。 */
+  const requestMergeOption = (groupIndex, optionIndex, from, to) => {
+    const axis = axisOfGroup(draft.specs[groupIndex])
+
+    if (!axis) {
+      /* 自定义组（Length…）不参与 variants 键，直接合并文字。 */
+      removeOption(groupIndex, optionIndex)
+      showToast?.(`已合并到「${to}」`, 'default', 2000)
+      return
+    }
+
+    const plan = mergeOptionAsins(mergedAsins, axis, from, to)
+    setOptionPrompt({
+      kind: 'merge',
+      groupIndex,
+      optionIndex,
+      from,
+      to,
+      axis,
+      moves: plan.moves,
+      conflicts: plan.conflicts,
+      /* 两边都有、且不同 → 默认保留目标（XXL）：那是商品原本声明的拼写。 */
+      prefer: 'to',
+    })
+  }
+
+  /**
+   * 确认之后真正落地。
+   *
+   * 删除：把该选项下的键在 `asinEdits` 里置空（= 从地图里删掉），再删选项。
+   * 合并：算出新地图 → 只把**差量**写进 `asinEdits`（避免顺手重写别的行）；
+   * 售罄标记跟着改名走，否则"卖完了"会变回"有货"。
+   */
+  const confirmOptionPrompt = () => {
+    const prompt = optionPrompt
+    if (!prompt) return
+
+    if (prompt.kind === 'delete') {
+      const edits = {}
+      for (const key of prompt.keys) edits[key] = ''
+      setAsinEdits((prev) => ({ ...prev, ...edits }))
+      removeOption(prompt.groupIndex, prompt.optionIndex)
+      setOptionPrompt(null)
+      showToast?.(
+        `已删除「${prompt.value}」，同时删掉 ${prompt.keys.length} 条 ASIN 关联`,
+        'default',
+        4000,
+      )
+      return
+    }
+
+    const plan = mergeOptionAsins(mergedAsins, prompt.axis, prompt.from, prompt.to, {
+      prefer: prompt.prefer,
+    })
+    const edits = diffVariants(mergedAsins, plan.variants)
+    setAsinEdits((prev) => ({ ...prev, ...edits }))
+
+    const movedSoldOut = rekeyKeys(draft.soldOut, {
+      colour: prompt.axis === 'colour' ? [{ from: prompt.from, to: prompt.to }] : [],
+      size: prompt.axis === 'size' ? [{ from: prompt.from, to: prompt.to }] : [],
+    }).keys
+    patch('soldOut', movedSoldOut)
+
+    /* 删掉源选项的同时，如果它是**颜色**、目标那一格又没有图，就把它的图接过去 ——
+     * "改个名，这个颜色的实拍图没了"正是这条路径最容易犯的错。尺码轴不涉及图片
+     * （每色一张，和尺码无关）。 */
+    const group = draft.specs[prompt.groupIndex]
+    const sourceImage = String(group?.images?.[prompt.optionIndex] || '').trim()
+    const targetIndex =
+      prompt.axis === 'colour'
+        ? group.options.findIndex(
+            (option, index) =>
+              index !== prompt.optionIndex &&
+              String(option ?? '').trim().toLowerCase() === prompt.to.toLowerCase(),
+          )
+        : -1
+
+    patch(
+      'specs',
+      draft.specs.map((group, groupIndex) => {
+        if (groupIndex !== prompt.groupIndex) return group
+        const options = []
+        const images = []
+        group.options.forEach((option, index) => {
+          if (index === prompt.optionIndex) return
+          let image = group.images[index] || ''
+          if (index === targetIndex && !String(image).trim() && sourceImage) image = sourceImage
+          options.push(option)
+          images.push(image)
+        })
+        return { ...group, options, images }
+      }),
+    )
+
+    setOptionPrompt(null)
+    showToast?.(
+      `已把「${prompt.from}」合并到「${prompt.to}」，移动 ${prompt.moves.length} 条 ASIN`,
+      'default',
+      4000,
+    )
+  }
+
   /* ── save ── */
 
   const handleSave = () => {
@@ -317,6 +479,24 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
      * paste. Blank is not an error — that is "missing", which the section flags. */
     if (invalidAsins.length) {
       showToast?.(`${invalidAsins.length} 个 ASIN 不是 10 位`, 'error')
+      return
+    }
+
+    /* 同一组里两个同名选项是**存不进去的状态**：variants 的键只有一份，
+     * 两个 `XXL` 里必有一个的 ASIN 永远显示不出来。改名的合并路径会拦住它，
+     * 但粘贴/手快仍可能绕过，所以保存前再挡一次。 */
+    const duplicated = draft.specs.find((group) => {
+      const seen = new Set()
+      for (const option of group.options) {
+        const key = String(option ?? '').trim().toLowerCase()
+        if (!key) continue
+        if (seen.has(key)) return true
+        seen.add(key)
+      }
+      return false
+    })
+    if (duplicated) {
+      showToast?.(`「${duplicated.type || '选项'}」里有重复值，先合并或改名再保存`, 'error', 4000)
       return
     }
 
@@ -505,7 +685,9 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
   return (
     <Modal
       open={open}
-      onClose={onClose}
+      /* Esc / 点遮罩：确认弹窗开着时只关它。两个 Modal 各自监听 window 的
+         keydown，不拦一下的话按一次 Esc 会把编辑器本身也关掉 —— 草稿就没了。 */
+      onClose={optionPrompt ? closeOptionPrompt : onClose}
       title={isNew ? '新增商品' : '编辑商品'}
       /* Phone: a bottom sheet at `max-w-xl`. Desktop: wide enough for three
          columns (photo | options | ASIN), which is the difference between
@@ -1217,7 +1399,7 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
 
                                   <button
                                     type="button"
-                                    onClick={() => removeOption(gi, oi)}
+                                    onClick={() => requestRemoveOption(gi, oi)}
                                     aria-label="Remove option"
                                     className="flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-charcoal-light/50 transition hover:bg-white hover:text-red-500"
                                   >
@@ -1263,7 +1445,7 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
                               />
                               <button
                                 type="button"
-                                onClick={() => removeOption(gi, oi)}
+                                onClick={() => requestRemoveOption(gi, oi)}
                                 aria-label="Remove option"
                                 className="flex h-4 w-4 items-center justify-center rounded-full text-charcoal-light/50 transition hover:bg-white hover:text-red-500"
                               >
@@ -1389,6 +1571,117 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
           </div>
         </div>
       </div>
+
+      {/* 删除 / 合并选项的确认 —— 两条路径都会动 `asins.variants`，所以必须
+          挡一道。放在编辑器 Modal 之后渲染，遮罩会盖在编辑器上面。 */}
+      <Modal
+        open={Boolean(optionPrompt)}
+        onClose={closeOptionPrompt}
+        title={optionPrompt?.kind === 'merge' ? '合并选项' : '删除选项'}
+        maxWidth="max-w-md"
+      >
+        {optionPrompt && (
+          <div className="px-5 pb-5 pt-5 sm:px-6">
+            {optionPrompt.kind === 'delete' ? (
+              <>
+                <p className="text-[12.5px] leading-relaxed text-charcoal">
+                  删除「<span className="font-medium">{optionPrompt.value}</span>」会同时删除该
+                  尺码下{' '}
+                  <span className="font-medium tabular-nums">{optionPrompt.keys.length}</span>{' '}
+                  条 ASIN 关联，确认吗？
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-charcoal-light">
+                  保存后生效；取消不会改动任何数据。
+                </p>
+                <ul className="mt-3 max-h-32 space-y-0.5 overflow-y-auto rounded-lg bg-cream-dark/60 px-2.5 py-2 text-[10.5px] leading-relaxed text-charcoal-light">
+                  {optionPrompt.keys.map((key) => (
+                    <li key={key} className="truncate">
+                      {key.split('|').filter(Boolean).join(' / ')}
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : (
+              <>
+                <p className="text-[12.5px] leading-relaxed text-charcoal">
+                  「<span className="font-medium">{optionPrompt.to}</span>」已经存在。把「
+                  <span className="font-medium">{optionPrompt.from}</span>」合并进去吗？
+                </p>
+                <p className="mt-1 text-[11px] leading-relaxed text-charcoal-light">
+                  {optionPrompt.moves.length} 条 ASIN 会搬到「{optionPrompt.to}」。
+                  {optionPrompt.conflicts.length > 0
+                    ? `其中 ${optionPrompt.conflicts.length} 条两边都有且不是同一个 ASIN，需要你决定保留哪个 —— 选错会把订单指向另一个 listing。`
+                    : '没有冲突，直接合并即可。'}
+                </p>
+
+                {optionPrompt.conflicts.length > 0 && (
+                  <div className="mt-3 space-y-1.5">
+                    {optionPrompt.conflicts.map((conflict) => (
+                      <div
+                        key={conflict.from}
+                        className="rounded-lg bg-cream-dark/60 px-2.5 py-2 text-[10.5px] leading-relaxed text-charcoal-light"
+                      >
+                        <div className="font-medium text-charcoal">
+                          {conflict.from.split('|').filter(Boolean).join(' / ')}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap gap-3">
+                          <span className="font-mono">2XL → {conflict.fromAsin}</span>
+                          <span className="font-mono">
+                            已有 → {conflict.toAsin}
+                          </span>
+                        </div>
+                      </div>
+                    ))}
+                    <div className="flex flex-wrap gap-3 pt-1">
+                      {[
+                        { id: 'to', label: `保留「${optionPrompt.to}」现有的` },
+                        { id: 'from', label: `改用「${optionPrompt.from}」的` },
+                      ].map((choice) => (
+                        <label
+                          key={choice.id}
+                          className="flex cursor-pointer items-center gap-1.5 text-[11px] text-charcoal"
+                        >
+                          <input
+                            type="radio"
+                            name="merge-preference"
+                            value={choice.id}
+                            checked={optionPrompt.prefer === choice.id}
+                            onChange={() =>
+                              setOptionPrompt((prev) =>
+                                prev ? { ...prev, prefer: choice.id } : prev,
+                              )
+                            }
+                          />
+                          {choice.label}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </>
+            )}
+
+            <div className="mt-5 flex items-center gap-2">
+              <button
+                type="button"
+                onClick={closeOptionPrompt}
+                className="flex-1 rounded-full bg-cream-dark py-2.5 text-[12.5px] font-medium text-charcoal/75 transition hover:text-charcoal"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={confirmOptionPrompt}
+                className={`flex flex-[1.4] items-center justify-center rounded-full py-2.5 text-[12.5px] font-medium text-white transition active:scale-[0.98] ${
+                  optionPrompt.kind === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-charcoal hover:bg-charcoal/85'
+                }`}
+              >
+                {optionPrompt.kind === 'delete' ? '删除' : '合并'}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </Modal>
   )
 }
