@@ -658,7 +658,7 @@ check(
   ['Black / M', 'White / L'],
 )
 
-/* ── 20. the option lists move under an issued code ── */
+/* ── 20. 目录变了，码本身没变 ── */
 console.log('\n[20] Option lists edited after the code was issued')
 const issuedCode = generateCodeFromLines('luna', [
   { productId: 'p001', qty: 2, specs: { Colour: 'Oatmeal', Size: 'L' } },
@@ -671,8 +671,12 @@ setProducts(
   ),
 )
 const changedResult = decodeCode(issuedCode)
-check('a changed option list is flagged', changedResult.optionsChanged, true)
-check('and it comes with a warning', changedResult.warnings.some((w) => /changed/.test(w)), true)
+/* 校验和只看码本身，所以运营改商品的规格表**不会**让一条合法旧码失效 ——
+ * 这正是它比"选项指纹"更适合做完整性校验的地方。规格真的变了的时候，越界的
+ * 下标会被标成"待确认"，而不是悄悄解成另一个颜色。 */
+check('a catalogue edit does not invalidate an issued code', changedResult.ok, true)
+check('the affected line is flagged instead', changedResult.optionsChanged, true)
+check('with a warning', changedResult.warnings.some((w) => /changed/.test(w)), true)
 
 /* Shrinking the list can push the stored index out of range. The line must be
    reported without a colour rather than pointing at a wrong one. */
@@ -707,7 +711,87 @@ check('and its quantity', midResult.items[24].qty, 1)
 setAsins({})
 setProducts(original)
 
-/* ── summary ── */
+/* ── 22. 校验和：任何手改都必须整条拒绝 ──
+   线上事故：一条被截断的码（fp 只有 3 位）会提示"少了字母"，但**随手补一个
+   字母**就能解析出商品 —— 因为旧版失配只记 warning。现在两种校验（整串校验
+   和 / 旧码的选项指纹）都不过就 `ok:false`，一行商品都不返回。 */
+console.log('\n[22] 校验和 —— 多一个字符、少一个字符、改一个字符，全部拒绝')
+
+const strictBase = generateCodeFromLines('luna', [
+  { productId: 'p001', qty: 2, specs: { Colour: 'Oatmeal', Size: 'L' } },
+  { productId: 'p003', qty: 1, specs: { Colour: 'Black', Size: 'M' } },
+]).code
+check('the untouched code decodes', decodeCode(strictBase).ok, true)
+
+const appended = decodeCode(`${strictBase}m`)
+check('one extra character is rejected', appended.ok, false)
+check('and no items come back', appended.items, undefined)
+check('the message says the code does not match', /does not match|truncated/i.test(appended.error), true)
+
+/* 每一个可能的尾随字符都试一遍：校验和只有 1/62^4 的碰撞概率，62 个里
+ * 一个都不该通过 —— 这条是线上那个"随手补一个字母就解出来"的回归测试。 */
+const ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz'
+check(
+  'no single appended character is ever accepted',
+  [...ALPHABET].filter((ch) => decodeCode(`${strictBase}${ch}`).ok).length,
+  0,
+)
+
+const chopped = decodeCode(strictBase.slice(0, -1))
+check('one missing character is rejected', chopped.ok, false)
+check('and no items come back either', chopped.items, undefined)
+
+/* 改中间一段（时间戳），校验和同样对不上。 */
+const parts = strictBase.slice(`${CODE_PREFIX}-`.length).split('.')
+const swapped = parts.map((part, index) => (index === 6 ? `${part}x` : part))
+const tampered = `${CODE_PREFIX}-${swapped.join('.')}`
+check('a changed segment is rejected', decodeCode(tampered).ok, false)
+
+/* fp 段 8 位 = 4 位校验和 + 4 位选项指纹。
+ * 改校验和 → 整条拒绝；改指纹那 4 位 → 仍然解码，只是会提示"规格可能变过"
+ * （那 4 位是提示用的，不承载订单内容）。 */
+const flip = (text, index) => {
+  const ch = text[index]
+  const next = ch === 'A' ? 'B' : 'A'
+  return `${text.slice(0, index)}${next}${text.slice(index + 1)}`
+}
+check('a wrong checksum character is rejected', decodeCode(flip(strictBase, strictBase.length - 5)).ok, false)
+check('a wrong option fingerprint still decodes', decodeCode(flip(strictBase, strictBase.length - 1)).ok, true)
+
+/* ── 23. 粘贴污染：中文标点 / 零宽字符 / 空白 ──
+   红人在 Gmail 或手机上复制时，英文句号会被替换成全角句号。清洗只负责把
+   字符改回半角，长度和校验照旧把关 —— 所以"洗完之后仍然错的码"还是错的。 */
+console.log('\n[23] 粘贴污染 —— 全角标点、零宽字符、空白')
+
+const cleanBase = strictBase
+const dotted = cleanBase.replace(/\./g, '。')
+check('a code typed with Chinese full stops still decodes', decodeCode(dotted).ok, true)
+check(
+  'and resolves to the same products',
+  decodeCode(dotted).items.map((item) => item.id),
+  decodeCode(cleanBase).items.map((item) => item.id),
+)
+
+check(
+  'zero-width characters are stripped',
+  decodeCode(cleanBase.replace(/\./g, '.\u200b')).ok,
+  true,
+)
+check('internal whitespace is stripped', decodeCode(cleanBase.replace(/\./g, '. ')).ok, true)
+check('a full-width space is stripped too', decodeCode(cleanBase.replace(/\./g, '.\u3000')).ok, true)
+check('a wrapped line still decodes', decodeCode(`${cleanBase.slice(0, 12)}\n${cleanBase.slice(12)}`).ok, true)
+
+/* 中文逗号出现在数量段（`0:2`）里也要能洗回来。 */
+const commaCode = generateCodeFromLines('luna', [
+  { productId: 'p001', qty: 2, specs: { Colour: 'Oatmeal', Size: 'L' } },
+  { productId: 'p003', qty: 3, specs: { Colour: 'Black', Size: 'M' } },
+]).code
+check('a Chinese comma in the qty segment', decodeCode(commaCode.replace(/,/g, '，')).ok, true)
+
+/* 清洗不是修复：少一位的码洗完还是少一位。 */
+check('cleaning does not repair a truncated code', decodeCode(`${dotted.slice(0, -1)}`).ok, false)
+
+/* summary */
 console.log(`\n${'─'.repeat(44)}`)
 console.log(`Passed ${passed}${failed ? `, failed ${failed}` : ''}`)
 if (failed) process.exit(1)

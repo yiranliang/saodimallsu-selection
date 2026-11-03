@@ -55,10 +55,15 @@
  *   qty     "_" when every line is 1 unit; otherwise sparse "i:q" pairs in
  *           base62 — "0:a,3:2" is line 0 ×10 and line 3 ×2.
  *   ts      generation time, seconds since epoch, base62
- *   fp      4-char fingerprint of the option lists this code was built from.
- *           Decode compares it with the live catalogue: a mismatch means the
- *           colour/size lists changed, so the indexes may point at a different
- *           variant. Ops gets an explicit warning instead of a silent mislabel.
+ *   fp      8 chars = 4-char **checksum of segments 1–7** + 4-char fingerprint
+ *           of the option lists.
+ *             · 校验和只由码本身算出，与目录无关：任何手改（多敲/少敲一个
+ *               字符）都会让它失配，解码直接返回 Invalid Code。
+ *             · 指纹要目录才能算，用来判断"尺码/颜色表在发码之后被改过"——那
+ *               种情况不拒码，只把受影响的行标成"待确认"。
+ *           校验和上线之前发出的码只有后 4 位（fp 段 4 个字符），解码同样
+ *           接受；但那种码**验证不了就拒绝**（比如商品已被删除时算不出指纹），
+ *           绝不把"无法验证"当成"没问题"。
  *
  * NOTHING BUT IDS, OPTION INDEXES, QUANTITY AND TIME
  * Everything human-readable — name, 货号, ASIN — is looked up in the catalogue
@@ -144,6 +149,40 @@ export { MAX_QTY }
 
 /** Shown when a code references a product that has since been deleted */
 const MISSING_IMAGE = './placeholders/placeholder.svg'
+
+/* ───────────────── 输入清洗 ───────────────── */
+
+/**
+ * 把一条**人工粘贴**的码整理成可以直接解析的形状。
+ *
+ * 红人是在 Gmail / 微信 / 手机上复制粘贴的，英文句号变成全角句号是真实发生过
+ * 的事故：`sdm-7.…` 里的 `.` 被输入法替换成 `。`，整条码直接解析失败，运营只能
+ * 让红人重发一次。同样的还有零宽字符（Word/网页复制会带 `\u200b`）。
+ *
+ * 三条规则：
+ *   1. 删掉所有零宽字符（`\u200b` `\u200c` `\u200d` `\ufeff`）；
+ *   2. 删掉**所有**空白（半角、全角、换行）—— 码里本来就没有空格，邮件客户端
+ *      的自动换行不该让它变成非法输入；
+ *   3. 全角标点 → 半角标点。码的字母表是 base62 + `.` + `,` + `:` + `_` + `-`，
+ *      所以这里只映射这几个有歧义的字符，不做通用全角转半角（那会把别的东西
+ *      悄悄改成合法字符）。
+ *
+ * **只清洗，不修复**：长度、校验和仍然照常校验，清洗不会让一条错码变成对的。
+ *
+ * @param {unknown} value
+ * @returns {string}
+ */
+export function normaliseCodeText(value) {
+  return String(value ?? '')
+    .replace(/[\u200b-\u200d\ufeff]/g, '')
+    .replace(/[\s\u00a0\u3000]+/g, '')
+    .replace(/[。．]/g, '.')
+    .replace(/[，、]/g, ',')
+    .replace(/；/g, ';')
+    .replace(/：/g, ':')
+    .replace(/！/g, '!')
+    .replace(/？/g, '?')
+}
 
 /* ───────────────── primitives ───────────────── */
 
@@ -328,11 +367,26 @@ export function generateCodeFromLines(ref, lines = []) {
   const qtySegment = sparseQty.length ? sparseQty.join(',') : '_'
 
   const tsSegment = b62(timestampSec)
-  const fpSegment = fingerprintOf(sequence)
+  /* fp 段是**两段拼起来**的 8 位：
+   *   前 4 位 校验和 —— 只由前 7 段算出，与目录无关（防手改、防截断）
+   *   后 4 位 选项指纹 —— 由商品当前的尺码/颜色表算出（防"规格表被改过"）
+   * 两者职责不同，缺一个都会出事：只有校验和，运营重排尺码表时旧码会静默
+   * 解成另一个尺码；只有指纹，删掉一个商品就没法验证、手改也拦不住。 */
+  const segments = [
+    VERSION_COMPACT,
+    refSlug,
+    idSegment,
+    b62(radix),
+    specSegment,
+    qtySegment,
+    tsSegment,
+  ]
+  const bodyText = segments.join('.')
+  const fpSegment = `${checksumOf(bodyText)}${fingerprintOf(sequence)}`
 
   return {
     /* 前缀恒为 CODE_PREFIX：发出的码永远带**当前**品牌名。 */
-    code: `${CODE_PREFIX}-${[VERSION_COMPACT, refSlug, idSegment, b62(radix), specSegment, qtySegment, tsSegment, fpSegment].join('.')}`,
+    code: `${CODE_PREFIX}-${[...segments, fpSegment].join('.')}`,
     payload: {
       version: Number(VERSION_COMPACT),
       ref: refSlug,
@@ -441,6 +495,28 @@ function encodeIdSegment(lines) {
 }
 
 /**
+ * 整串校验和 —— **与目录无关**，只由码自己的前 7 段算出。
+ *
+ * 为什么新码用它、而不是选项指纹：选项指纹覆盖的是"商品当前的尺码/颜色表"，
+ * 运营改一次某个商品的规格，所有包含它的**合法旧码**都会失配。校验和只看码
+ * 本身，所以运营怎么改商品都不会误伤已发出的码，同时任何手改（多敲一个字母、
+ * 删一段）都会被立刻发现。
+ *
+ * @param {string} text 前 7 段用 `.` 连接
+ * @returns {string} 4 位 base62
+ */
+function checksumOf(text) {
+  let hash = 2166136261
+  const source = String(text ?? '')
+  for (let i = 0; i < source.length; i++) {
+    hash ^= source.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  const digits = b62(BigInt(hash >>> 0))
+  return digits.length >= 4 ? digits.slice(-4) : digits.padStart(4, '0')
+}
+
+/**
  * Fingerprint of the option lists this code was built from.
  *
  * FNV-1a over `id + type + options` for every selected product. Decoding
@@ -448,6 +524,8 @@ function encodeIdSegment(lines) {
  * code was issued, so the indexes in `specs` may resolve to a different
  * variant. Ops needs to be told that explicitly — a silently wrong colour is
  * exactly the kind of mistake this whole format has to avoid.
+ *
+ * 只用于**旧码**（校验和之前发出的那批）：新码的 fp 段是 `checksumOf`。
  */
 function fingerprintOf(lines) {
   let hash = 2166136261
@@ -581,7 +659,10 @@ export function decodeCode(code) {
   const fail = (error) => ({ ok: false, error })
 
   if (!code || typeof code !== 'string') return fail('Empty code')
-  const trimmed = code.trim()
+  /* 清洗：全角标点 → 半角，去掉零宽字符与所有空白（邮件客户端会把长码折行）。
+   * 只清洗、不修复 —— 长度与校验和照常把关。 */
+  const trimmed = normaliseCodeText(code)
+  if (!trimmed) return fail('Empty code')
 
   /* ── 品牌边界 ──
      前缀不是可选项：把 B 品牌的码粘进本品牌的后台，必须在这里被拦下。
@@ -745,9 +826,13 @@ function specsFromDigit(product, digit) {
 function decodeCompact(parts) {
   const fail = (error) => ({ ok: false, error })
   if (parts.length !== 8) return fail('Malformed v7 code')
-  /* The fingerprint is always exactly 4 characters, so a code with a chewed-off
-   * tail is rejected here instead of decoding to a plausible-looking order. */
-  if (!/^[0-9A-Za-z]{4}$/.test(parts[7])) return fail('Code looks truncated — check the last characters')
+  /* fp 段两种长度都合法：
+   *   8 位 = 新码（4 位整串校验和 + 4 位选项指纹）
+   *   4 位 = 旧码（只有选项指纹）—— 校验和上线之前发出去的那批
+   * 其余长度（比如被截掉一位的 3 位）一律按"码不完整"拒绝。 */
+  if (!/^(?:[0-9A-Za-z]{4}|[0-9A-Za-z]{8})$/.test(parts[7])) {
+    return fail('Code looks truncated — check the last characters')
+  }
 
   const ref = parts[1]
   const ids = decodeIdSegment(parts[2])
@@ -848,12 +933,42 @@ function decodeCompact(parts) {
     })
   })
 
-  /* The fingerprint can only be checked when every product is still here: a
-   * deleted product contributes to it at encode time and cannot at decode
-   * time, which would raise a false "options changed". */
+  /* ── 校验：对不上就整条拒绝，绝不返回商品 ──
+   *
+   * 新码（fp 8 位）：前 4 位是**整串校验和**，与目录无关 —— 手改一个字符立刻
+   * 露馅，运营改商品规格也不会误伤它。后 4 位是选项指纹，只用来判断"规格表
+   * 变没变"（变了解码仍然可以继续，但会标"待确认"）。
+   *
+   * 旧码（fp 4 位）：只有选项指纹，要目录才能算。**算不了就不放行** ——
+   * 线上那个"随手补一个字母就能解出商品"的 bug，根因就是把"无法验证"当成了
+   * "没问题"。 */
+  const fp = parts[7]
+  const bodyText = parts.slice(0, 7).join('.')
   const fpComparable = missing.length === 0
-  const fpMatches = !fpComparable || fingerprintOf(items.map((item) => ({ id: item.id, product: lookup.get(item.id)?.product }))) === parts[7]
-  const optionsChanged = fpComparable ? !fpMatches : uncertain.length > 0
+  const optionFp = fpComparable
+    ? fingerprintOf(
+        items.map((item) => ({ id: item.id, product: lookup.get(item.id)?.product })),
+      )
+    : ''
+
+  let optionsChanged = uncertain.length > 0
+
+  if (fp.length === 8) {
+    if (fp.slice(0, 4) !== checksumOf(bodyText)) {
+      return fail(
+        'Code does not match — it may be mistyped or truncated. Check every character, or ask for a new code.',
+      )
+    }
+    /* 校验和过了：码本身可信。指纹只负责"规格表动过没有"，不做拒绝。 */
+    if (fpComparable && optionFp !== fp.slice(4)) optionsChanged = true
+  } else {
+    /* 旧码：只有选项指纹可查。算不了 → 拒绝（无法验证 ≠ 可信）。 */
+    if (!fpComparable || optionFp !== fp) {
+      return fail(
+        'Code does not match — it may be mistyped or truncated. Check every character, or ask for a new code.',
+      )
+    }
+  }
 
   const warnings = []
   if (missing.length) {
