@@ -36,6 +36,7 @@ import {
   discountOf,
   dealsOrder,
   filterDeals,
+  isCampaignDeal,
   soonestDealMs,
 } from '../utils/deal.js'
 import { hasSeenGuide, markGuideSeen, shouldAutoOpen } from '../utils/guide.js'
@@ -213,8 +214,14 @@ export default function SelectionPage() {
   const isCampaign = activeCategory === CAMPAIGN_TAB
   const inDealsView = isDeals || isCampaign
 
-  const regularPool = useMemo(() => dealPool.filter((product) => !product.isCampaign), [dealPool])
-  const campaignPool = useMemo(() => dealPool.filter((product) => product.isCampaign), [dealPool])
+  const regularPool = useMemo(
+    () => dealPool.filter((product) => !isCampaignDeal(product, campaignTabLabel)),
+    [dealPool, campaignTabLabel],
+  )
+  const campaignPool = useMemo(
+    () => dealPool.filter((product) => isCampaignDeal(product, campaignTabLabel)),
+    [dealPool, campaignTabLabel],
+  )
   const activePool = isCampaign ? campaignPool : regularPool
 
   /**

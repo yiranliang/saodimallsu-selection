@@ -265,12 +265,67 @@ export function isCampaignLabel(text) {
   if (/\d\s*%/.test(raw) || /\boff\b/i.test(raw)) return true
 
   /* 2. 活动名。`campaignKey` 已经把 `Deals` / `Sale` 这类尾巴剥掉了。 */
-  const key = campaignKey(raw)
-  if (key && CAMPAIGN_NAMES.some((name) => key.startsWith(name))) return true
+  if (isNamedCampaign(raw)) return true
 
   /* 3. 逐词。复数靠剥 `s` 兜一下（`Deals`、`Sales` 已在表里，`Doorbusters` 不一定）。 */
   const words = raw.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)
   return words.some((word) => CAMPAIGN_WORDS.has(word) || CAMPAIGN_WORDS.has(word.replace(/s$/, '')))
+}
+
+/**
+ * 这串文字是不是一个**有名字的活动**（`Black Friday` / `🔥Cyber Monday` /
+ * `Prime Day`…）—— 比 `isCampaignLabel` 窄：`50% OFF`、`Flash Sale` 这类
+ * "促销语言"不算。
+ *
+ * 为什么要窄的这一层：判断"商品属于哪场活动"时，`50% OFF` 这种标只说明
+ * "这件在打折"，不能说明"它属于黑五"。用宽的那层会把批量打了 `50% OFF`
+ * 的常规秒杀全部搬进大促区。
+ *
+ * @param {unknown} text
+ * @returns {boolean}
+ */
+export function isNamedCampaign(text) {
+  const raw = String(text ?? '').trim()
+  if (!raw) return false
+  const key = campaignKey(raw)
+  return Boolean(key) && CAMPAIGN_NAMES.some((name) => key.startsWith(name))
+}
+
+/**
+ * 这件商品属于 🔥 大促区吗？
+ *
+ * **两个信号取并集**，顺序是"显式优先、名字兜底"：
+ *
+ *   1. `is_campaign === true` —— 导入 / 批量开秒杀时运营选的那一栏（13-campaign.sql）
+ *   2. `sub_tag` **或** `tag` 是**有名字的活动**（`Black Friday` / `Cyber Monday`），
+ *      或者和当前大促 Tab 同名（`isSameCampaign(label, campaignName)`）
+ *
+ * 为什么需要第 2 条：第一版只看 `is_campaign`，结果**已经批量打了黑五标的老数据**
+ * 全是 false —— 大促区一件都不显示、Tab 直接消失，运营在前面看到的只有
+ * "Limited Deals"，还以为是改名没生效。标是"这件商品属于哪场活动"的人工决定，
+ * 在没人回填布尔列之前，它必须能自己撑起分类。
+ *
+ * 为什么用 `isNamedCampaign` 而不是 `isCampaignLabel`：后者把 `50% OFF`、
+ * `Flash Sale` 也算活动 —— 运营给常规秒杀打一枚 `50% OFF` 是常事，那种标只说明
+ * "在打折"，不该把商品整体搬进大促区。有名字的活动 + 当前 Tab 名才是归属信号。
+ *
+ * 为什么 `tag` 也算：批量角标弹窗有两个槽位（第一行活动标写 `sub_tag`、第二行
+ * 普通标写 `tag`），运营选哪个都可能。
+ *
+ * 反过来，`is_campaign === true` 而标被清掉的商品（比如清空秒杀时自动摘标）
+ * 仍然归在大促区 —— 那是运营在导入时明确选过的。
+ *
+ * @param {object} product
+ * @param {string} [campaignName] 当前大促 Tab 的名字（`settings.deals_tab_label`）
+ * @returns {boolean}
+ */
+export function isCampaignDeal(product, campaignName = '') {
+  if (product?.isCampaign === true) return true
+  return [product?.subTag, product?.tag].some(
+    (label) =>
+      isNamedCampaign(label) ||
+      (String(campaignName ?? '').trim() !== '' && isSameCampaign(label, campaignName)),
+  )
 }
 
 /**
@@ -702,49 +757,36 @@ export const BADGE_ZONE = {
  * | --- | --- | --- | --- |
  * | `catalogue` 卡片 | campaign / Limited Deal / Coming Soon / tag | tag | 不显示 |
  * | `regular` 常规秒杀卡片 | **Limited Deal**（活动标被摘掉） | tag | 不显示 |
- * | `campaign` 大促卡片 | **只留非活动类标签**（NEW / Highly Recommend …），活动身份全不挂 | tag（同样过滤） | 不显示 |
+ * | `campaign` 大促卡片 | **商品自己的活动标**（Black Friday…），**永不出现 Limited Deal**；没活动标的才落到 tag | tag | 不显示 |
  * | `detail` | 同 catalogue（+ ACC） | tag | 显示 |
  *
  * 为什么折扣不再是角标：它在手机上是**第二行**，正好压在商品图上 —— 卡片只有
  * 169px 宽、照片是主体，一枚 `50% OFF` 换来的信息量抵不上它遮住的东西。
  * 折扣本身没有消失：它仍在专区的价格区（`dealPriceInfo`）、详情页的价格区，
  * 以及大促专区顶部的折扣分桶里。这里只是**不再把它画成角标**。
- * 为什么大促专区里连 `Limited Deal` 都不显示：整区都是大促，再强调一遍身份
- * 是零信息（就是"点进 Black Friday 目录，卡片上还顶着一枚 Black Friday"）。
  * 为什么卡片上不再有 ACC：佣金是红人**点进去**才需要判断的事，详情页有
  * 一整块 ACC 卡片（含 Campaign ID 和复制按钮），卡片上那枚只是噪音。
  *
- * 两个秒杀专区里都不挂活动身份
- * ─────────────────────────────
- * 进了 `🔥Black Friday` 专区，整屏都是黑五 —— 每张卡再挂一枚 `Black Friday`
- * 是零信息。常规秒杀区同理：那一屏的语言是"还差多久"，不是"哪场活动"。
- * 所以 `regular` / `campaign` 两面里 `sub_tag` 与 `tag` 只要**看着像活动**就
- * 当没有，两条判据取并集：
+ * 两个秒杀专区对"活动标"的处理**相反**
+ * ──────────────────────────────────
+ *   regular  活动标不挂：那一屏的语言是"还差多久"（倒计时 + 紧迫度），
+ *            身份统一由系统派生的 `Limited Deal` 表达。
+ *   campaign 活动标**要留**：这一区的身份就是"哪场活动" —— 一件打了
+ *            `Black Friday` 的商品进来，卡上就该是 `Black Friday`。
+ *            去掉的只有系统派生的 `Limited Deal`（整区都在大促，那枚是废话）。
  *
- *   1. `isCampaignLabel(text)` —— 词表认得的活动（Black Friday、Cyber Monday、
- *      `50% OFF`、Flash Sale …），与专区叫什么无关。这条是"批量打了黑五标，
- *      但专区名还叫 Limited Deals"那个 case 的修复。
- *   2. `isSameCampaign(text, 专区名)` —— 词表认不出来的**自定义**活动名
- *      （`Spring Refresh`），靠和当前 Tab 名比对兜底。
- *
- * 判定放在身份选择**之前**，这样"活动标被摘掉之后普通标能不能顶上来"仍然按
- * 正常顺序算 —— 一件挂了 `Highly Recommend` 的秒杀款，进专区后角标变成它，
- * 而不是整枚消失。
- *
- * 两个专区的**唯一区别**：常规区允许系统派生的 `Limited Deal` 顶上来，
- * 大促区不允许（整区都在大促）。`!inCampaign` 就是这一句。
- *
- * 常规货架（`catalogue`）不参与这套去重：在那里 `Black Friday` 不是重复，
- * 是这件商品的关键信息。
+ * 这条规则被改过一次：最早两区都摘掉活动标，结果运营在后台批量打了
+ * `Black Friday`、进大促区却只看到 `Limited Deal`，以为标没生效。现在的取舍是
+ * **大促区显示人填的标、不显示系统派生标**。
  *
  * `Coming Soon` 独占一行：一个不能买的款，任何"强推"都不该替它说话。
  *
  * @param {object} product
  * @param {number} [now]
  * @param {{ zone?: 'catalogue'|'regular'|'campaign'|'detail', campaign?: string, inCampaign?: boolean }} [options]
- *   `campaign` 是当前专区的活动名（前台传 `settings.dealsTabLabel`），在两个
- *   秒杀面里用于识别**自定义**活动名；词表认得的活动名不传也会被摘掉。
- *   `inCampaign` 只给详情页用：这个弹层是从大促专区点开的，活动身份同样不挂。
+ *   `campaign` 是当前专区的活动名（前台传 `settings.dealsTabLabel`），只在
+ *   `regular` 面用于识别**自定义**活动名；词表认得的活动名不传也会被摘掉。
+ *   `inCampaign` 只给详情页用：这个弹层是从大促专区点开的，`Limited Deal` 同样不挂。
  * @returns {Array<{ text:string, value:string, kind:'teaser'|'campaign'|'deal'|'acc'|'tag' }>}
  */
 export function badgeStackFor(
@@ -756,21 +798,18 @@ export function badgeStackFor(
   /* 预告期间的秒杀窗口仍然参与**身份判定**（需求把 Coming Soon 排在秒杀之后）。 */
   const phase = dealPhase(product, now)
   const dealing = phase === 'live' || phase === 'scheduled'
-  /* `inCampaign` 让**详情页**也能表明"我是在大促专区里被点开的"：整区都在
-   * 大促，详情页再挂一枚 `Black Friday` 是同一句废话。ACC 不受影响。 */
   const inCampaignZone = zone === BADGE_ZONE.CAMPAIGN || viewInCampaign === true
-  const inDealTab = inCampaignZone || zone === BADGE_ZONE.REGULAR
+  const isRegularZone = zone === BADGE_ZONE.REGULAR
   const rawTag = String(product?.tag ?? '').trim()
   const rawCampaign = String(product?.subTag ?? '').trim()
 
-  /* 专区自己的名字：只在这两个面、且调用方给了名字时才比对（自定义活动名）。 */
-  const ownName = inDealTab ? String(zoneCampaign ?? '').trim() : ''
-  const repeatsOwnName = (text) => ownName !== '' && isSameCampaign(text, ownName)
-  /* 秒杀专区里：活动身份一律当没有 —— 词表认得的，或者和专区同名的。 */
-  const dropInDealTab = (text) => inDealTab && (repeatsOwnName(text) || isCampaignLabel(text))
+  /* 只有**常规秒杀区**摘活动标；大促区保留（那正是它的身份）。
+   * `isSameCampaign` 兜住词表认不出来的自定义活动名（`Spring Refresh`）。 */
+  const dropCampaignLabel = (text) =>
+    isRegularZone && text !== '' && (isCampaignLabel(text) || isSameCampaign(text, zoneCampaign))
 
-  const tag = dropInDealTab(rawTag) ? '' : rawTag
-  const campaign = dropInDealTab(rawCampaign) ? '' : rawCampaign
+  const tag = dropCampaignLabel(rawTag) ? '' : rawTag
+  const campaign = dropCampaignLabel(rawCampaign) ? '' : rawCampaign
 
   /* ── 第一行：身份 ── */
   let identity = null

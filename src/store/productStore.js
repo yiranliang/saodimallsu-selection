@@ -776,9 +776,15 @@ export async function setProductsDeals(targets, { priority, isCampaign } = {}) {
      * `Black Friday` 而不是 `Limited Deal`，而导入表格里没有"活动标"这一列，
      * 运营根本无从发现（见 deal.js 的 `dropsCampaignTag`）。只清活动类的
      * 文字，`NEW` / `Highly Recommend` 原样保留；副角标列不存在时整段跳过，
-     * 因为那个功能此刻本来就没生效。 */
+     * 因为那个功能此刻本来就没生效。
+     *
+     * `sub_tag` 写**空字符串**，不是 null：这一列在 11-*.sql 里是
+     * `not null default ''`（14-tag-nulls.sql 才放开），写 null 会让整条 upsert
+     * 被数据库拒掉 —— 现象是"点批量清空秒杀 → 报 not-null violation"。
+     * 空串在两边都安全：老库（NOT NULL）接受它，新库把它和 null 当同一个意思
+     * （`rowToProduct` 里一律 `String(sub_tag ?? '')`）。 */
     if (subBadgeAvailable && dropsCampaignTag(byId.get(String(id)), deal || {})) {
-      clearRows.push({ ...row, sub_tag: null, sub_badge_color: null })
+      clearRows.push({ ...row, sub_tag: '', sub_badge_color: null })
     } else {
       plainRows.push(row)
     }

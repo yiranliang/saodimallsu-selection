@@ -48,6 +48,7 @@ import {
   formatPriceText,
   isDealActive,
   isCampaignLabel,
+  isCampaignDeal,
   campaignOrder,
   campaignTabLabelOf,
   cardCountdown,
@@ -309,20 +310,26 @@ check('regular: NEW survives as the second line', onRegular({ ...deal, tag: 'NEW
   'NEW',
 ])
 
-/* ── 🔥 大促：活动身份全不挂，只留非活动类运营标 ── */
-check('campaign: a deal wears no badge at all', onCampaign(deal), [])
+/* ── 🔥 大促：人填的活动标就是这一区的身份；系统派生的 Limited Deal 不挂 ── */
+check('campaign: a deal with no label wears nothing', onCampaign(deal), [])
 check('campaign: no discount badge to fall back on', onCampaign(deal).length, 0)
 check(
-  'campaign: a hand-applied campaign label is hidden too',
+  'campaign: the hand-applied campaign label IS the identity',
   onCampaign({ ...deal, tag: 'Black Friday' }),
-  [],
+  ['Black Friday'],
 )
 check(
-  'campaign: and in the campaign slot as well',
+  'campaign: same in the campaign slot',
   onCampaign({ ...deal, subTag: 'Cyber Monday' }),
-  [],
+  ['Cyber Monday'],
 )
-check('campaign: a hand-typed percentage is not a way back in', onCampaign({ ...deal, tag: '50% OFF' }), [])
+/* 这一条是 Bug 3 的根：进了大促区还显示 Limited Deal，运营会以为标没生效。 */
+check(
+  'campaign: never Limited Deal',
+  onCampaign({ ...deal, subTag: 'Black Friday' }).includes('Limited Deal'),
+  false,
+)
+check('campaign: a hand-typed label still shows', onCampaign({ ...deal, tag: '50% OFF' }), ['50% OFF'])
 check(
   'campaign: a non-campaign label still shows',
   onCampaign({ ...deal, tag: 'Highly Recommend' }),
@@ -330,11 +337,13 @@ check(
 )
 check('campaign: NEW survives', onCampaign({ ...deal, tag: 'NEW' }), ['NEW'])
 check(
-  'campaign: the campaign is dropped, the label takes the line',
+  'campaign: the campaign leads, the ops label rides underneath',
   onCampaign({ ...deal, subTag: 'Black Friday', tag: 'Highly Recommend' }),
-  ['Highly Recommend'],
+  ['Black Friday', 'Highly Recommend'],
 )
-check('campaign: a campaign label on a plain product is empty', onCampaign({ tag: 'Black Friday' }), [])
+check('campaign: a campaign label on a plain product still shows', onCampaign({ tag: 'Black Friday' }), [
+  'Black Friday',
+])
 
 /* ── 详情：身份 + 标签，折扣不进角标（它在下面的价格区） ── */
 check('detail: identity only', onDetail(deal), ['Limited Deal'])
@@ -351,11 +360,16 @@ check(
 check('detail: no discount text anywhere', onDetail(deal).some((v) => v.includes('OFF')), false)
 check('detail: no emoji anywhere', onDetail(deal).some((v) => /[⚡🔥💰]/.test(v)), false)
 
-/* 从大促专区点开的详情页：卡片上怎么去重，它就怎么去重。 */
+/* 从大促专区点开的详情页：活动标照常显示，但系统派生的 Limited Deal 不要。 */
 check(
-  'detail opened inside the campaign tab drops the campaign label too',
+  'detail opened inside the campaign tab keeps the campaign label',
   texts({ ...deal, subTag: 'Black Friday' }, START, { zone: BADGE_ZONE.DETAIL, inCampaign: true }),
-  [],
+  ['Black Friday'],
+)
+check(
+  'but never Limited Deal',
+  texts(deal, START, { zone: BADGE_ZONE.DETAIL, inCampaign: true }).includes('Limited Deal'),
+  false,
 )
 check(
   'while the plain detail keeps it',
@@ -496,7 +510,7 @@ check('so it never matches its own number', isSameCampaign('50% OFF', '50'), fal
 check('two different campaigns stay different', isSameCampaign('Black Friday', 'Cyber Monday'), false)
 check('empty never matches', isSameCampaign('', 'Black Friday'), false)
 
-/* ── 自定义活动名：词表认不出来的，只能靠专区名比对 ── */
+/* ── 自定义活动名：词表认不出来的，只能在**常规**秒杀区靠专区名比对 ── */
 const BF = '🔥Black Friday'
 const SPRING = 'Spring Refresh'
 check(
@@ -505,19 +519,20 @@ check(
   ['Black Friday'],
 )
 check(
-  'inside the tab a spelled-out name is redundant even without the tab arg',
+  'inside the campaign tab the campaign label is the identity',
   texts({ ...deal, subTag: 'Black Friday' }, START, { zone: BADGE_ZONE.CAMPAIGN }),
-  [],
+  ['Black Friday'],
 )
 check(
-  'a custom name survives the word list…',
+  'a custom name is kept there too',
   texts({ ...deal, tag: SPRING }, START, { zone: BADGE_ZONE.CAMPAIGN }),
   [SPRING],
 )
+/* 常规秒杀区反过来：那一屏讲紧迫度，活动标（含自定义名）都让位给 Limited Deal。 */
 check(
-  '…until the tab name says it is this campaign',
-  texts({ ...deal, tag: SPRING }, START, { zone: BADGE_ZONE.CAMPAIGN, campaign: SPRING }),
-  [],
+  'the regular tab drops a custom campaign name',
+  texts({ ...deal, tag: SPRING }, START, { zone: BADGE_ZONE.REGULAR, campaign: SPRING }),
+  ['Limited Deal'],
 )
 check(
   'the tab name is ignored on the catalogue',
@@ -871,6 +886,32 @@ check('the soonest end drives the tick', soonestDealMs([deal], START), END - STA
 check('a scheduled deal counts to its start', soonestDealMs([deal], START - 1000), 1000)
 check('empty pool', soonestDealMs([], START), null)
 check('products without a window are ignored', soonestDealMs([{ id: 'x' }], START), null)
+
+/* ── 大促归属：显式标记优先，活动名兜底（Bug 2 的根） ── */
+console.log('\n[6d] isCampaignDeal — 哪些商品进 🔥 大促区')
+
+check('the stored flag alone is enough', isCampaignDeal({ isCampaign: true }), true)
+check('a named campaign in the identity slot', isCampaignDeal({ subTag: 'Black Friday' }), true)
+check('a named campaign in the plain slot', isCampaignDeal({ tag: 'Black Friday' }), true)
+/* 历史数据全是 is_campaign=false，但标是运营亲手打的 —— 必须能自己撑起分类。 */
+check(
+  'the flag can be false and the label still wins',
+  isCampaignDeal({ isCampaign: false, subTag: 'Cyber Monday' }),
+  true,
+)
+check('an emoji does not hide the name', isCampaignDeal({ subTag: '🔥Black Friday' }), true)
+/* `50% OFF` 只是"在打折"，不是"属于黑五" —— 不能把常规秒杀整批搬走。 */
+check('a discount label is not a campaign', isCampaignDeal({ tag: '50% OFF' }), false)
+check('nor is Flash Sale', isCampaignDeal({ subTag: 'Flash Sale' }), false)
+check('an ops label is not a campaign', isCampaignDeal({ tag: 'NEW' }), false)
+check('nor is Highly Recommend', isCampaignDeal({ subTag: 'Highly Recommend' }), false)
+check('no labels at all', isCampaignDeal({}), false)
+check('null product', isCampaignDeal(null), false)
+/* 自定义活动名（`Spring Refresh`）只能靠和当前 Tab 名比对。 */
+check('a custom name matches the tab name', isCampaignDeal({ tag: 'Spring Refresh' }, 'Spring Refresh'), true)
+check('but not another tab', isCampaignDeal({ tag: 'Spring Refresh' }, 'Black Friday'), false)
+/* 标被清掉但运营当初选了"大促"：仍然归在大促区。 */
+check('the flag survives a cleared label', isCampaignDeal({ isCampaign: true, subTag: '' }), true)
 
 console.log(
   `\n${failed === 0 ? '✓ ALL PASSED' : '✗ FAILURES'}: ${passed} passed, ${failed} failed\n`,
