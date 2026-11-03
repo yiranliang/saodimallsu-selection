@@ -62,6 +62,10 @@ export default function ProductDetail({
    * `Black Friday` 是同一句废话。常规货架 / ⚡ 常规秒杀传 false。 */
   inCampaign = false,
   campaign = '',
+  /* 整份选款已满（`MAX_CART_ITEMS`）：步进器 `+` 置灰；"Add to my selection"
+   * 仍然可点，由父组件弹一句 `Maximum N items allowed per selection.` —— 比死
+   * 按钮更容易让人明白发生了什么。 */
+  atCap = false,
   onAdd,
   onIncrement,
   onDecrement,
@@ -759,6 +763,7 @@ export default function ProductDetail({
                   size="lg"
                   onIncrement={() => onIncrement(currentLine.key)}
                   onDecrement={() => onDecrement(currentLine.key)}
+                  incrementDisabled={atCap}
                 />
                 <span className="flex items-center gap-1 text-[12px] font-medium text-accent">
                   <Check className="h-3.5 w-3.5" />

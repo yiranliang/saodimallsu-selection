@@ -8,6 +8,7 @@ import { isSoldOut } from '../utils/soldOut.js'
 import { listingKnownFor } from '../store/linkStore.js'
 import { sizedImage } from '../utils/image.js'
 import { isTeaser } from '../utils/teaser.js'
+import { MAX_CART_ITEMS } from '../utils/lines.js'
 
 /**
  * Selection cart
@@ -33,6 +34,10 @@ export default function CartDrawer({
   styles,
   variants,
   units,
+  /* 单子最多几件（`MAX_CART_ITEMS`）。UI 只负责显示 `(X / N)` 和置灰 `+`，
+   * 真正的拦截在 useSelection 里 —— 组件不该是唯一一道防线。 */
+  maxItems = MAX_CART_ITEMS,
+  atCap = false,
   onIncrement,
   onDecrement,
   onRemove,
@@ -77,9 +82,22 @@ export default function CartDrawer({
         {/* Header */}
         <div className="flex shrink-0 items-start justify-between gap-3 border-b border-charcoal/[0.07] px-5 py-4 sm:px-6">
           <div>
-            <h2 className="text-base font-semibold tracking-tight text-charcoal">
-              Your selection
-            </h2>
+            <div className="flex items-baseline gap-2">
+              <h2 className="text-base font-semibold tracking-tight text-charcoal">
+                Your selection
+              </h2>
+              {/* 件数进度：`(X / N)`。`aria-live` 让读屏软件也能听到加购后的变化；
+                  到上限时整段转红，不用再写第二句"你满了"。 */}
+              <span
+                data-cart-progress
+                aria-live="polite"
+                className={`text-[13px] font-semibold tabular-nums ${
+                  atCap ? 'text-red-500' : 'text-charcoal-light'
+                }`}
+              >
+                ({units} / {maxItems})
+              </span>
+            </div>
             <p className="mt-0.5 text-[12px] text-charcoal-light">
               {styles} {styles === 1 ? 'style' : 'styles'}
               {variants > styles && ` · ${variants} variants`}
@@ -207,6 +225,7 @@ export default function CartDrawer({
                           qty={qty}
                           onIncrement={() => onIncrement(key)}
                           onDecrement={() => onDecrement(key)}
+                          incrementDisabled={atCap}
                         />
                         {gone ? (
                           <button

@@ -12,6 +12,9 @@ export default function QuantityStepper({
   onDecrement,
   size = 'sm',
   max = 35,
+  /* 整份选款到上限时，`+` 必须点不动 —— 这里单独一个 prop 而不是把 max 调小，
+   * 因为 "这一行最多 35 件" 和 "整张单子最多 MAX_CART_ITEMS 件" 是两条不同的规则。 */
+  incrementDisabled = false,
 }) {
   const compact = size === 'sm'
 
@@ -48,7 +51,7 @@ export default function QuantityStepper({
       <button
         type="button"
         onClick={stop(onIncrement)}
-        disabled={qty >= max}
+        disabled={qty >= max || incrementDisabled}
         aria-label="Increase quantity"
         className={`flex ${btn} items-center justify-center rounded-full text-accent transition active:scale-90 hover:bg-accent/15 disabled:opacity-30`}
       >

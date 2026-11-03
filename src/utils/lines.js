@@ -31,6 +31,56 @@ import { isTeaser } from './teaser.js'
 /** Max units per line — one base36 digit in the code */
 export const MAX_QTY = 35
 
+/**
+ * 整份选款的上限：**所有颜色 × 尺码的数量之和**。
+ *
+ * 这是业务定的硬上限：一连点五下 `+` 不该变成"订五件"，选品太多也会让 PR
+ * 预算失控。它和 `MAX_QTY`（单行 35 件，编码格式的限制）是两件事 —— 一行最多
+ * 35 件，但整张单子只能 `MAX_CART_ITEMS` 件。
+ *
+ * UI 上的 `(X / N)`、置灰的 `+`、拦截用的 toast 全部**读这个常量**，不要在
+ * 别处再写一个数字 —— 改上限时只改这一行。
+ */
+export const MAX_CART_ITEMS = 25
+
+/** 还能再加几件（永不为负）。 */
+export function roomLeft(lines, cap = MAX_CART_ITEMS) {
+  const used = (Array.isArray(lines) ? lines : []).reduce(
+    (sum, line) => sum + Math.max(0, Math.trunc(Number(line?.qty) || 0)),
+    0,
+  )
+  return Math.max(0, Math.trunc(Number(cap) || 0) - used)
+}
+
+/**
+ * 把一份行数组裁进上限。
+ *
+ * 顺序累加，满了之后的整行丢掉；跨过上限的那一行只保留"装得下"的数量。
+ * 用途是 localStorage 里超过上限的旧数据 —— 加载时静默截断，**绝不因为
+ * 数据太满就报错或清空整张单子**（那会让她连已经选好的都丢掉）。
+ *
+ * @param {object[]} lines
+ * @param {number} [cap]
+ * @returns {object[]} 新数组；没超限时内容与入参一致
+ */
+export function clampLinesToCap(lines, cap = MAX_CART_ITEMS) {
+  const list = Array.isArray(lines) ? lines : []
+  const limit = Math.max(0, Math.trunc(Number(cap) || 0))
+  const out = []
+  let used = 0
+
+  for (const line of list) {
+    if (used >= limit) break
+    const qty = Math.max(0, Math.trunc(Number(line?.qty) || 0))
+    if (!qty) continue
+    const take = Math.min(qty, limit - used)
+    out.push(take === qty ? line : { ...line, qty: take })
+    used += take
+  }
+
+  return out
+}
+
 const SEP = '::'
 const JOIN = '|'
 

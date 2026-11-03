@@ -96,6 +96,9 @@ export default function SelectionPage() {
     renew,
     reconcile,
     expiredOnLoad,
+    maxItems,
+    atCap,
+    totalUnits,
   } = useSelection()
 
   const [detailProduct, setDetailProduct] = useState(null)
@@ -446,12 +449,23 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
       return
     }
 
+    /* 件数上限（`MAX_CART_ITEMS`）：整单加不进去就明说，不静默吞掉这次点击。 */
+    if (atCap) {
+      showToast(`Maximum ${maxItems} items allowed per selection.`, 'error', 3500)
+      return
+    }
+
     add(product, {})
     showToast(`Added ${product.name}`, 'success')
-  }, [add, getQty, removeAll, showToast])
+  }, [add, atCap, getQty, maxItems, removeAll, showToast])
 
   /** Sheet: add the combination currently in the pickers */
   const handleAddFromDetail = (product, specs) => {
+    /* 详情页是加购的主入口，所以拦截也在这里：到上限就只弹提示，不写状态。 */
+    if (atCap) {
+      showToast(`Maximum ${maxItems} items allowed per selection.`, 'error', 3500)
+      return
+    }
     add(product, specs)
     const label = Object.values(specs).filter(Boolean).join(' / ')
     showToast(label ? `Added ${product.name} · ${label}` : `Added ${product.name}`, 'success')
@@ -597,6 +611,7 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
             onIncrement={increment}
             onDecrement={decrement}
             onOpenDetail={setDetailProduct}
+            atCap={atCap}
           />
         )}
 
@@ -628,6 +643,7 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
              的 Black Friday / Cyber Monday 不用它也摘得掉）。常规货架上
              Black Friday 不是重复，是这件商品的关键信息。 */
           campaign={isCampaign ? campaignTabLabel : ''}
+          atCap={atCap}
         />
 
         {/* Paging lives here, not inside the grid, so the footer below it is
@@ -692,6 +708,8 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
         styles={visible.styles}
         variants={visible.variants}
         units={visible.units}
+        maxItems={maxItems}
+        atCap={atCap}
         onIncrement={increment}
         onDecrement={decrement}
         onRemove={remove}
@@ -706,6 +724,8 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
       <ProductDetail
         product={detailProduct}
         open={!!detailProduct}
+        atCap={atCap}
+        maxItems={maxItems}
         /* 从 🔥 大促专区点开的详情页，活动身份同样不挂（见 badgeStackFor
            ／ ProductDetail 的注释）。弹层打开时分类栏被遮住，所以当前 tab
            就是它被点开时的 tab。 */

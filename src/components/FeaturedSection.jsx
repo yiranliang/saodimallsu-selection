@@ -36,6 +36,8 @@ export default function FeaturedSection({
   /* 换一批：父组件换一个种子，这里只负责动画与按钮。 */
   onShuffle,
   seed = 0,
+  /* 整份选款已满（`MAX_CART_ITEMS`）：卡片步进器的 `+` 置灰。 */
+  atCap = false,
 }) {
   if (!products.length) return null
 
@@ -113,6 +115,7 @@ export default function FeaturedSection({
             onDecrement={onDecrement}
             onOpenDetail={onOpenDetail}
             zone={BADGE_ZONE.CATALOGUE}
+            atCap={atCap}
           />
         ))}
       </div>

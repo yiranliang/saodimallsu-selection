@@ -50,6 +50,8 @@ function ProductCard({
   /* 常规秒杀那屏的"现在"。父组件一个 timer 服务整屏，只有那一屏才传；
    * 常规货架不传，卡片就不会因为倒计时一秒一刷。 */
   now,
+  /* 整份选款已满（`MAX_CART_ITEMS`）：卡上的步进器 `+` 置灰。 */
+  atCap = false,
 }) {
   const [beat, setBeat] = useState(false)
   const selected = lines.length > 0
@@ -330,6 +332,7 @@ function ProductCard({
               qty={lines[0].qty}
               onIncrement={() => onIncrement(lines[0].key)}
               onDecrement={() => onDecrement(lines[0].key)}
+              incrementDisabled={atCap}
             />
           ) : selected ? (
             <button
@@ -380,6 +383,7 @@ function sameCard(prev, next) {
   if (prev.product !== next.product) return false
   if (prev.zone !== next.zone) return false
   if (prev.now !== next.now) return false
+  if (prev.atCap !== next.atCap) return false
   if (prev.campaign !== next.campaign) return false
   if (prev.amazonUrl !== next.amazonUrl) return false
   if (prev.onToggle !== next.onToggle) return false

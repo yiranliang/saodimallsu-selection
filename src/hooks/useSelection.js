@@ -1,7 +1,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { readSelection, saveLines, clearLegacySelection } from '../utils/storage.js'
 import {
+  MAX_CART_ITEMS,
   addLine,
+  clampLinesToCap,
   setLineQty,
   incrementLine,
   decrementLine,
@@ -42,7 +44,9 @@ export function useSelection() {
    * decides expiry, so an aged-out draft arrives here already empty — and the
    * first write below persists that emptiness. */
   const [boot] = useState(() => readSelection())
-  const [lines, setLines] = useState(boot.lines)
+  /* 旧数据兜底：localStorage 里可能躺着超过上限的单子（上限调小之前存的），
+   * 加载时静默截断到 `MAX_CART_ITEMS` —— 不报错、也不清空，她选好的前 N 件照样在。 */
+  const [lines, setLines] = useState(() => clampLinesToCap(boot.lines, MAX_CART_ITEMS))
   const stampRef = useRef(boot.updatedAt)
 
   useEffect(() => {
@@ -96,7 +100,9 @@ export function useSelection() {
   const add = useCallback(
     (product, specs, qty = 1) => {
       touch()
-      setLines((prev) => addLine(prev, product, specs, qty))
+      /* 上限在状态层再兜一次：UI 会先拦并弹 Toast，但连点/并发渲染都可能
+       * 让两次 add 挤在同一个 tick 里，这里保证最终状态永远不超过上限。 */
+      setLines((prev) => clampLinesToCap(addLine(prev, product, specs, qty), MAX_CART_ITEMS))
     },
     [touch],
   )
@@ -104,7 +110,7 @@ export function useSelection() {
   const increment = useCallback(
     (key) => {
       touch()
-      setLines((prev) => incrementLine(prev, key))
+      setLines((prev) => clampLinesToCap(incrementLine(prev, key), MAX_CART_ITEMS))
     },
     [touch],
   )
@@ -120,7 +126,7 @@ export function useSelection() {
   const setQty = useCallback(
     (key, qty) => {
       touch()
-      setLines((prev) => setLineQty(prev, key, qty))
+      setLines((prev) => clampLinesToCap(setLineQty(prev, key, qty), MAX_CART_ITEMS))
     },
     [touch],
   )
@@ -180,6 +186,10 @@ export function useSelection() {
     counts,
     /** True only when a non-empty draft was discarded because it had aged out */
     expiredOnLoad: boot.expired,
+    /** 购物车上限（件数），UI 用它渲染 `(X / N)` 与置灰 `+` */
+    maxItems: MAX_CART_ITEMS,
+    /** 已经满了？ */
+    atCap: counts.units >= MAX_CART_ITEMS,
     totalStyles: counts.styles,
     totalVariants: counts.variants,
     totalUnits: counts.units,

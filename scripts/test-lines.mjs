@@ -10,6 +10,9 @@
 
 import {
   MAX_QTY,
+  MAX_CART_ITEMS,
+  clampLinesToCap,
+  roomLeft,
   lineKey,
   sanitizeSpecs,
   isComplete,
@@ -214,6 +217,38 @@ check('missing key fails', isLine({ productId: 'p001', qty: 1 }), false)
 check('zero qty fails', isLine({ key: 'x', productId: 'p001', qty: 0 }), false)
 check('null fails', isLine(null), false)
 check('a string fails', isLine('p001::Black|M'), false)
+
+/* ── 10. 整单上限（MAX_CART_ITEMS = 25） ── */
+console.log('\n[10] Cart cap — 25 items per selection')
+
+const cartLine = (key, qty) => ({ key, productId: 'p001', qty, specs: { Colour: 'Black', Size: 'M' } })
+
+check('the cap is 25', MAX_CART_ITEMS, 25)
+check('a single item leaves 24', roomLeft([cartLine('a', 1)]), 24)
+check('an empty cart has the full 25', roomLeft([]), 25)
+check('24 of 25 leaves one', roomLeft([cartLine('a', 9), cartLine('b', 15)]), 1)
+check('a full cart has no room', roomLeft([cartLine('a', 25)]), 0)
+/* 超过上限的旧数据（上限调小之前存的）不能出现负数。 */
+check('over-full is clamped to zero, never negative', roomLeft([cartLine('a', 30)]), 0)
+
+/* 加载时截断：按顺序装到 25 件为止，跨过上限的那一行只留装得下的数量，
+ * 再往后的整行丢弃（12 + 12 + 1 = 25，第四行没份）。 */
+const overflow = [cartLine('a', 12), cartLine('b', 12), cartLine('c', 3), cartLine('d', 2)]
+const clamped = clampLinesToCap(overflow)
+check('the total is exactly 25', clamped.reduce((sum, line) => sum + line.qty, 0), 25)
+check('the first line is untouched', clamped[0].qty, 12)
+check('so is the second', clamped[1].qty, 12)
+check('the crossing line keeps only what fits', clamped[2].qty, 1)
+check('lines past the cap are dropped', clamped.length, 3)
+check('and the dropped one is the last', clamped.some((line) => line.key === 'd'), false)
+check('the input is not mutated', overflow[2].qty, 3)
+
+check('a cart under the cap is returned as-is', clampLinesToCap(overflow.slice(0, 1))[0].qty, 12)
+check('exactly at the cap is fine', clampLinesToCap([cartLine('a', 25)]).length, 1)
+check('zero qty lines are skipped', clampLinesToCap([cartLine('a', 0), cartLine('b', 3)])[0].key, 'b')
+check('null in, empty out', clampLinesToCap(null), [])
+check('an empty cart stays empty', clampLinesToCap([]), [])
+check('a custom cap is honoured', clampLinesToCap([cartLine('a', 5), cartLine('b', 6)], 7).map((l) => l.qty), [5, 2])
 
 console.log(`\n${'─'.repeat(44)}`)
 console.log(`Passed ${passed}${failed ? `, failed ${failed}` : ''}`)

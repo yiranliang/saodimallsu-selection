@@ -35,6 +35,8 @@ export default function ProductGrid({
   zone,
   /* 常规秒杀那屏的"现在"（父组件一个 timer 服务整屏）；其他面不传。 */
   now,
+  /* 整份选款已满（`MAX_CART_ITEMS`）：卡片步进器的 `+` 置灰。 */
+  atCap = false,
   /* 这个专区的活动名（后台改的 Tab 名）。专区内部不重复挂同名角标，
    * 见 `badgeStackFor`。普通目录传空串。 */
   campaign = '',
@@ -110,6 +112,7 @@ export default function ProductGrid({
             onOpenDetail={onOpenDetail}
             zone={zone}
             now={now}
+            atCap={atCap}
             campaign={campaign}
           />
         ))}
