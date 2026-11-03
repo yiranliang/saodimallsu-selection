@@ -161,7 +161,7 @@
 | 功能 | 位置 | 备注 |
 |---|---|---|
 | **极简骨架屏** | `src/pages/SelectionPage.jsx`（`holdSkeleton`）+ `index.html` 的 boot ring | 首屏立刻出骨架，不做固定 450 ms 等待；数据到齐后短暂 hold 再淡出，避免闪一下 |
-| **首页推荐位 Featured for You** | `src/utils/featured.js`、`src/components/FeaturedSection.jsx` | 网格上方 24 件；种子在挂载时取一次，只有「Shuffle」按钮会换（纯本地重算，不发请求），滚动/加购不重洗。按分类加权：每类先保 1–2 件，余量随机补齐，保证小类目有曝光。**只读目录、不碰 `sort_order`**，下方网格顺序不变；只在 All + 无搜索时出现 |
+| **首页推荐位 Featured for You** | `src/utils/featured.js`、`src/components/FeaturedSection.jsx` | 网格上方 24 件；种子在挂载时取一次，只有「Shuffle」按钮会换（纯本地重算，不发请求），滚动/加购不重洗。**全库纯随机**（洗牌后取前 24，不按分类保底 —— 保底会让小类目每次都是同一件）。**只读目录、不碰 `sort_order`**，下方网格顺序不变；只在 All + 无搜索时出现 |
 | **秒杀系统（两个专区）** | `supabase/09-deal.sql`、`supabase/13-campaign.sql`、`src/utils/deal.js`、`src/utils/dealImport.js` | 导入/批量开秒杀时**必选归属**：`is_campaign=false` → ⚡ `Limited Deals`（按紧迫度、卡片带倒计时）；`true` → 🔥 大促 Tab（名字读 `settings.deals_tab_label`，按折扣区间 chip 过滤、按折扣从高到低排）。两个 Tab 计数为 0 时各自隐藏 |
 | **双角标堆叠** | `src/utils/deal.js` 的 `badgeStackFor()` + `BADGE_ZONE`、`supabase/11-sub-badge-deal-priority.sql` | 第一行是**身份**（大促标 / Limited Deal），第二行是**决定**（运营手填 `sub_tag`）。`sale_*` 是实时算出的状态，`sub_tag` 是人填的决定——所以是两列，不是塞进同一个 `tag`。**两个秒杀专区都不挂活动身份**：大促区连 `Limited Deal` 也不挂（整区都在大促），常规区挂 `Limited Deal` 但摘掉 `Black Friday` 这类标（判定见 `isCampaignLabel`） |
 | **后台全中文** | `src/i18n/admin.js` + `scripts/test-admin-i18n.mjs` | 新增后台文案必须中文；漏翻会被测试拦下 |
