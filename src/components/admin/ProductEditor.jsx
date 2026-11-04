@@ -160,6 +160,18 @@ export default function ProductEditor({
     if (!open) setQueuedSave(false)
   }, [open])
 
+  /* 队列里那次保存的"点火器"。**必须放在 `if (!product) return null` 之前**：
+   * 弹层关着的时候 `product` 是 null，会走提前 return；如果把 hook 写在它后面，
+   * 打开商品的一瞬间 hook 数量就变了 —— 正是 React #310
+   * "Rendered more hooks than during the previous render"。 */
+  const saveRef = useRef(null)
+
+  useEffect(() => {
+    if (!queuedSave || loading || loadError) return
+    setQueuedSave(false)
+    saveRef.current?.()
+  }, [queuedSave, loading, loadError])
+
   /* Drag a colour photo onto the main image — or click the arrow on the card,
    * which is the same action without a mouse. One function for both, so they
    * can never disagree about what happens.
@@ -655,16 +667,9 @@ export default function ProductEditor({
     }
   }
 
-  /* 队列里那次保存的"点火器"：数据到齐、草稿已经用整行重建之后，自动补上。
-   * `saveRef` 保证调用的是最新一次渲染里的 handleSave（草稿是新的）。 */
-  const saveRef = useRef(null)
+  /* 把"最新一版 handleSave"交给上面那个 effect（hook 本身已经在那里声明了，
+   * 这里只是每次渲染更新引用）。 */
   saveRef.current = handleSave
-
-  useEffect(() => {
-    if (!queuedSave || loading || loadError) return
-    setQueuedSave(false)
-    saveRef.current?.()
-  }, [queuedSave, loading, loadError])
 
   const isDataUrl = draft.image.startsWith('data:')
   /* `null` = no colour set, which means "keep the default charcoal pill" —
