@@ -3,6 +3,7 @@ import Modal from '../Modal.jsx'
 import ProductImage from '../ProductImage.jsx'
 import { Close, Plus, Trash, Check, ChevronDown, ChevronUp, Image as ImageIcon, AlertCircle, ExternalLink, ArrowToTop } from '../icons.jsx'
 import { UNCATEGORISED, getBadgeColumnStatus, getTeaserColumnStatus, getDealColumnStatus, getAccColumnStatus, getSubBadgeStatus, getPriorityColumnStatus } from '../../store/productStore.js'
+import { isProductPartial } from '../../store/productStore.js'
 import { useCategories } from '../../hooks/useCategories.js'
 import { useAsins } from '../../hooks/useAsins.js'
 import { getAsinsStatus, isValidAsin } from '../../utils/asinStore.js'
@@ -70,9 +71,24 @@ const NEW_CATEGORY = '__new__'
  * catalogue; a handful of photos filled it and broke saving. A URL costs ~60
  * bytes and is cached by the browser, so that is the only input offered.
  */
-export default function ProductEditor({ open, product, isNew, onSave, onClose, showToast }) {
+export default function ProductEditor({
+  open,
+  product,
+  isNew,
+  /* 轻列表里的商品只有列表列：弹层先开、表单区盖骨架屏，`loadProduct` 回来的
+   * 瞬间自动填充。`loadError` 非空时骨架屏换成"加载失败 + 重试"。 */
+  loading = false,
+  loadError = '',
+  onReload,
+  onSave,
+  onClose,
+  showToast,
+}) {
   const [draft, setDraft] = useState(() => toDraft(product))
   const [imageError, setImageError] = useState('')
+  /* 点了保存、正在等数据 —— 数据一到就自动接着存，不弹"没加载完"的红字。 */
+  const [queuedSave, setQueuedSave] = useState(false)
+  const [saving, setSaving] = useState(false)
   const knownCategories = useCategories()
 
   /* ASIN edits, keyed by `"Colour|Size"`. Deliberately a sparse overlay on top
@@ -121,7 +137,9 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
   const [wasOpen, setWasOpen] = useState(open)
   if (open !== wasOpen) setWasOpen(open)
 
-  if (open && product && (seedId !== product.id || !wasOpen)) {
+  /* 数据还没到（轻列表商品正在补整行）时**先不播种**：那会把"没有图"的草稿
+   * 摆进表单。等 `loading` 变 false 再播种一次，用户看到的就是完整商品。 */
+  if (open && product && !loading && (seedId !== product.id || !wasOpen)) {
     setSeedId(product.id)
     setDraft(toDraft(product))
     setImageError('')
@@ -131,6 +149,16 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
     setFrozenOrder(null)
     setOptionPrompt(null)
   }
+
+  /* 队列里的"点了保存"只在同一次打开里有效：换商品、或者关掉弹层就作废 ——
+   * 否则下次打开会莫名其妙自动保存一次。 */
+  useEffect(() => {
+    setQueuedSave(false)
+  }, [product?.id])
+
+  useEffect(() => {
+    if (!open) setQueuedSave(false)
+  }, [open])
 
   /* Drag a colour photo onto the main image — or click the arrow on the card,
    * which is the same action without a mouse. One function for both, so they
@@ -466,7 +494,25 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
 
   /* ── save ── */
 
-  const handleSave = () => {
+  const handleSave = async () => {
+    /* 数据还没到（轻列表商品正在补整行）：**不拒绝**，只把"要保存"记下来。
+     * 数据一到，下面那个 effect 会自动再走一遍 —— 那时草稿已经从整行重建，
+     * 存进去的是完整数据。运营的心智是"我点了保存，它就该保存"，不该看到红字。 */
+    if (loading || loadError) {
+      setQueuedSave(true)
+      if (loadError) onReload?.()
+      return
+    }
+
+    /* 缓存可能在编辑期间被"整目录刷新"弄回 partial（运营点了刷新、或 realtime
+     * 补了一次全量）。这时也不能直接调 updateProduct —— 底层的硬闸门会拒，
+     * 前端就变成一句红字。改为：重新补整行 → 编辑器自动重存。 */
+    if (product?.id && isProductPartial(product.id)) {
+      setQueuedSave(true)
+      onReload?.()
+      return
+    }
+
     const sku = draft.sku.trim()
 
     if (!draft.name.trim() && !sku) {
@@ -549,7 +595,9 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
     }
 
     // `id` is internal and never changes; `sku` is the 货号 and is free-form
-    onSave({
+    setSaving(true)
+    try {
+      await onSave({
       id: product.id,
       sku,
       name: draft.name.trim() || sku,
@@ -601,8 +649,22 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
       /* Only so the caller can say what happened in the toast; nothing stores
        * this. Empty when no option was renamed. */
       asinRenames: sku && asinsReady && renameNotes.length ? renameNotes : undefined,
-    })
+      })
+    } finally {
+      setSaving(false)
+    }
   }
+
+  /* 队列里那次保存的"点火器"：数据到齐、草稿已经用整行重建之后，自动补上。
+   * `saveRef` 保证调用的是最新一次渲染里的 handleSave（草稿是新的）。 */
+  const saveRef = useRef(null)
+  saveRef.current = handleSave
+
+  useEffect(() => {
+    if (!queuedSave || loading || loadError) return
+    setQueuedSave(false)
+    saveRef.current?.()
+  }, [queuedSave, loading, loadError])
 
   const isDataUrl = draft.image.startsWith('data:')
   /* `null` = no colour set, which means "keep the default charcoal pill" —
@@ -710,7 +772,7 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
             (`.no-scrollbar`), and the form is taller than the dialog: the ASIN
             block sat 500px below the fold with nothing on screen suggesting
             there was more, which is exactly how it "went missing". */}
-        <div className="overflow-y-auto px-5 pb-6 pt-6 sm:px-7">
+        <div className="relative overflow-y-auto px-5 pb-6 pt-6 sm:px-7">
           <h2 className="text-lg font-semibold tracking-tight text-charcoal">
             {isNew ? '新增商品' : '编辑商品'}
           </h2>
@@ -1569,6 +1631,42 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
           </div>
           </div>
           </div>
+
+          {/* 骨架屏：轻列表里的商品先开弹层、后台静默补整行。盖在表单上方，
+              不透明 —— 底下那份草稿还没用完整数据播种，不能让人看见。 */}
+          {(loading || loadError) && (
+            <div className="absolute inset-0 z-10 bg-cream px-5 pb-6 pt-6 sm:px-7">
+              {loadError ? (
+                <div className="mt-10 rounded-2xl bg-red-50 px-4 py-4 text-center ring-1 ring-red-100">
+                  <p className="text-[12.5px] font-medium text-red-600">加载完整数据失败</p>
+                  <p className="mt-1 text-[11px] leading-relaxed text-red-500/90">{loadError}</p>
+                  <button
+                    type="button"
+                    onClick={() => onReload?.()}
+                    className="mt-3 rounded-full bg-red-500 px-4 py-1.5 text-[12px] font-medium text-white transition hover:bg-red-600 active:scale-95"
+                  >
+                    重试
+                  </button>
+                </div>
+              ) : (
+                <div className="animate-pulse">
+                  <div className="h-4 w-28 rounded bg-cream-dark" />
+                  <div className="mt-4 grid gap-3 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
+                    <div className="h-44 rounded-2xl bg-cream-dark" />
+                    <div className="space-y-2">
+                      <div className="h-9 rounded-lg bg-cream-dark" />
+                      <div className="h-9 rounded-lg bg-cream-dark" />
+                      <div className="h-9 rounded-lg bg-cream-dark" />
+                      <div className="h-9 w-2/3 rounded-lg bg-cream-dark" />
+                    </div>
+                  </div>
+                  <p className="mt-5 text-center text-[11.5px] text-charcoal-light">
+                    正在加载完整数据…
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Footer */}
@@ -1582,9 +1680,30 @@ export default function ProductEditor({ open, product, isNew, onSave, onClose, s
             <button
               type="button"
               onClick={handleSave}
-              className="flex flex-[1.6] items-center justify-center gap-2 rounded-full bg-accent py-3 text-[13px] font-medium text-white shadow-lg shadow-accent/20 transition hover:bg-accent-dark active:scale-[0.98]"
+              disabled={saving}
+              className="flex flex-[1.6] items-center justify-center gap-2 rounded-full bg-accent py-3 text-[13px] font-medium text-white shadow-lg shadow-accent/20 transition hover:bg-accent-dark active:scale-[0.98] disabled:cursor-wait disabled:opacity-80"
             >
-              {isNew ? '创建商品' : '保存修改'}
+              {loading || queuedSave ? (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/35 border-t-white"
+                  />
+                  正在加载完整数据…
+                </>
+              ) : saving ? (
+                <>
+                  <span
+                    aria-hidden="true"
+                    className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white/35 border-t-white"
+                  />
+                  保存中…
+                </>
+              ) : isNew ? (
+                '创建商品'
+              ) : (
+                '保存修改'
+              )}
             </button>
           </div>
         </div>

@@ -165,8 +165,9 @@ export default function ProductsPage() {
 
   const [editing, setEditing] = useState(null) // product being edited
   const [creating, setCreating] = useState(false)
-  /* 正在为哪个商品拉"整行"（轻列表里只有列表列，编辑器要全量才能安全保存）。 */
-  const [loadingDetailId, setLoadingDetailId] = useState(null)
+  /* 正在为哪个商品补"整行"数据（轻列表里只有列表列）。弹层已经打开，表单区
+   * 盖着骨架屏；`error` 非空时骨架屏变成"加载失败 + 重试"。 */
+  const [detailState, setDetailState] = useState({ id: '', loading: false, error: '' })
   const [deleteTarget, setDeleteTarget] = useState(null) // product awaiting single-delete confirmation
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
   /* 批量改角标的小窗。选择集在打开时快照，见 BatchBadgeDialog 的说明。 */
@@ -185,29 +186,43 @@ export default function ProductsPage() {
   }, [])
 
   /**
-   * 打开编辑器：轻列表里的商品**必须先拉整行**。
+   * 打开编辑器：**立刻弹层**，数据在后台静默补。
    *
-   * `variant_images` 没加载 = 草稿里所有颜色都没图；这时候保存，等于把云端
-   * 已补好的图全部写成 `{}`。所以这里 await 一次单行查询（几 KB），拿到完整
-   * 商品再开弹层；拉失败就**不开**，并明说原因。
+   * 以前是"等整行拉回来再开"，运营点快了会觉得卡。现在把弹层先开出来、
+   * 表单区盖一层骨架屏，`loadProduct` 回来的瞬间自动填充 —— 她想马上开始
+   * 编辑也不会被挡住；万一数据还没到就点了保存，编辑器会转圈等数据再自动存
+   * （见 ProductEditor 的 `handleSave`），不再弹红字拒绝。
+   *
+   * `variant_images` 仍然必须拿到才能写库：空字典保存等于把已补好的图删掉。
+   * 这条底线留在 `updateProduct` 里，UI 只负责"等"和"重试"。
    */
-  const openEditor = async (product) => {
-    if (!product) return
-    if (!isProductPartial(product.id)) {
-      setEditing(product)
-      setCreating(false)
-      return
-    }
-    setLoadingDetailId(product.id)
+  const hydrateEditor = async (product) => {
+    if (!product?.id) return
+    setDetailState((prev) => ({ ...prev, id: product.id, loading: true, error: '' }))
     try {
       const full = await loadProduct(product.id)
-      setEditing(full)
-      setCreating(false)
+      setEditing((current) => (current && current.id === full.id ? full : current))
+      /* 只在"这次加载还是当前这件商品"时才清骨架屏：连着点开两件商品时，
+       * 前一件的结果不该把后一件的 loading 关掉。 */
+      setDetailState((prev) =>
+        prev.id === product.id ? { id: product.id, loading: false, error: '' } : prev,
+      )
     } catch (err) {
-      showToast?.(`加载商品详情失败：${err.message}`, 'error', 5000)
-    } finally {
-      setLoadingDetailId(null)
+      setDetailState((prev) =>
+        prev.id === product.id ? { id: product.id, loading: false, error: err.message } : prev,
+      )
     }
+  }
+
+  const openEditor = (product) => {
+    if (!product) return
+    setEditing(product)
+    setCreating(false)
+    if (isProductPartial(product.id)) {
+      hydrateEditor(product)
+      return
+    }
+    setDetailState({ id: '', loading: false, error: '' })
   }
 
   /* ── 前台秒杀专区的展示名 ── */
@@ -503,6 +518,14 @@ export default function ProductsPage() {
       setEditing(null)
       setCreating(false)
     } catch (err) {
+      /* 最后一道：底层闸门仍然会拒绝"没加载完就写整行"（这是防丢图的红线）。
+       * 但 UI 不把这句话当错误砸给运营 —— 重新补数据、把弹层留在原地，
+       * 数据到齐后编辑器会自动接着保存。 */
+      if (draft?.id && /完整数据/.test(err.message)) {
+        showToast?.('商品数据刚刚被刷新，已重新加载，请再点一次保存', 'default', 4000)
+        hydrateEditor(editing || draft)
+        return
+      }
       showToast?.(err.message, 'error')
     }
   }
@@ -1819,8 +1842,7 @@ export default function ProductsPage() {
                     type="button"
                     onClick={() => openEditor(product)}
                     aria-label={`Edit ${product.name}`}
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-charcoal-light transition hover:bg-cream-dark hover:text-charcoal disabled:opacity-40"
-                    disabled={loadingDetailId === product.id}
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-charcoal-light transition hover:bg-cream-dark hover:text-charcoal"
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
@@ -1899,10 +1921,16 @@ export default function ProductsPage() {
         open={!!editing}
         product={editing}
         isNew={creating}
+        /* 轻列表里打开的商品：弹层先出来，表单区是骨架屏；这两个 prop 让保存
+         * 按钮在数据到齐前显示"正在加载完整数据…"，到齐后自动接着保存。 */
+        loading={detailState.id === editing?.id && detailState.loading}
+        loadError={detailState.id === editing?.id ? detailState.error : ''}
+        onReload={() => editing && hydrateEditor(editing)}
         onSave={handleSave}
         onClose={() => {
           setEditing(null)
           setCreating(false)
+          setDetailState({ id: '', loading: false, error: '' })
         }}
         showToast={showToast}
       />
