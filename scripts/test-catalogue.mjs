@@ -23,6 +23,12 @@ import {
   hasMore,
 } from '../src/utils/catalogue.js'
 import { isShoppable } from '../src/utils/teaser.js'
+import {
+  __setCatalogueForTests as setCatalogue,
+  applyProductEvent,
+  getProducts,
+  isProductPartial,
+} from '../src/store/productStore.js'
 
 let passed = 0
 let failed = 0
@@ -491,6 +497,50 @@ check(
   ),
   true,
 )
+
+/* ── 16. Realtime 局部更新 ──
+ *
+ * 后台/前台都不该因为"某件商品改了个名字"就重拉整个目录。`applyProductEvent`
+ * 把 realtime 事件里那一行直接并进缓存；顺序、新增、删除都必须对得上，否则
+ * 下一步就是拖拽排序错位 —— 那正是这次优化最容易踩的坑。 */
+console.log('\n[16] Realtime 局部更新，不重拉目录')
+
+const row = (id, name, sortOrder) => ({
+  id,
+  sku: id.toUpperCase(),
+  name,
+  category: 'Tops',
+  image: '',
+  specs: {},
+  sort_order: sortOrder,
+})
+
+const idsOf = () => getProducts().map((item) => item.id)
+
+setCatalogue([
+  product('p001', 'Alpha', 'A01', 'Tops'),
+  product('p002', 'Bravo', 'A02', 'Tops'),
+  product('p003', 'Charlie', 'A03', 'Bottoms'),
+])
+
+check('a seeded catalogue is not partial', isProductPartial('p001'), false)
+
+applyProductEvent({ eventType: 'UPDATE', new: row('p002', 'Bravo renamed', 1) })
+check('an UPDATE is applied in place', getProducts().find((item) => item.id === 'p002').name, 'Bravo renamed')
+check('and the order did not move', idsOf(), ['p001', 'p002', 'p003'])
+
+/* sort_order 变了 → 顺序必须跟着变，否则拖拽后的位置会被一次改名覆盖掉。 */
+applyProductEvent({ eventType: 'UPDATE', new: row('p001', 'Alpha', 9) })
+check('a sort_order change reorders the cache', idsOf(), ['p002', 'p003', 'p001'])
+
+applyProductEvent({ eventType: 'INSERT', new: row('p004', 'Delta', 2) })
+check('an INSERT lands in sort_order position', idsOf(), ['p002', 'p003', 'p004', 'p001'])
+
+applyProductEvent({ eventType: 'DELETE', old: { id: 'p002' } })
+check('a DELETE removes the row', idsOf(), ['p003', 'p004', 'p001'])
+
+check('a payload with no id is refused', applyProductEvent({ eventType: 'UPDATE', new: {} }), false)
+check('an empty payload is refused', applyProductEvent({}), false)
 
 /* ── summary ── */
 console.log(`\n${'─'.repeat(44)}`)

@@ -32,6 +32,9 @@ import {
   moveProductsToEdge,
   reorderProducts,
   loadProducts,
+  loadProduct,
+  isProductPartial,
+  isCatalogueLight,
   getBadgeColumnStatus,
   getDealColumnStatus,
   getCampaignColumnStatus,
@@ -162,6 +165,8 @@ export default function ProductsPage() {
 
   const [editing, setEditing] = useState(null) // product being edited
   const [creating, setCreating] = useState(false)
+  /* 正在为哪个商品拉"整行"（轻列表里只有列表列，编辑器要全量才能安全保存）。 */
+  const [loadingDetailId, setLoadingDetailId] = useState(null)
   const [deleteTarget, setDeleteTarget] = useState(null) // product awaiting single-delete confirmation
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
   /* 批量改角标的小窗。选择集在打开时快照，见 BatchBadgeDialog 的说明。 */
@@ -169,6 +174,41 @@ export default function ProductsPage() {
   /* 批量秒杀 / 批量分类。三个弹窗互斥打开（同一个按钮条，一次只想改一件事）。 */
   const [batchDealOpen, setBatchDealOpen] = useState(false)
   const [batchCategoryOpen, setBatchCategoryOpen] = useState(false)
+
+  /* ── 轻列表 ──
+   * 这一屏只需要列表形状（没有 `variant_images`，只有 `photo_count`）。从别处
+   * 切过来时目录可能还是全量，主动换成轻列表；数据库没有 `photo_count` 列的
+   * 话 `loadProducts` 会自己退回全量，只是省不到流量，功能不受影响。 */
+  useEffect(() => {
+    if (isCatalogueLight()) return
+    loadProducts({ silent: true, light: true }).catch(() => {})
+  }, [])
+
+  /**
+   * 打开编辑器：轻列表里的商品**必须先拉整行**。
+   *
+   * `variant_images` 没加载 = 草稿里所有颜色都没图；这时候保存，等于把云端
+   * 已补好的图全部写成 `{}`。所以这里 await 一次单行查询（几 KB），拿到完整
+   * 商品再开弹层；拉失败就**不开**，并明说原因。
+   */
+  const openEditor = async (product) => {
+    if (!product) return
+    if (!isProductPartial(product.id)) {
+      setEditing(product)
+      setCreating(false)
+      return
+    }
+    setLoadingDetailId(product.id)
+    try {
+      const full = await loadProduct(product.id)
+      setEditing(full)
+      setCreating(false)
+    } catch (err) {
+      showToast?.(`加载商品详情失败：${err.message}`, 'error', 5000)
+    } finally {
+      setLoadingDetailId(null)
+    }
+  }
 
   /* ── 前台秒杀专区的展示名 ── */
   const settings = useSettings()
@@ -1548,10 +1588,15 @@ export default function ProductsPage() {
           // asins.js is { 货号: { 'Colour|Size': ASIN } } — count the entries,
           // not the keys of the outer object
           const asinCount = Object.keys(asinMap[skuOf(product)] || {}).length
-          const photoCount = Object.values(product.variantImages || {}).reduce(
-            (sum, byOption) => sum + Object.keys(byOption || {}).length,
-            0,
-          )
+          /* 优先用 `photo_count`（触发器维护的整数）——轻列表里根本没有
+           * `variant_images` 可数。数据库还没跑 15-photo-count.sql 时退回
+           * 数 JSON，这样"没迁移的库"只是多传流量，角标照常显示。 */
+          const photoCount =
+            Number(product.photoCount) ||
+            Object.values(product.variantImages || {}).reduce(
+              (sum, byOption) => sum + Object.keys(byOption || {}).length,
+              0,
+            )
           const isSelected = selectedIds.has(product.id)
 
           // Heading is the 货号 when there is one, otherwise the product name.
@@ -1772,12 +1817,10 @@ export default function ProductsPage() {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      setEditing(product)
-                      setCreating(false)
-                    }}
+                    onClick={() => openEditor(product)}
                     aria-label={`Edit ${product.name}`}
-                    className="flex h-8 w-8 items-center justify-center rounded-full text-charcoal-light transition hover:bg-cream-dark hover:text-charcoal"
+                    className="flex h-8 w-8 items-center justify-center rounded-full text-charcoal-light transition hover:bg-cream-dark hover:text-charcoal disabled:opacity-40"
+                    disabled={loadingDetailId === product.id}
                   >
                     <Pencil className="h-3.5 w-3.5" />
                   </button>

@@ -109,6 +109,9 @@ const SUB_BADGE_COLUMNS = ['sub_tag', 'sub_badge_color']
  * 只跑过 09 的库照样能开秒杀，只是这批全部算常规 —— 前台两个 Tab 里
  * 大促那个为空、自动隐藏，"少了一个 Tab"不会看起来像坏了。 */
 const CAMPAIGN_COLUMN = 'is_campaign'
+/* 图片数（15-photo-count.sql）。单独一列、单独一个开关：它是**只读**的派生值
+ * （触发器维护），前端永远不写；有它，后台列表就能不带 `variant_images`。 */
+const PHOTO_COUNT_COLUMN = 'photo_count'
 const OPTIONAL_COLUMNS = [
   'sold_out_variants',
   'badge_color',
@@ -118,6 +121,7 @@ const OPTIONAL_COLUMNS = [
   ...ACC_COLUMNS,
   ...SUB_BADGE_COLUMNS,
   'deal_priority',
+  PHOTO_COUNT_COLUMN,
 ]
 
 /* What an absent optional column means for the operator, and the SQL that adds
@@ -138,6 +142,7 @@ const ABSENT_HINTS = {
   sub_tag: { meaning: '「全部没有副角标」', sql: 'supabase/11-sub-badge-deal-priority.sql' },
   sub_badge_color: { meaning: '「全部没有副角标」', sql: 'supabase/11-sub-badge-deal-priority.sql' },
   deal_priority: { meaning: '「秒杀专区全部不置顶」', sql: 'supabase/11-sub-badge-deal-priority.sql' },
+  photo_count: { meaning: '「列表仍会带上变体图 JSON」', sql: 'supabase/15-photo-count.sql' },
 }
 
 /** Columns the database turned out not to have (yet). */
@@ -158,6 +163,21 @@ let subBadgeAvailable = false
 let subBadgeStatus = 'unknown'
 let priorityColumnAvailable = false
 let priorityColumnStatus = 'unknown'
+/* 15-photo-count.sql。有它，列表就能省掉 `variant_images`。 */
+let photoCountAvailable = false
+let photoCountStatus = 'unknown'
+
+/**
+ * 目录当前是"轻列表"还是"全量"。
+ *
+ * `light` = 这一轮拉的是列表形状（没有 `variant_images`，只有 `photo_count`），
+ * 所以缓存里的商品**不完整**：编辑器要保存它之前必须先把整行拉下来，否则
+ * 空着的 `variant_images` 会被当成"这个商品没有专属图"写回库里 —— 那是删数据，
+ * 不是保存。
+ */
+let lightMode = false
+/** 哪些商品的 `variant_images` 没加载（轻列表拉进来的那些）。 */
+const partialIds = new Set()
 /* Five missing columns would otherwise print five identical warnings on every
  * cold load. One per SQL file is enough to act on. */
 const warnedSqlFiles = new Set()
@@ -287,6 +307,21 @@ function selectColumns() {
   return extra.length ? `${BASE_COLUMNS}, ${extra.join(', ')}` : BASE_COLUMNS
 }
 
+/**
+ * 列表形状：**去掉 `variant_images`**，保留其它所有列。
+ *
+ * 那一列整张表里体积最不可控（每个颜色一条 CDN URL），而后台列表只需要
+ * "有几张图"—— 那正好是 `photo_count`。`specs` / `sold_out_variants` 很小，
+ * 而且"缺 ASIN 红点"和"断货筛选"要靠它们，所以留着。
+ */
+function listColumns() {
+  return selectColumns()
+    .split(',')
+    .map((column) => column.trim())
+    .filter((column) => column && column !== 'variant_images')
+    .join(', ')
+}
+
 function queryProducts(columns) {
   return requireClient()
     .from('products')
@@ -333,7 +368,7 @@ function warnAbsent(absent) {
  * Returns the rows plus the column list that produced them, so the caller knows
  * whether `badge_color` can be written.
  */
-async function fetchCatalogueRows() {
+async function fetchCatalogueRows({ light = false } = {}) {
   /* One probe first: on a fully migrated database this is the only extra
    * request, and on a stale one it replaces up to six failures with one
    * success. */
@@ -344,10 +379,14 @@ async function fetchCatalogueRows() {
       missingColumns.add(column)
       warnAbsent(column)
     }
+    photoCountAvailable = present.has(PHOTO_COUNT_COLUMN)
+    photoCountStatus = photoCountAvailable ? 'ok' : 'missing'
   }
 
   for (let attempt = 0; attempt <= OPTIONAL_COLUMNS.length; attempt++) {
-    const columns = selectColumns()
+    /* 轻列表只在 `photo_count` 真的存在时才省得到东西：没有那一列，
+     * 「N 张图」只能靠数 `variant_images`，于是老老实实退回全量。 */
+    const columns = light && photoCountAvailable ? listColumns() : selectColumns()
     const { data, error } = await queryProducts(columns)
     if (!error) return { data, columns }
 
@@ -383,13 +422,58 @@ function rowFor(product, options) {
 }
 
 /**
+ * 把一次写入的结果应用到缓存里的某一行 —— **不需要数据库把整行回传**。
+ *
+ * 这是省 Egress 的关键一步：以前每次 `update`/`upsert` 都链一个 `.select()`，
+ * 让 PostgREST 把修改后的**整行**（含 `specs` / `variant_images` 这些大 JSON）
+ * 回传一遍。批量改 300 件的角标，等于把整个目录下载了一次 —— 而我们本来就知道
+ * 自己写进去了什么。
+ *
+ * 走 `productToRow` → `rowToProduct` 这一圈，是为了让它和"真实回读"走**同一套
+ * 归一化**（空串变缺省、颜色规范化、可选列的取舍），否则本地缓存会和下次
+ * 刷新后的数据长得不一样，界面先显示一份、刷新后又变一次。
+ *
+ * @param {string} id
+ * @param {object} columns snake_case，和数据库同一套键
+ */
+function patchCachedRow(id, columns) {
+  const key = String(id)
+  cache = cache.map((product) => {
+    if (String(product.id) !== key) return product
+    const row = productToRow(product)
+    return rowToProduct({
+      ...row,
+      id: product.id,
+      sort_order: orderById.get(key) ?? 0,
+      ...columns,
+    })
+  })
+}
+
+/**
  * Fetch the whole catalogue.
+ *
  * `silent` keeps the current UI on screen — used by realtime, where flashing a
  * skeleton on every remote edit would be worse than a 200 ms stale view.
+ *
+ * `light` 拉"列表形状"（不带 `variant_images`）：后台列表用，省掉最重的一列。
+ * 拉完这些商品会被标记成 **partial**，编辑器在保存前必须先把整行取回来
+ * （`loadProduct`），否则空 JSON 会被写回去把图删了。数据库没有 `photo_count`
+ * 时自动退回全量 —— 宁可多传流量，也不能让界面少一个角标。
+ *
+ * @param {{ silent?: boolean, light?: boolean }} [options]
  */
-export async function loadProducts({ silent = false } = {}) {
+export async function loadProducts({ silent = false, light } = {}) {
   if (!isConfigured) return cache
-  if (inflight) return inflight
+
+  const wantLight = light === undefined ? lightMode : Boolean(light)
+
+  /* 形状不同的请求不能共用同一个 in-flight：把"轻列表"的结果交给前台，前台
+   * 就会少掉每个颜色的实拍图。先等当前这次落地，再按需要的形状拉一次。 */
+  if (inflight) {
+    await inflight.catch(() => {})
+    if (wantLight === lightMode) return cache
+  }
 
   if (!silent) {
     /* A hydrated grid must never blink back to a skeleton: `loading` is only
@@ -408,7 +492,7 @@ export async function loadProducts({ silent = false } = {}) {
       let result = { data: [], columns: selectColumns() }
       for (let attempt = 0; attempt < 3; attempt++) {
         const epoch = orderEpoch
-        result = await fetchCatalogueRows()
+        result = await fetchCatalogueRows({ light: wantLight })
         if (epoch === orderEpoch) break
       }
 
@@ -432,11 +516,22 @@ export async function loadProducts({ silent = false } = {}) {
       subBadgeStatus = subBadgeAvailable ? 'ok' : 'missing'
       priorityColumnAvailable = columns.includes('deal_priority')
       priorityColumnStatus = priorityColumnAvailable ? 'ok' : 'missing'
+      photoCountAvailable = columns.includes(PHOTO_COUNT_COLUMN)
+      photoCountStatus = photoCountAvailable ? 'ok' : 'missing'
 
       cache = rows.map(rowToProduct)
       orderById.clear()
       for (const row of rows) orderById.set(row.id, row.sort_order ?? 0)
-      persistCatalogue(rows)
+
+      /* 轻列表 = 这些商品的 `variant_images` 根本没请求过。记住这个事实，
+       * 编辑器保存前要拿它当闸门。 */
+      lightMode = wantLight && !columns.includes('variant_images')
+      partialIds.clear()
+      if (lightMode) for (const row of rows) partialIds.add(String(row.id))
+
+      /* 轻列表不写本地快照：那份快照是"数据库连不上时的兜底目录"，写进一批
+       * 没有图的数据，下次离线打开就变成"所有商品都没图"。 */
+      if (!lightMode) persistCatalogue(rows)
 
       status = 'ready'
       lastError = ''
@@ -451,6 +546,109 @@ export async function loadProducts({ silent = false } = {}) {
   })()
 
   return inflight
+}
+
+/** 缓存里的商品是不是"只拉过列表列"（没有 `variant_images`）。 */
+export function isProductPartial(id) {
+  return partialIds.has(String(id))
+}
+
+/** 当前目录是轻列表还是全量？ */
+export function isCatalogueLight() {
+  return lightMode
+}
+
+/**
+ * 单条拉一个商品的**整行**，合并进缓存，并解除它的 partial 标记。
+ *
+ * 编辑器打开 partial 商品前必须走这条路：`select('*')` 只有一行（含
+ * `variant_images`），比整目录重拉便宜两个数量级；同一个商品并发打开只发一次
+ * 请求（`detailInflight`），拉过一次之后就是纯缓存。
+ *
+ * @param {string} id
+ * @returns {Promise<object|null>} 完整商品；失败时抛错（调用方不该继续打开编辑器）
+ */
+const detailInflight = new Map()
+
+export async function loadProduct(id) {
+  const key = String(id)
+  const cached = cache.find((product) => String(product.id) === key)
+
+  if (!isConfigured) return cached || null
+  if (cached && !partialIds.has(key)) return cached
+  if (detailInflight.has(key)) return detailInflight.get(key)
+
+  const job = (async () => {
+    const { data, error } = await requireClient()
+      .from('products')
+      .select('*')
+      .eq('id', key)
+      .single()
+
+    if (error) throw new Error(error.message)
+
+    const product = rowToProduct(data)
+    const known = cache.some((item) => String(item.id) === key)
+    cache = known
+      ? cache.map((item) => (String(item.id) === key ? product : item))
+      : [...cache, product]
+    orderById.set(key, data.sort_order ?? orderById.get(key) ?? 0)
+    partialIds.delete(key)
+    notify()
+    return product
+  })()
+
+  detailInflight.set(key, job)
+  try {
+    return await job
+  } finally {
+    detailInflight.delete(key)
+  }
+}
+
+/**
+ * 把一条 realtime 事件直接应用进缓存 —— **不再整目录重拉**。
+ *
+ * Supabase 的 `postgres_changes` 在 INSERT/UPDATE 时带回**整行**（`new`），
+ * 这正是缓存需要的东西；DELETE 只带主键（`old.id`）。应用完重排一次顺序即可，
+ * `sort_order` 的连带变化由 `orderById + resort()` 处理，所以拖拽排序不受影响。
+ *
+ * 返回 `false` 表示"这条事件没法用"（没有 id、形状不认识），调用方应当退回
+ * 一次全量刷新 —— 宁可多一次请求，也不能让界面停在错误状态。
+ *
+ * @param {{ eventType?: string, event?: string, new?: object, old?: object }} payload
+ * @returns {boolean}
+ */
+export function applyProductEvent(payload) {
+  const event = String(payload?.eventType || payload?.event || '').toUpperCase()
+  const row = payload?.new
+  const old = payload?.old
+
+  if (event === 'DELETE' || (!row?.id && old?.id)) {
+    const id = String(old?.id ?? '')
+    if (!id) return false
+    cache = cache.filter((product) => String(product.id) !== id)
+    orderById.delete(id)
+    partialIds.delete(id)
+    resort()
+    notify()
+    return true
+  }
+
+  if (!row || !row.id) return false
+
+  const id = String(row.id)
+  const product = rowToProduct(row)
+  cache = cache.some((item) => String(item.id) === id)
+    ? cache.map((item) => (String(item.id) === id ? product : item))
+    : [...cache, product]
+
+  orderById.set(id, row.sort_order ?? orderById.get(id) ?? 0)
+  /* 事件带回的是整行，所以这个商品的 `variant_images` 现在是齐的。 */
+  partialIds.delete(id)
+  resort()
+  notify()
+  return true
 }
 
 /** Load once, for callers that must not proceed without a catalogue. */
@@ -477,10 +675,19 @@ export async function createProduct(product) {
   const row = rowFor(product, { sortOrder: sortOrderForNewProduct() })
   delete row.id
 
-  const { data, error } = await requireClient().from('products').insert(row).select().single()
+  /* 只要 `id`（数据库分配的）和 `sort_order`。整行回传等于把刚写进去的
+   * `specs` / `variant_images` 再下载一遍 —— 而我们手里就有这些值。 */
+  const { data, error } = await requireClient()
+    .from('products')
+    .insert(row)
+    .select('id, sort_order')
+    .single()
   if (error) throw new Error(error.message)
 
-  cache = [...cache, rowToProduct(data)]
+  cache = [
+    ...cache,
+    rowToProduct({ ...row, id: data.id, sort_order: data.sort_order ?? 0 }),
+  ]
   orderById.set(data.id, data.sort_order ?? 0)
   /* A new product lands at `max + 1`, i.e. last — `resort()` is what enforces
    * that from the data instead of trusting the append. */
@@ -489,6 +696,13 @@ export async function createProduct(product) {
 }
 
 export async function updateProduct(id, patch) {
+  /* 硬闸门：轻列表里的商品没有 `variant_images`，整行保存会把空 JSON 写回去，
+   * 把那件商品已经补好的图**全部删掉**。这条路径不允许"尽力而为"——宁可报错，
+   * 让界面重新打开一次编辑器（`loadProduct` 会先把整行取回来）。 */
+  if (partialIds.has(String(id))) {
+    throw new Error('商品完整数据还没加载完，已拒绝保存（否则会清空图片）。请重新打开编辑器。')
+  }
+
   const current = cache.find((product) => product.id === id) || {}
   const row = rowFor({ ...current, ...patch }, { id })
 
@@ -524,23 +738,19 @@ export async function updateProduct(id, patch) {
     console.warn('[products] has_acc / acc_id 列不存在，ACC 开关未保存。先跑 supabase/10-acc.sql。')
   }
 
-  const { data, error } = await requireClient()
-    .from('products')
-    .update(row)
-    .eq('id', id)
-    .select()
-    .single()
+  /* 不回传整行：`row` 就是刚发出去的那一行，缓存用它自己更新即可。
+   * （`sort_order` 已经在上面的 delete 里摘掉了，所以这里的 patch 一定不会
+   * 把位置写回去。） */
+  const { error } = await requireClient().from('products').update(row).eq('id', id)
 
   if (error) throw new Error(error.message)
 
-  cache = cache.map((product) => (product.id === id ? rowToProduct(data) : product))
-  orderById.set(id, data.sort_order ?? orderById.get(id) ?? 0)
+  patchCachedRow(id, row)
   /* Re-derive the order from `orderById`, which only the reorder writers touch.
-   * If a save had moved the row, this line would put it straight back where the
-   * drag left it — and if another admin moved it remotely, the fresh
-   * `data.sort_order` above is what carries their change. */
+   * A save never moves the row, so the number here is unchanged — a drag made
+   * in another tab arrives through the realtime refetch, not through this call. */
   resort()
-  return data
+  return cache.find((product) => String(product.id) === String(id)) || null
 }
 
 /**
@@ -557,18 +767,14 @@ export async function updateProduct(id, patch) {
  * shows the new chips without a reload.
  */
 export async function updateProductSpecs(id, specs) {
-  const { data, error } = await requireClient()
-    .from('products')
-    .update({ specs })
-    .eq('id', id)
-    .select()
-    .single()
+  const { error } = await requireClient().from('products').update({ specs }).eq('id', id)
 
   if (error) throw new Error(error.message)
 
-  cache = cache.map((product) => (product.id === id ? rowToProduct(data) : product))
+  /* 只回填这一列 —— 导入一次可能改几十件，整行回传会把目录再下载一遍。 */
+  patchCachedRow(id, { specs })
   notify()
-  return data
+  return cache.find((product) => String(product.id) === String(id)) || null
 }
 
 /**
@@ -672,20 +878,21 @@ export async function setProductsBadge(ids, badge, { sub, touchTag = true } = {}
   if (!Object.keys(payload).length) return 0
 
   /* 分批：一次 Select all 很容易超过一百件，单条 update 的 in(...) 会把 id
-   * 列表拼进查询串，条数一多就是一次没有上限的请求。每批都回传整行，所以
-   * 缓存按批刷新，界面在第一批回来时就已经更新。 */
+   * 列表拼进查询串，条数一多就是一次没有上限的请求。
+   *
+   * **不再 `.select()`**：批量打角标以前会把每件商品修改后的整行都回传一遍
+   * （含 `specs` / `variant_images`），300 件就是一次整目录下载。这里改成用
+   * 刚发出去的 payload 直接更新缓存 —— 写进去什么，界面上就是什么。 */
   let written = 0
   for (const part of chunk(list, BATCH_CHUNK)) {
-    const { data, error } = await requireClient()
+    const { error } = await requireClient()
       .from('products')
       .update(payload)
       .in('id', part)
-      .select()
 
     if (error) throw new Error(error.message)
 
-    const patched = new Map((data || []).map((row) => [String(row.id), rowToProduct(row)]))
-    cache = cache.map((product) => patched.get(String(product.id)) || product)
+    for (const id of part) patchCachedRow(id, payload)
     written += part.length
     notify()
   }
@@ -797,22 +1004,19 @@ export async function setProductsDeals(targets, { priority, isCampaign } = {}) {
     )
   }
 
-  /* 分批 upsert：每批自带 select，回传的行直接刷新缓存 —— 后台列表上的
-   * "⚡ 25% OFF" 在第一批回来时就变了，不必等整批。 */
+  /* 分批 upsert，**不回传整行**：每批写完就用自己发出去的 `part` 更新缓存。
+   * 以前这里挂着 `.select()`，导入 300 行会把 300 行整列（含大 JSON）原样
+   * 下载回来 —— 而写进去的值我们本来就有。 */
   const write = async (batch) => {
     let done = 0
     for (const part of chunk(batch, BATCH_CHUNK)) {
-      const { data, error } = await requireClient()
+      const { error } = await requireClient()
         .from('products')
         .upsert(part, { onConflict: 'id' })
-        .select()
 
       if (error) throw new Error(error.message)
 
-      if (data) {
-        const patched = new Map(data.map((row) => [String(row.id), rowToProduct(row)]))
-        cache = cache.map((product) => patched.get(String(product.id)) || product)
-      }
+      for (const row of part) patchCachedRow(row.id, row)
       done += part.length
       notify()
     }
@@ -872,14 +1076,22 @@ export async function setProductsCategoryByIds(ids, category, mode = 'replace') 
       query = query.or(`category.is.null,category.eq.${UNCATEGORISED}`)
     }
 
-    const { data, error } = await query.select()
+    /* 不回传整行：分类只改一列，缓存里也只改这一列。`fill` 模式命中哪些行
+     * 由本地目录决定（服务器那条 `or` 过滤的是同样的条件），所以"改了几件"
+     * 这个数字仍然准确。 */
+    const targets =
+      mode === 'fill'
+        ? part.filter((id) => {
+            const product = cache.find((item) => String(item.id) === String(id))
+            return !product?.category || product.category === UNCATEGORISED
+          })
+        : part
+
+    const { error } = await query
     if (error) throw new Error(error.message)
 
-    if (data) {
-      const patched = new Map(data.map((row) => [String(row.id), rowToProduct(row)]))
-      cache = cache.map((product) => patched.get(String(product.id)) || product)
-      changed += data.length
-    }
+    for (const id of targets) patchCachedRow(id, { category: name })
+    changed += targets.length
     notify()
   }
 

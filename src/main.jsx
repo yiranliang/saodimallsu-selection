@@ -81,8 +81,12 @@ window.MAKO = window.SAODIMALLSU
  *      nothing on screen waits for it)
  */
 async function bootstrap() {
+  /* 后台列表只需要"列表形状"的目录（没有 `variant_images`，只有 `photo_count`），
+   * 前台需要整行（详情弹层要按颜色换图）。两条路径各拉各的形状 —— 后台省掉的
+   * 是整张 products 表里最重的那一列。 */
+  const onAdmin = String(window.location.hash || '').startsWith('#/admin')
   const catalogue = Promise.allSettled([
-    loadProducts(),
+    loadProducts({ light: onAdmin }),
     loadCategories(),
     loadLinks(),
     loadSettings(),

@@ -126,6 +126,12 @@ function shared(product) {
   const dealPriority = Number(product?.dealPriority)
   if (Number.isFinite(dealPriority) && dealPriority > 0) out.dealPriority = Math.trunc(dealPriority)
 
+  /* 图片数（`15-photo-count.sql` 的 `photo_count`，由触发器维护）。
+   * 后台列表用这个整数画「N 张图」，从而不必拉 `variant_images` 本体。
+   * 0 = 没有专属图，和以前一样不显示角标，所以不写进形状。 */
+  const photoCount = Number(product?.photoCount)
+  if (Number.isFinite(photoCount) && photoCount > 0) out.photoCount = Math.trunc(photoCount)
+
   return out
 }
 
@@ -174,6 +180,9 @@ export function rowToProduct(row) {
       subTag: row.sub_tag,
       subBadgeColor: row.sub_badge_color,
       dealPriority: row.deal_priority,
+      /* 15-*.sql。后台列表靠它画「N 张图」，所以列表查询可以不带
+       * `variant_images`。缺列时是 `undefined`，角标不显示 —— 与"没有图"同义。 */
+      photoCount: row.photo_count,
     }),
   }
 }

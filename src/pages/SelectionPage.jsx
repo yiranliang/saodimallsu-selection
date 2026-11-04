@@ -17,7 +17,7 @@ import { useToast } from '../hooks/useToast.js'
 import { useAmazonLinks } from '../hooks/useAmazonLinks.js'
 import { getInfluencerRef } from '../utils/storage.js'
 import { generateCodeFromLines, saveRecord } from '../utils/code.js'
-import { UNCATEGORISED, loadProducts, getCatalogueError } from '../store/productStore.js'
+import { UNCATEGORISED, loadProducts, getCatalogueError, isCatalogueLight } from '../store/productStore.js'
 import { amazonUrlFor, listingKnownFor } from '../store/linkStore.js'
 import { useCategories } from '../hooks/useCategories.js'
 import { useSettings } from '../hooks/useSettings.js'
@@ -147,6 +147,14 @@ export default function SelectionPage() {
   }, [expiredOnLoad, showToast])
 
   const loading = dataLoading || holdSkeleton
+
+  /* 前台要整行目录：详情弹层按颜色换图靠 `variant_images`，而它只在"全量"
+   * 目录里才有。如果这一页是从后台切过来的（后台拉的是轻列表），这里补一次
+   * 全量 —— 否则每个颜色都只会显示主图。 */
+  useEffect(() => {
+    if (!isCatalogueLight()) return
+    loadProducts({ silent: true, light: false }).catch(() => {})
+  }, [])
 
   /* Auto-open once, and only when there is something to look at.
    *

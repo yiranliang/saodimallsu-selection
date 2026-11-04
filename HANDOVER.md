@@ -84,7 +84,7 @@
 4. **`src/store/mapping.js` 是字段白名单**（在 `store/` 下，不在 `utils/` 下）。新增字段要改**三处**：`shared()`（给前台的驼峰值）、`rowToProduct()`（读）、`productToRow()`（写）。
    只改前后两处、漏了读，结果是「存得进去、永远读出来是空」——存成功了所以没人怀疑。
 5. **可选列必须在「读」和「写」两侧都降级。** PostgREST 遇到不存在的列会把**整条 SELECT 判 400**（不是返回空）。
-   现有可选列：`sold_out_variants`、`badge_color`、`sub_tag` / `sub_badge_color`、`sale_*`、`is_campaign`、`deal_priority` 等。
+   现有可选列：`sold_out_variants`、`badge_color`、`sub_tag` / `sub_badge_color`、`sale_*`、`is_campaign`、`deal_priority`、`photo_count` 等。
    新增可选列要同时加：**`src/store/productStore.js`** 里的 `OPTIONAL_COLUMNS`、`rowFor()` 的摘除清单、以及类似 `badgeColumnAvailable` 的开关（这些都在 productStore，不在 mapping.js）。
 6. **`variantKey(colour, size)` → `` `${colour}|${size}` ``**（`src/utils/sku.js`）是唯一实现。
    `asins.variants`、`product_links`、`sold_out_variants` 三处共用，**别各自拼字符串**。
@@ -338,6 +338,7 @@ SQL Editor 里**按 01 → 12 依次执行**，全部幂等，可重复跑：
 | 12 | `12-settings.sql` | 全局设置（大促专区 Tab 名，`deals_tab_label`） |
 | 13 | `13-campaign.sql` | 大促归属 `is_campaign`（两个秒杀 Tab 的切分依据；缺列时全部算常规） |
 | 14 | `14-tag-nulls.sql` | 放开 `sub_tag` / `tag` 的 NOT NULL 并清掉 `sub_tag` 的 `''::text` 默认值（清活动标会写空串，不再撞 400） |
+| 15 | `15-photo-count.sql` | `photo_count`（触发器维护的图片数）：后台列表靠它省掉 `variant_images` 那一大列 |
 
 **批量导入（换季上新）**
 

@@ -26,7 +26,7 @@
  */
 
 import { supabase } from './supabase.js'
-import { loadProducts } from '../store/productStore.js'
+import { applyProductEvent, isCatalogueLight, loadProducts } from '../store/productStore.js'
 import { loadLinks } from '../store/linkStore.js'
 import { loadCategories } from '../utils/categoryStore.js'
 import { loadSettings } from '../utils/settingsStore.js'
@@ -39,8 +39,13 @@ let channel = null
 let generation = 0
 let timer = null
 const pending = new Set()
+/* 每一条 products 事件都把整行带回来，所以正常情况下**不需要重拉目录**：
+ * 把这一行打进缓存就够了（见 productStore 的 `applyProductEvent`）。攒起来是
+ * 为了 burst（批量改 300 件）时按照到达顺序逐条应用，仍然只 notify 一次。 */
+const productEvents = []
 
-function schedule(table) {
+function schedule(table, payload) {
+  if (table === 'products' && payload) productEvents.push(payload)
   pending.add(table)
   if (timer) clearTimeout(timer)
   timer = setTimeout(flush, DEBOUNCE_MS)
@@ -50,10 +55,18 @@ async function flush() {
   timer = null
   const tables = new Set(pending)
   pending.clear()
+  const events = productEvents.splice(0, productEvents.length)
 
   try {
     if (tables.has('products')) {
-      await loadProducts({ silent: true })
+      /* 局部更新优先。`applied` 为 false 有两种情况：没有任何 payload（例如
+       * 重新订阅后的"补一次"），或者某条事件的形状我们不认识 —— 两种都退回
+       * 一次全量刷新，宁可多一次请求也不能让界面停在错的顺序上。 */
+      let applied = events.length > 0
+      for (const event of events) {
+        if (!applyProductEvent(event)) applied = false
+      }
+      if (!applied) await loadProducts({ silent: true, light: isCatalogueLight() })
       /* A product row carries the 货号, and the Amazon link is derived from it.
        * Refetching the link map keeps the storefront from pointing at the ASIN
        * of a 货号 that was just corrected. */
@@ -90,7 +103,7 @@ export async function startRealtime() {
     .on(
       'postgres_changes',
       { event: '*', schema: 'public', table: 'products' },
-      () => schedule('products'),
+      (payload) => schedule('products', payload),
     )
     .on(
       'postgres_changes',
@@ -134,6 +147,7 @@ export function stopRealtime() {
     timer = null
   }
   pending.clear()
+  productEvents.length = 0
 
   if (channel && supabase) {
     const old = channel
