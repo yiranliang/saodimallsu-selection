@@ -41,7 +41,7 @@ export const MAX_QTY = 35
  * UI 上的 `(X / N)`、置灰的 `+`、拦截用的 toast 全部**读这个常量**，不要在
  * 别处再写一个数字 —— 改上限时只改这一行。
  */
-export const MAX_CART_ITEMS = 25
+export const MAX_CART_ITEMS = 15
 
 /** 还能再加几件（永不为负）。 */
 export function roomLeft(lines, cap = MAX_CART_ITEMS) {
