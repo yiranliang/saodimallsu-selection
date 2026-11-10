@@ -113,6 +113,83 @@
   .guide-in {
     animation: guide-in 0.18s ease-out both;
   }
+
+  /* ═══ 圣诞装饰（纯 CSS，零图片、零网络请求） ═══
+   *
+   * 性能取舍先说清楚：
+   *   - 雪点只动 `transform`（合成器线程），不动 top/left，也不动 box-shadow；
+   *   - 灯泡只动 `opacity`，光晕是**静态** box-shadow —— 每帧重绘阴影才是手机
+   *     上真正会掉帧的东西；
+   *   - 所有装饰层都是 `pointer-events-none` + `aria-hidden`，不参与命中测试，
+   *     也不进无障碍树。 */
+
+  @keyframes snow-fall {
+    from {
+      transform: translate3d(0, -12px, 0);
+    }
+    to {
+      transform: translate3d(8px, 300px, 0);
+    }
+  }
+
+  .header-snow-dot {
+    position: absolute;
+    top: 0;
+    border-radius: 9999px;
+    background: #fff;
+    /* 一点点柔化，避免白点在米白背景上像坏像素 */
+    box-shadow: 0 0 2px rgba(255, 255, 255, 0.9);
+    animation-name: snow-fall;
+    animation-timing-function: linear;
+    animation-iteration-count: infinite;
+  }
+
+  /* 积雪的下边缘：重复的半径遮罩，看上去是一排小圆丘。 */
+  .header-snowdrift {
+    height: 14px;
+    background: #fff;
+    -webkit-mask-image: radial-gradient(circle 9px at 12px 16px, #000 99%, transparent 100%);
+    mask-image: radial-gradient(circle 9px at 12px 16px, #000 99%, transparent 100%);
+    -webkit-mask-size: 24px 14px;
+    mask-size: 24px 14px;
+    -webkit-mask-repeat: repeat-x;
+    mask-repeat: repeat-x;
+  }
+
+  @keyframes bulb-twinkle {
+    0%,
+    100% {
+      opacity: 0.42;
+    }
+    50% {
+      opacity: 1;
+    }
+  }
+
+  .header-bulb {
+    display: block;
+    width: 5px;
+    height: 5px;
+    margin-top: 3px;
+    border-radius: 9999px;
+    background: var(--bulb, #c62828);
+    /* 静态光晕：动画只改 opacity，阴影不重绘 */
+    box-shadow: 0 0 5px 1px var(--bulb, #c62828);
+    animation: bulb-twinkle 2.6s ease-in-out infinite;
+  }
+
+  /* 搜索框的"积雪"外圈：白色柔光 + 原本的细边框 */
+  .search-snow {
+    box-shadow:
+      0 0 0 3px rgba(255, 255, 255, 0.85),
+      0 0 12px rgba(255, 255, 255, 0.55),
+      0 1px 2px rgba(43, 43, 43, 0.05);
+  }
+
+  /* 圣诞帽的红色微光（静态滤镜，不参与动画） */
+  .santa-glow {
+    filter: drop-shadow(0 0 3px rgba(220, 38, 38, 0.55));
+  }
 }
 
 /* 关掉动效偏好：不转、不脉冲、不位移，内容照常出现。
@@ -134,5 +211,15 @@
   .animate-pulse,
   .animate-spin {
     animation: none !important;
+  }
+
+  /* 下雪和闪烁都停掉；雪点直接隐藏 —— 静止的雪花会像屏幕上的灰点。 */
+  .header-snow-dot {
+    display: none;
+  }
+
+  .header-bulb {
+    animation: none;
+    opacity: 0.85;
   }
 }

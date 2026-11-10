@@ -33,8 +33,18 @@ export default function SearchBox({ value, onChange }) {
         autoComplete="off"
         spellCheck={false}
         enterKeyHint="search"
-        className="h-9 w-full rounded-full bg-white pl-10 pr-10 text-[12.5px] text-charcoal ring-1 ring-charcoal/8 transition placeholder:text-charcoal-light/60 focus:outline-none focus:ring-charcoal/25 [&::-webkit-search-cancel-button]:appearance-none"
+        className="search-snow h-9 w-full rounded-full bg-white pl-10 pr-10 text-[12.5px] text-charcoal ring-1 ring-charcoal/8 transition placeholder:text-charcoal-light/60 focus:outline-none focus:ring-charcoal/25 [&::-webkit-search-cancel-button]:appearance-none"
       />
+
+      {/* 装饰用小树：打字时让位给右侧的清除按钮（两者都在 right-2/3 那一带）。 */}
+      {!active && (
+        <span
+          aria-hidden="true"
+          className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-[12px] leading-none"
+        >
+          🎄
+        </span>
+      )}
 
       {active && (
         <button
