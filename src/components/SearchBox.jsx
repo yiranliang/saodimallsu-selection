@@ -28,7 +28,7 @@ export default function SearchBox({ value, onChange }) {
         type="search"
         value={value}
         onChange={(event) => onChange(event.target.value)}
-        placeholder="Search style no. or name"
+        placeholder="🎄 Search your holiday picks..."
         aria-label="Search by style number or name"
         autoComplete="off"
         spellCheck={false}

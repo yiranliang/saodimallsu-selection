@@ -17,8 +17,21 @@ function Header({ influencerName }) {
         <div className="flex items-start justify-between gap-4">
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-[15px] font-bold text-white sm:h-10 sm:w-10">
-              {brandConfig.logoText}
+            <div className="relative">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-[15px] font-bold text-white sm:h-10 sm:w-10">
+                {brandConfig.logoText}
+              </div>
+
+              {/* 圣诞帽 —— 纯 CSS：红色三角 + 白帽檐 + 帽尖小球，斜扣在 Logo
+                  右上角。没有图片、没有额外请求；`aria-hidden` 让读屏软件跳过。 */}
+              <span
+                aria-hidden="true"
+                className="pointer-events-none absolute -right-1.5 -top-2 z-10 block h-4 w-4 -rotate-12"
+              >
+                <span className="absolute bottom-[3px] left-1/2 h-0 w-0 -translate-x-1/2 border-b-[9px] border-l-[6px] border-r-[6px] border-b-red-600 border-l-transparent border-r-transparent" />
+                <span className="absolute bottom-0 left-0 h-[3px] w-4 rounded-full bg-white ring-1 ring-charcoal/10" />
+                <span className="absolute left-1/2 top-0 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-white ring-1 ring-charcoal/10" />
+              </span>
             </div>
             <div className="leading-tight">
               <div className="text-[15px] font-semibold tracking-[0.14em] text-charcoal sm:text-base">
@@ -43,6 +56,9 @@ function Header({ influencerName }) {
 
         {/* Welcome */}
         <h1 className="mt-7 text-[26px] font-semibold leading-snug tracking-tight text-charcoal sm:mt-9 sm:text-4xl">
+          <span aria-hidden="true" className="mr-1.5 align-baseline text-[0.62em] text-red-600">
+            ❄
+          </span>
           {brandConfig.welcome}
         </h1>
         <p className="mt-2 max-w-xl text-sm leading-relaxed text-charcoal-light sm:text-[15px]">
