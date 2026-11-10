@@ -159,7 +159,7 @@
   @keyframes bulb-twinkle {
     0%,
     100% {
-      opacity: 0.42;
+      opacity: 0.34;
     }
     50% {
       opacity: 1;
@@ -167,15 +167,31 @@
   }
 
   .header-bulb {
+    position: relative;
     display: block;
-    width: 5px;
-    height: 5px;
-    margin-top: 3px;
+    width: 6px;
+    height: 6px;
+    margin-top: 2px;
     border-radius: 9999px;
     background: var(--bulb, #c62828);
-    /* 静态光晕：动画只改 opacity，阴影不重绘 */
-    box-shadow: 0 0 5px 1px var(--bulb, #c62828);
-    animation: bulb-twinkle 2.6s ease-in-out infinite;
+    /* 静态光晕 + 一点点高光，才像灯泡而不像彩色圆点。
+     * 动画只改 opacity，阴影不参与动画（每帧重绘阴影才是手机掉帧的元凶）。 */
+    box-shadow:
+      0 0 7px 2px var(--bulb, #c62828),
+      inset 0 0 2px rgba(255, 255, 255, 0.75);
+    animation: bulb-twinkle 3s ease-in-out infinite;
+  }
+
+  /* 灯座：一小截竖线把灯泡挂到电线上，整条才是一串"灯"，不是散落的点。 */
+  .header-bulb::before {
+    content: '';
+    position: absolute;
+    left: 50%;
+    top: -2px;
+    width: 1px;
+    height: 3px;
+    transform: translateX(-50%);
+    background: rgba(43, 43, 43, 0.3);
   }
 
   /* 搜索框的"积雪"外圈：白色柔光 + 原本的细边框 */

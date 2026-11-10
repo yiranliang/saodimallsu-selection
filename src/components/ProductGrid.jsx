@@ -46,7 +46,7 @@ export default function ProductGrid({
   if (!products.length) {
     if (error) {
       return (
-        <div className="mx-auto max-w-6xl px-5 py-20 text-center sm:px-8">
+        <div className="mx-auto max-w-7xl px-5 py-20 text-center sm:px-8">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-cream-dark text-charcoal-light">
             <Bag className="h-7 w-7" />
           </div>
@@ -70,7 +70,7 @@ export default function ProductGrid({
     const searching = Boolean(query)
 
     return (
-      <div className="mx-auto max-w-6xl px-5 py-20 text-center sm:px-8">
+      <div className="mx-auto max-w-7xl px-5 py-20 text-center sm:px-8">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-cream-dark text-charcoal-light">
           <Bag className="h-7 w-7" />
         </div>
@@ -96,10 +96,10 @@ export default function ProductGrid({
   }
 
   return (
-    <div className="mx-auto max-w-6xl px-5 sm:px-8">
+    <div className="mx-auto max-w-7xl px-5 sm:px-8">
       {/* `fade-up` fires once, when this element replaces the skeleton. CSS only —
           no library, no image, no extra request. */}
-      <div className="fade-up grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4">
+      <div className="fade-up grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
         {products.map((product) => (
           <ProductCard
             key={product.id}
@@ -133,7 +133,7 @@ export default function ProductGrid({
  */
 function GridSkeleton() {
   return (
-    <div className="mx-auto max-w-6xl px-5 sm:px-8">
+    <div className="mx-auto max-w-7xl px-5 sm:px-8">
       <div className="flex flex-col items-center gap-3 pb-7 pt-1">
         <div className="relative flex h-14 w-14 items-center justify-center">
           <span className="brand-spinner absolute inset-0" aria-hidden="true" />
@@ -149,7 +149,7 @@ function GridSkeleton() {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4" aria-hidden="true">
+      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6" aria-hidden="true">
         {Array.from({ length: SKELETON_CARDS }).map((_, i) => (
           <div key={i} className="overflow-hidden rounded-2xl bg-white">
             <div className="aspect-square animate-pulse bg-cream-dark" />

@@ -87,11 +87,11 @@ function CategoryNav({
 
   return (
     <nav className="sticky top-0 z-30 bg-cream/95 backdrop-blur-md">
-      <div className="mx-auto max-w-6xl px-5 pb-1 pt-2.5 sm:px-8">
+      <div className="mx-auto max-w-7xl px-5 pb-1 pt-2.5 sm:px-8">
         <SearchBox value={query} onChange={onQueryChange} />
       </div>
 
-      <div className="relative mx-auto max-w-6xl">
+      <div className="relative mx-auto max-w-7xl">
         <div
           ref={categoryRail.ref}
           data-rail="categories"
@@ -132,7 +132,7 @@ function CategoryNav({
           can only be in one: `bucketOf` reads the SAME number the badge prints,
           so the chip never disagrees with the card. */}
       {active === CAMPAIGN_TAB && (
-        <div className="mx-auto max-w-6xl px-5 pb-2 sm:px-8">
+        <div className="mx-auto max-w-7xl px-5 pb-2 sm:px-8">
           <div
             ref={bucketRail.ref}
             data-rail="deals"
@@ -181,7 +181,7 @@ function CategoryNav({
         </div>
       )}
 
-      <div className="mx-auto max-w-6xl px-5 sm:px-8">
+      <div className="mx-auto max-w-7xl px-5 sm:px-8">
         <div className="h-px bg-charcoal/[0.06]" />
       </div>
     </nav>

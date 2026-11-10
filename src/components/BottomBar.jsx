@@ -34,7 +34,7 @@ function BottomBar({ styles, variants, units, onOpenCart, onGenerate }) {
       <div className="pointer-events-none h-10 bg-gradient-to-t from-cream to-transparent" />
 
       <div className="border-t border-charcoal/[0.06] bg-cream">
-        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-5 pb-[max(0.875rem,env(safe-area-inset-bottom))] pt-3 sm:px-8">
+        <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-5 pb-[max(0.875rem,env(safe-area-inset-bottom))] pt-3 sm:px-8">
           {/* Count → opens the cart */}
           <button
             type="button"

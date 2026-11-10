@@ -658,7 +658,7 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
             always the last thing on the page — the staff link stays reachable
             no matter how many batches have been loaded. */}
         {!loading && filtered.length > 0 && (more || deferredQuery || filtered.length > PAGE_SIZE) && (
-          <div className="mx-auto mt-8 max-w-6xl px-5 text-center sm:px-8">
+          <div className="mx-auto mt-8 max-w-7xl px-5 text-center sm:px-8">
             {more ? (
               <>
                 <button
@@ -684,7 +684,7 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
         )}
 
         {!loading && (
-          <footer className="mx-auto mt-14 max-w-6xl px-5 text-center sm:px-8">
+          <footer className="mx-auto mt-14 max-w-7xl px-5 text-center sm:px-8">
             {/* 品牌使命在上面、配货声明在下面：前者是"我们为什么做这个"，后者是
                流程条款。同字号、更淡一档灰度 —— 它是全页最轻的一句，但位置在
                免责之上，因为一句使命不该排在条款后面。 */}

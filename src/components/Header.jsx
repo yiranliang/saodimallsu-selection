@@ -57,7 +57,7 @@ function Header({ influencerName }) {
         ))}
       </div>
 
-      <div className="relative z-10 mx-auto max-w-6xl px-5 pb-8 pt-5 sm:px-8 sm:pb-10 sm:pt-7">
+      <div className="relative z-10 mx-auto max-w-7xl px-5 pb-8 pt-5 sm:px-8 sm:pb-10 sm:pt-7">
         <div className="flex items-start justify-between gap-4">
           {/* Brand */}
           <div className="flex items-center gap-3">
@@ -70,10 +70,10 @@ function Header({ influencerName }) {
                   右上角。没有图片、没有额外请求；`aria-hidden` 让读屏软件跳过。 */}
               <span
                 aria-hidden="true"
-                className="santa-glow pointer-events-none absolute -right-1.5 -top-2 z-10 block h-4 w-4 -rotate-12"
+                className="santa-glow pointer-events-none absolute -right-1 -top-1.5 z-10 block h-3.5 w-3.5 rotate-12"
               >
-                <span className="absolute bottom-[3px] left-1/2 h-0 w-0 -translate-x-1/2 border-b-[9px] border-l-[6px] border-r-[6px] border-b-red-600 border-l-transparent border-r-transparent" />
-                <span className="absolute bottom-0 left-0 h-[3px] w-4 rounded-full bg-white ring-1 ring-charcoal/10" />
+                <span className="absolute bottom-[3px] left-1/2 h-0 w-0 -translate-x-1/2 border-b-[8px] border-l-[5px] border-r-[5px] border-b-red-600 border-l-transparent border-r-transparent" />
+                <span className="absolute bottom-0 left-0 h-[3px] w-full rounded-full bg-white ring-1 ring-charcoal/10" />
                 <span className="absolute left-1/2 top-0 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-white ring-1 ring-charcoal/10" />
               </span>
             </div>
@@ -100,7 +100,7 @@ function Header({ influencerName }) {
 
         {/* 灯带：一根渐隐的电线 + 14 颗小灯泡。灯泡只闪 opacity，光晕静态。 */}
         <div aria-hidden="true" className="pointer-events-none relative mt-7 h-6 sm:mt-8">
-          <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-charcoal/20 to-transparent" />
+          <span className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-charcoal/30 to-transparent" />
           <div className="flex items-start justify-between px-1">
             {LIGHTS.map((color, index) => (
               <span
@@ -124,11 +124,9 @@ function Header({ influencerName }) {
         </p>
       </div>
 
-      <div className="mx-auto max-w-6xl px-5 sm:px-8">
-        <div className="h-px bg-charcoal/[0.07]" />
-      </div>
-
-      {/* 屋檐积雪：一排半圆遮罩，压在底边上，把那条细分割线盖成"雪檐" */}
+      {/* 屋檐积雪：一排半圆遮罩，压在底边上。原来这里还有一条 1px 分割线，
+          被雪檐盖住之后只剩断续的几段，看着像编辑器里的参考线 —— 去掉，
+          让"雪"本身当这条边。 */}
       <div
         aria-hidden="true"
         className="pointer-events-none absolute inset-x-0 bottom-0 z-10"

@@ -45,7 +45,7 @@ export default function FeaturedSection({
     <section
       aria-label="Featured for You"
       data-featured
-      className="mx-auto mb-10 max-w-6xl px-5 sm:mb-14 sm:px-8"
+      className="mx-auto mb-10 max-w-7xl px-5 sm:mb-14 sm:px-8"
     >
       <div className="mb-4 sm:mb-5">
         {/* 标题独占一行；副标题和右侧的操作区共用一行，并且 `items-center` ——
@@ -102,7 +102,7 @@ export default function FeaturedSection({
           `prefers-reduced-motion` 下 `.fade-up` 本来就被关掉，等于直接替换。 */}
       <div
         key={seed}
-        className="fade-up grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-4"
+        className="fade-up grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6"
       >
         {products.map((product) => (
           <ProductCard
