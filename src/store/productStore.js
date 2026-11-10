@@ -823,64 +823,69 @@ export async function setProductsHidden(ids, hidden) {
 }
 
 /**
- * 批量改角标：只写 `tag` + `badge_color`（可选的还有副角标两列）。
+ * 批量改标签：运营标签（`tag` + `badge_color`）和可选的大促标签
+ * （`sub_tag` + `sub_badge_color`）。
  *
  * 为什么不复用 `updateProduct`：它用缓存里的商品重建**整行**，那对编辑器是
  * 正确的（编辑器就是这些字段的主人），对批量是危险的 —— 一次"给十件商品挂
- * Black Friday"不该有机会把秒杀窗口、库存或价格一起写回去（哪怕值一样，
+ * Bestseller"不该有机会把秒杀窗口、库存或价格一起写回去（哪怕值一样，
  * 一次网络抖动也会让别的管理员刚改的价格被旧快照覆盖）。
  *
- * `badge_color` 是可选的（07-badge-color.sql）：列不存在时把这一列从 payload
- * 里剔掉再发，宁可只存文字，也不要让整批写失败。文字清空时颜色一并不写，
- * 见 utils/batchBadge.js。
+ * 两个字段是**分开的**，而且可以只写其中一个：
+ *   `tag`     运营属性（Bestseller / New），前台渲染成线框徽章；
+ *   `sub_tag` 大促归属（Black Friday / Cyber Monday），**不上卡片**，只决定
+ *             商品进哪个大促专区 Tab（`isCampaignDeal`）。
+ * 传 `undefined` = 这次完全不碰那一列 —— 这正是"改运营标签不会清掉大促标签"
+ * 的保证，反之亦然。
  *
- * `options.sub` 是**可选的副角标**：只有显式传进来才写 `sub_*` 两列。
- * 传 `undefined`（默认）= 完全不碰副角标 —— 这一点很关键，否则"只改主角标"
- * 会顺手清掉运营一早上填好的黑五标识。
+ * `badge_color` / `sub_badge_color` 都是可选的列（07 / 11-*.sql）：列不存在时
+ * 把这一列从 payload 里剔掉再发，宁可只存文字，也不要让整批写失败。
  *
  * @param {string[]} ids
- * @param {{ tag?: string, badgeColor?: string }} badge 已由 normaliseBadgeDraft 规整
+ * @param {{ tag?: string, badgeColor?: string } | undefined} badge 已由 normaliseBadgeDraft 规整
  * @param {{ sub?: { subTag?: string, subBadgeColor?: string } }} [options]
  * @returns {Promise<number>} 实际提交的 id 数
  */
-export async function setProductsBadge(ids, badge, { sub, touchTag = true } = {}) {
+export async function setProductsBadge(ids, badge, { sub } = {}) {
   const list = (Array.isArray(ids) ? ids : [ids]).filter(Boolean)
   if (!list.length) return 0
 
   const payload = {}
-  if (touchTag) {
-    const tag = String(badge?.tag ?? '').trim()
+
+  /* `badge` 缺席（undefined）= 这次不碰运营标签。传空对象 `{ tag: '' }` 才是
+   * "清空运营标签" —— 两者必须能区分，否则批量改大促标会顺手擦掉 Bestseller。 */
+  if (badge) {
+    const tag = String(badge.tag ?? '').trim()
     payload.tag = tag
     if (badgeColumnAvailable) {
-      payload.badge_color = tag ? normaliseBadgeColor(badge?.badgeColor) || null : null
+      payload.badge_color = tag ? normaliseBadgeColor(badge.badgeColor) || null : null
+    } else if (tag) {
+      console.warn('[products] badge_color 列不存在，批量标签只保存了文字。先跑 supabase/07-badge-color.sql。')
     }
   }
 
-  const touchSub = sub !== undefined && sub !== null
-  if (touchSub) {
+  /* 大促标签（`sub_tag`）：只有显式传进来才写。`sub` 缺席 = 完全不碰这一列
+   * —— 这是"只改运营标签不会清掉活动名"的保证。 */
+  if (sub) {
     if (subBadgeAvailable) {
-      const subTag = String(sub?.subTag ?? '').trim()
+      const subTag = String(sub.subTag ?? '').trim()
       payload.sub_tag = subTag
-      payload.sub_badge_color = subTag ? normaliseBadgeColor(sub?.subBadgeColor) || null : null
+      payload.sub_badge_color = subTag ? normaliseBadgeColor(sub.subBadgeColor) || null : null
     } else {
       console.warn(
-        '[products] sub_tag / sub_badge_color 列不存在，副角标未保存。先跑 supabase/11-sub-badge-deal-priority.sql。',
+        '[products] sub_tag / sub_badge_color 列不存在，大促标签未保存。先跑 supabase/11-sub-badge-deal-priority.sql。',
       )
     }
   }
 
-  if (touchTag && !badgeColumnAvailable) {
-    console.warn('[products] badge_color 列不存在，批量角标只保存了文字。先跑 supabase/07-badge-color.sql。')
-  }
-
-  /* 没勾主角标、又没勾副角标 = 什么都不该写。返回 0 而不是发一个空 update
-   * （PostgREST 会拒绝空 payload，报一句和现场无关的错）。 */
+  /* 什么都没给 = 不该发一个空 update（PostgREST 会拒绝空 payload 并报一句与现场
+   * 无关的错）。真发生说明调用方忘了传，返回 0 比报错更好定位。 */
   if (!Object.keys(payload).length) return 0
 
   /* 分批：一次 Select all 很容易超过一百件，单条 update 的 in(...) 会把 id
    * 列表拼进查询串，条数一多就是一次没有上限的请求。
    *
-   * **不再 `.select()`**：批量打角标以前会把每件商品修改后的整行都回传一遍
+   * **不再 `.select()`**：批量打标签以前会把每件商品修改后的整行都回传一遍
    * （含 `specs` / `variant_images`），300 件就是一次整目录下载。这里改成用
    * 刚发出去的 payload 直接更新缓存 —— 写进去什么，界面上就是什么。 */
   let written = 0

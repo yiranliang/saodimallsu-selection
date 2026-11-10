@@ -61,7 +61,10 @@ export function imageSrcSet(url, widths = [320, 640]) {
  * browser picking the 320 or the 640 file — an over-stated `sizes` silently
  * doubles the bytes.
  */
-export const CARD_IMAGE_SIZES = '(min-width: 1024px) 22vw, (min-width: 768px) 30vw, 46vw'
+/* 每档都略大于实际渲染宽度：宁可多下 20%，也不要让浏览器挑小一档、
+ * 把商品图放大成糊的。列数变了（lg 4 / xl 5）之后这组值跟着改。 */
+export const CARD_IMAGE_SIZES =
+  '(min-width: 1280px) 20vw, (min-width: 1024px) 26vw, (min-width: 768px) 32vw, 48vw'
 
 /** The detail sheet is a square filling the sheet, capped at max-w-lg */
 export const DETAIL_IMAGE_SIZES = '(min-width: 512px) 512px, 92vw'

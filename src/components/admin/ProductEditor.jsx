@@ -24,8 +24,10 @@ import {
   badgeStyle,
   badgeTemplateMatch,
   normaliseBadgeColor,
+  normaliseTagList,
 } from '../../utils/badge.js'
 import { parsePriorityInput } from '../../utils/batchOps.js'
+import { CAMPAIGN_QUICK_PICKS, normaliseCampaignDraft } from '../../utils/batchBadge.js'
 import { t } from '../../i18n/admin.js'
 import {
   VARIANT_IMAGE_MIME,
@@ -606,6 +608,13 @@ export default function ProductEditor({
       discountLabel: dealOn ? draft.discountLabel.trim() : '',
     }
 
+    /* 大促标签单独规整：单枚、折叠空白。和上面的运营标签没有任何关系 ——
+     * 一个决定"卡片上写什么"，一个决定"进哪个大促 Tab"。 */
+    const campaign = normaliseCampaignDraft({
+      text: draft.subTag,
+      color: draft.subBadgeColor,
+    })
+
     // `id` is internal and never changes; `sku` is the 货号 and is free-form
     setSaving(true)
     try {
@@ -614,14 +623,15 @@ export default function ProductEditor({
       sku,
       name: draft.name.trim() || sku,
       category: draft.category.trim() || UNCATEGORISED,
-      tag: draft.tag.trim(),
-      /* Only meaningful with a tag, but kept even when the text is blank: ops
-       * often types the text and picks the colour in either order, and dropping
-       * the colour on save would make the picker feel broken. */
+      /* 运营标签：一个字段、可以有多枚（`Bestseller, New`）。写库前统一
+       * 规整成 "A, B" —— 前台按逗号切分并最多显示 3 枚（`trustBadgesFor`）。
+       * 颜色仍然保留：文字空 = 没有标签，颜色跟着清（映射层也会兜底）。 */
+      tag: normaliseTagList(draft.tag),
       badgeColor: normaliseBadgeColor(draft.badgeColor),
-      /* 副角标：文字空 = 没有副角标（颜色跟着清），理由同主角标。 */
-      subTag: draft.subTag.trim(),
-      subBadgeColor: normaliseBadgeColor(draft.subBadgeColor),
+      /* 大促标签：**和运营标签完全独立**。它不进卡片，只用来把这批商品归到
+       * 对应的大促专区 Tab（`isCampaignDeal`）。黑五换网一改的就是这一枚。 */
+      subTag: campaign.subTag,
+      subBadgeColor: campaign.subBadgeColor,
       /* 置顶权重：空输入 = 0 = 不置顶。只在秒杀专区内部生效，
        * 不碰 sort_order —— 拖拽序仍然由 reorder 写入独占。 */
       dealPriority: parsePriorityInput(draft.dealPriority) ?? 0,
@@ -675,14 +685,16 @@ export default function ProductEditor({
   /* `null` = no colour set, which means "keep the default charcoal pill" —
    * `badgeStyle` returns null rather than a default so the classes stay. */
   const previewBadge = badgeStyle(draft.badgeColor)
+  /* 预览按前台同一条规则切分：逗号/顿号/竖线都认，最多 3 枚。 */
+  const previewTags = normaliseTagList(draft.tag).split(', ').filter(Boolean)
   /* Read during render, not in state: the flag flips once per session (when the
    * first catalogue read discovers the column), and the editor is only ever
    * opened after that read. */
   const badgeColumnMissing = getBadgeColumnStatus() === 'missing'
+  const subBadgeColumnMissing = getSubBadgeStatus() === 'missing'
   const teaserColumnMissing = getTeaserColumnStatus() === 'missing'
   const dealColumnMissing = getDealColumnStatus() === 'missing'
   const accColumnMissing = getAccColumnStatus() === 'missing'
-  const subBadgeColumnMissing = getSubBadgeStatus() === 'missing'
   const priorityColumnMissing = getPriorityColumnStatus() === 'missing'
   const variantCount = draft.specs.reduce(
     (sum, group) => sum + group.images.filter((url) => String(url || '').trim()).length,
@@ -867,16 +879,25 @@ export default function ProductEditor({
                 {/* Same pill, same place, same colours as the storefront card —
                     the point of the picker is to judge the badge against the
                     photo it sits on, not against a colour swatch. */}
-                {draft.tag.trim() && (
-                  <span
+                {previewTags.length > 0 && (
+                  <div
                     data-badge-preview
-                    style={previewBadge || undefined}
-                    className={`absolute left-2 top-2 max-w-[calc(100%-1rem)] truncate rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide ${
-                      previewBadge ? '' : 'bg-charcoal/80 text-cream backdrop-blur-sm'
-                    }`}
+                    className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap items-start gap-1"
                   >
-                    {draft.tag.trim()}
-                  </span>
+                    {previewTags.map((tag) => (
+                      <span
+                        key={tag}
+                        style={
+                          previewBadge
+                            ? { borderColor: previewBadge.backgroundColor, color: previewBadge.backgroundColor }
+                            : undefined
+                        }
+                        className="max-w-full truncate rounded-[2px] border border-charcoal/50 bg-white px-1.5 py-px text-[10px] font-semibold leading-4"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
                 )}
               </div>
 
@@ -1040,7 +1061,7 @@ export default function ProductEditor({
                 )}
               </Field>
               <div className="block">
-                <span className="mb-1.5 flex items-baseline gap-1.5 text-[11px] font-medium tracking-wider text-charcoal-light">{t('Badge')}<span className="font-normal tracking-normal text-charcoal-light/60">可选</span>
+                <span className="mb-1.5 flex items-baseline gap-1.5 text-[11px] font-medium tracking-wider text-charcoal-light">{t('Badge')}<span className="font-normal tracking-normal text-charcoal-light/60">可选 · 多个用逗号分隔</span>
                 </span>
 
                 <div className="flex items-center gap-1.5">
@@ -1048,8 +1069,8 @@ export default function ProductEditor({
                     type="text"
                     value={draft.tag}
                     onChange={(e) => patch('tag', e.target.value)}
-                    placeholder="New"
-                    aria-label="Badge text"
+                    placeholder="例如 Bestseller, New"
+                    aria-label="Badge tags, comma separated"
                     className="input-field min-w-0 flex-1 text-[13px]"
                   />
 
@@ -1174,14 +1195,12 @@ export default function ProductEditor({
                 )}
               </div>
 
-              {/* 副角标 —— 右上角那枚。
-                  主角标回答"它现在是什么状态"（Coming Soon / ⚡ Deal / ACC），
-                  副角标回答"运营想让你先看它"，两件事互不覆盖，所以是两块输入
-                  而不是一个下拉。黑五期间一件商品会同时拥有
-                  「⚡ 25% OFF」（左上，由 sale_* 算出）和「Black Friday」（右上）。
-                  颜色规则与主角标完全一致（亮度选文字色，见 utils/badge.js）。 */}
-              <div className="block">
-                <span className="mb-1.5 flex items-baseline gap-1.5 text-[11px] font-medium tracking-wider text-charcoal-light">大促标<span className="font-normal tracking-normal text-charcoal-light/60">第一行 · 可选</span>
+              {/* 大促标签 —— **不显示在卡片上**，只决定这批商品进哪个大促
+                  专区 Tab（见 isCampaignDeal）。和上面的运营标签完全独立：
+                  运营标签写 Bestseller，这里写 Black Friday。黑五换网一时改
+                  的就是这一枚。 */}
+              <div className="mt-3 block">
+                <span className="mb-1.5 flex items-baseline gap-1.5 text-[11px] font-medium tracking-wider text-charcoal-light">大促标签<span className="font-normal tracking-normal text-charcoal-light/60">可选 · 不进卡片</span>
                 </span>
 
                 <div className="flex items-center gap-1.5">
@@ -1189,8 +1208,8 @@ export default function ProductEditor({
                     type="text"
                     value={draft.subTag}
                     onChange={(e) => patch('subTag', e.target.value)}
-                    placeholder="Black Friday"
-                    aria-label="Secondary badge text"
+                    placeholder="例如 Black Friday"
+                    aria-label="Campaign tag text"
                     className="input-field min-w-0 flex-1 text-[13px]"
                   />
                   <span
@@ -1204,31 +1223,18 @@ export default function ProductEditor({
                       type="color"
                       value={normaliseBadgeColor(draft.subBadgeColor) || '#2B2B2B'}
                       onChange={(e) => patch('subBadgeColor', e.target.value.toUpperCase())}
-                      aria-label="Secondary badge colour"
+                      aria-label="Campaign tag colour"
                       className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                     />
                   </span>
-                  {draft.subTag && (
-                    <span
-                      style={badgeStyle(draft.subBadgeColor) || undefined}
-                      className={`shrink-0 truncate rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                        badgeStyle(draft.subBadgeColor) ? '' : 'bg-charcoal/80 text-cream'
-                      }`}
-                    >
-                      {draft.subTag}
-                    </span>
-                  )}
                 </div>
 
-                {/* 两个一键文案：黑五主推就这么写，不该每次现打。颜色沿用
-                    当前值，这样"先挑了红色再改文案"不会被冲掉。 */}
                 <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                  {['Black Friday', 'Cyber Monday'].map((word) => (
+                  {CAMPAIGN_QUICK_PICKS.map((word) => (
                     <button
                       key={word}
                       type="button"
                       onClick={() => patch('subTag', word)}
-                      aria-label={`Secondary badge quick fill ${word}`}
                       aria-pressed={draft.subTag === word}
                       className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
                         draft.subTag === word
@@ -1257,6 +1263,7 @@ export default function ProductEditor({
                   </p>
                 )}
               </div>
+
             </div>
 
             {/* Visibility — off the storefront, still in the catalogue */}
@@ -1867,7 +1874,7 @@ function toDraft(product) {
     category: product?.category || UNCATEGORISED,
     tag: product?.tag || '',
     badgeColor: product?.badgeColor || '',
-    /* 副角标（右上角）。和 tag 完全独立 —— 黑五期间两枚要同时在。 */
+    /* 大促标签：只决定商品进哪个大促专区 Tab，不上卡片（见 trustBadgesFor）。 */
     subTag: product?.subTag || '',
     subBadgeColor: product?.subBadgeColor || '',
     /* 专区置顶权重。存的是数字，输入框要字符串；空 = 不置顶。 */

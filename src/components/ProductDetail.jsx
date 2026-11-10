@@ -17,11 +17,11 @@ import { isAcc, campaignIdOf } from '../utils/acc.js'
 import { copyToClipboard } from '../utils/clipboard.js'
 import {
   BADGE_ZONE,
-  badgeStackFor,
   countdownDisplay,
   dealPhase,
   dealPriceInfo,
   dealWindow,
+  trustBadgesFor,
 } from '../utils/deal.js'
 
 /**
@@ -292,17 +292,11 @@ export default function ProductDetail({
 
   // Re-renders on every pick, so choosing a colour swaps the photo in place
   const resolved = resolveProductImage(product, spec)
-  /* 角标栈 —— 和卡片同一个函数，但用的是 `detail` 面：身份 + ACC，**没有
-   * 折扣行**（折扣在下面的价格区，画成角标只会压住图片）。
-   *
-   * 从 🔥 大促专区点开时（`inCampaign`）连活动身份也不挂 —— 那一屏整区都在
-   * 大促，卡片上怎么去重，详情页就怎么去重；否则"点进 Black Friday 卡片是
-   * 干净的，再点开又冒出一枚 Black Friday"。ACC 不受影响（那是付款相关的事）。 */
-  const badges = badgeStackFor(product, now, {
-    zone: BADGE_ZONE.DETAIL,
-    campaign,
-    inCampaign,
-  })
+  /* 详情图**不放任何角标**（和卡片一致：图片 0 遮挡）。运营的属性徽章
+   * （Bestseller / New）改用极细线框渲染在标题下面，规则和卡片共用
+   * `trustBadgesFor` —— 大促/秒杀身份照旧不显示。 */
+  const trustBadges = trustBadgesFor(product, { campaign })
+
   const countdown = dealShown ? countdownDisplay(phase, countdownMs) : null
 
   /* Link is product-level (the first ASIN); "has a listing" is per combination,
@@ -409,29 +403,6 @@ export default function ProductDetail({
                 fetchpriority="high"
                 className="h-full w-full object-contain"
               />
-              {badges.length > 0 && (
-                /* 纵向 Flex，8px 间距（gap-2）：详情页的文字比卡片大一号，
-                   间距也要跟着放大一档，两枚才不会被读成一块。 */
-                <div
-                  data-badge-stack
-                  className="absolute left-4 top-4 flex max-w-[calc(100%-2rem)] flex-col items-start gap-2"
-                >
-                  {badges.map((entry, index) => {
-                    const style = badgeStyle(entry.value)
-                    return (
-                      <span
-                        key={`${entry.kind}-${index}`}
-                        style={style || undefined}
-                        className={`max-w-full truncate rounded-full px-2.5 py-1 text-[11px] font-medium ${
-                          style ? '' : 'bg-charcoal/80 text-cream backdrop-blur-sm'
-                        }`}
-                      >
-                        {entry.text}
-                      </span>
-                    )
-                  })}
-                </div>
-              )}
             </div>
           </div>
 
@@ -447,6 +418,29 @@ export default function ProductDetail({
             <h2 className="mt-1 text-xl font-semibold leading-snug tracking-tight text-charcoal">
               {product.name}
             </h2>
+
+            {/* 运营徽章：和卡片同一套（极细线框、无底色、10px、深灰字）。
+                图片上已经没有任何角标，徽章只出现在这里。 */}
+            {trustBadges.length > 0 && (
+              <div className="mt-2 flex flex-wrap items-center gap-1">
+                {trustBadges.map((badge) => {
+                  const custom = badgeStyle(badge.value)
+                  return (
+                    <span
+                      key={badge.text}
+                      style={
+                        custom
+                          ? { borderColor: custom.backgroundColor, color: custom.backgroundColor }
+                          : undefined
+                      }
+                      className="max-w-full truncate rounded-[2px] border border-charcoal/50 px-1.5 py-px text-[10px] font-semibold leading-4"
+                    >
+                      {badge.text}
+                    </span>
+                  )
+                })}
+              </div>
+            )}
 
             {/* Deal countdown — right under the name, where the price will be.
                 Local arithmetic on a string already in the catalogue: no

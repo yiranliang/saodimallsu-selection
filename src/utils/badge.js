@@ -201,3 +201,36 @@ export function badgeStyle(color) {
   if (!hex) return null
   return { backgroundColor: hex, color: badgeTextColor(hex) }
 }
+
+/** 一枚商品的运营标签最多显示几枚（前后台共用这个数）。 */
+export const MAX_TAGS = 3
+
+/**
+ * 多标签文本 → 规范串 `A, B, C`。
+ *
+ * 分隔符认英文逗号、中文顿号、竖线 —— 运营手写时这几种都会出现。
+ * 同时做三件事：折叠空白、忽略大小写去重、最多留 `max` 枚。
+ *
+ * 为什么要在写入前就规整：库里只存一串纯文本（不加新表），前台按同一个规则
+ * 再切一次；如果存的形状五花八门（`a,,b` / `a 、 b`），前台切出来就会有空
+ * 徽章或重复徽章。
+ *
+ * @param {unknown} raw
+ * @param {{ max?: number }} [options]
+ * @returns {string} 空输入返回 `''`
+ */
+export function normaliseTagList(raw, { max = MAX_TAGS } = {}) {
+  const parts = String(raw ?? '')
+    .split(/[,，、|]/)
+    .map((part) => part.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+
+  const unique = []
+  for (const part of parts) {
+    const key = part.toLowerCase()
+    if (unique.some((tag) => tag.toLowerCase() === key)) continue
+    unique.push(part)
+    if (unique.length >= max) break
+  }
+  return unique.join(', ')
+}

@@ -21,7 +21,7 @@
  */
 
 /** 推荐位固定展示多少件。 */
-export const FEATURED_SIZE = 24
+export const FEATURED_SIZE = 25
 
 /** 种子范围。`mulberry32` 只吃 32 位整数，这里留出正数区间方便调试。 */
 const SEED_LIMIT = 0x7fffffff

@@ -38,7 +38,6 @@ import {
   getBadgeColumnStatus,
   getDealColumnStatus,
   getCampaignColumnStatus,
-  getSubBadgeStatus,
   getPriorityColumnStatus,
   UNCATEGORISED,
 } from '../../store/productStore.js'
@@ -56,7 +55,6 @@ import {
   CATEGORY_MODES,
   buildDealFromDates,
   countFillTargets,
-  normaliseSubBadgeDraft,
   parsePriorityInput,
   resolveCategoryName,
 } from '../../utils/batchOps.js'
@@ -100,12 +98,13 @@ import { normaliseDealsTabLabel } from '../../utils/deal.js'
 import { computeBulkDeleteGuard } from '../../utils/adminSecurity.js'
 import { BADGE_COLOR_PRESETS, badgeStyle, normaliseBadgeColor } from '../../utils/badge.js'
 import {
-  BADGE_WRITE_MODES,
   BATCH_BADGE_MAX,
+  BATCH_BADGE_MAX_TAGS,
   BATCH_BADGE_QUICK_PICKS,
-  badgeWriteFor,
+  CAMPAIGN_QUICK_PICKS,
   normaliseBadgeDraft,
-  placementCountsOf,
+  normaliseCampaignDraft,
+  planBadgeApply,
 } from '../../utils/batchBadge.js'
 
 /**
@@ -565,55 +564,49 @@ export default function ProductsPage() {
   }
 
   /**
-   * 批量改角标。只写角标那四列（见 setProductsBadge），所以这条路径碰不到
-   * 价格、秒杀窗口或库存 —— 黑五前一天最不该出事的就是那些字段。
+   * 批量设置运营标签。只写 `tag` + `badge_color` 两列（见 setProductsBadge），
+   * 所以这条路径碰不到价格、秒杀窗口或库存 —— 黑五前一天最不该出事的就是那些。
    * 成功后清空选择：这十件已经改完了，留着下一件事通常是误操作。
    *
-   * 写哪个槽位由 `badgeWriteFor` 决定，一句话：
-   *   第二行 = `tag`（普通标，不动别人），第一行 = `sub_tag`（活动标，覆盖）。
-   * 这段逻辑必须在纯函数里，因为它错了的症状是"后台说成功、前台没变化"。
+   * 多个标签在 `normaliseBadgeDraft` 里规整成 `A, B`（去重、最多 3 枚），
+   * 和前台 `trustBadgesFor` 共用同一条切分规则 —— 后台怎么写，前台怎么显示。
    *
    * @param {{ text?: string, color?: string }} draft 弹窗里的**原始**输入。
-   *   这里规整，且只规整一次 —— 收已规整的 `{ tag, badgeColor }` 也行，但那是兜底，
-   *   不要依赖（`normaliseBadgeDraft` 幂等，见 utils/batchBadge.js 的注释）。
    */
-  const handleBatchBadge = async (draft, sub, mode = 'append') => {
-    const plan = badgeWriteFor(mode, normaliseBadgeDraft(draft), sub)
-    if (!plan.touchTag && !plan.sub) return
-    const written = plan.sub?.subTag || plan.badge.tag
-    /* 空文字不该走到这里（应用按钮是灰的），真走到了也绝不能让 toast 说
-     * 「设为「」」—— 那种提示会让人以为后台坏了。 */
-    if (!written) return
+  const handleBatchBadge = async (draft) => {
+    const { badge, sub } = planBadgeApply(draft)
+    /* 两个区都可以为空：只改运营标签、只改大促标签、或者两个一起改。
+     * 一个都没填 → 什么都不写（应用按钮那时是灰的，这里只是兜底）。 */
+    if (!badge && !sub) return
+
+    const parts = []
+    if (badge) parts.push(`运营标签「${badge.tag}」`)
+    if (sub) parts.push(sub.subTag ? `大促标签「${sub.subTag}」` : '大促标签（已清空）')
+
     try {
       const count = await setProductsBadge(
         selectedProducts.map((product) => product.id),
-        plan.badge,
-        { sub: plan.sub, touchTag: plan.touchTag },
+        badge || undefined,
+        { sub },
       )
       setBatchBadgeOpen(false)
       clearSelection()
-      showToast?.(
-        mode === 'overwrite'
-          ? `已把 ${count} 件商品的活动标设为「${written}」`
-          : `已给 ${count} 件商品设置角标「${written}」`,
-        'success',
-      )
+      showToast?.(`已更新 ${count} 件商品：${parts.join(' · ')}`, 'success')
     } catch (err) {
       showToast?.(err.message, 'error')
     }
   }
 
-  /** 清空 = 两行一起清（颜色一并不写，见 utils/batchBadge.js）。 */
+  /** 清空 = 把 `tag` 写成空串（颜色一并不写，见 utils/batchBadge.js）。 */
   const handleBatchBadgeClear = async () => {
     try {
       const count = await setProductsBadge(
         selectedProducts.map((product) => product.id),
         { tag: '', badgeColor: '' },
-        { sub: { subTag: '', subBadgeColor: '' } },
       )
       setBatchBadgeOpen(false)
       clearSelection()
-      showToast?.(`已清空 ${count} 件商品的角标`, 'default')
+      showToast?.(`已清空 ${count} 件商品的标签`, 'default')
     } catch (err) {
       showToast?.(err.message, 'error')
     }
@@ -1959,7 +1952,6 @@ export default function ProductsPage() {
         open={batchBadgeOpen}
         products={selectedProducts}
         columnMissing={getBadgeColumnStatus() === 'missing'}
-        subColumnMissing={getSubBadgeStatus() === 'missing'}
         onClose={() => setBatchBadgeOpen(false)}
         onApply={handleBatchBadge}
         onClear={handleBatchBadgeClear}
@@ -2205,56 +2197,53 @@ function SingleDeleteDialog({ open, product, onCancel, onConfirm }) {
  * 3. 这两种写法各会落到第几行、有几件会看不见，**逐个数字列出来**。
  *    不说的话，运营第二天会来问"我设的黑五怎么没显示"。
  */
-function BatchBadgeDialog({
-  open,
-  products,
-  columnMissing,
-  subColumnMissing,
-  onClose,
-  onApply,
-  onClear,
-}) {
+function BatchBadgeDialog({ open, products, columnMissing, onClose, onApply, onClear }) {
   const [text, setText] = useState('')
   const [color, setColor] = useState('')
-  /* 默认写第二行（普通标）：它能和已有的大促标并存，是最不容易出错的写法。 */
-  const [mode, setMode] = useState('append')
-  /* 第二行模式下可以顺手写一枚大促标（第一行）。默认**不参与**：没勾就写空
-   * 会把运营早上填好的黑五标一次清掉。 */
-  const [subOn, setSubOn] = useState(false)
-  const [subText, setSubText] = useState('')
-  const [subColor, setSubColor] = useState('')
+  /* 大促标签是**独立开关**：不勾就完全不碰 `sub_tag`，勾了才会写（空文字 =
+   * 清空）。这是"改运营标签不会顺手清掉活动名"的 UI 那一半保证。 */
+  const [campaignOn, setCampaignOn] = useState(false)
+  const [campaign, setCampaign] = useState('')
+  const [campaignColor, setCampaignColor] = useState('')
   const [busy, setBusy] = useState(false)
 
   const count = products.length
   const draft = normaliseBadgeDraft({ text, color })
-  /* 落位统计跟着模式变：覆盖写的是第一行的活动标，几乎每一件都能看见。 */
-  const placement = placementCountsOf(products, Date.now(), { mode })
-  const overwrite = mode === 'overwrite'
   const pickedColor = normaliseBadgeColor(color)
-  const pill = badgeStyle(pickedColor)
-  const subDraft = normaliseSubBadgeDraft({ text: subText, color: subColor })
-  const subPill = badgeStyle(normaliseBadgeColor(subColor))
+  const tags = draft.tag ? draft.tag.split(', ') : []
+  const campaignDraft = normaliseCampaignDraft({ text: campaign, color: campaignColor })
+  const pickedCampaignColor = normaliseBadgeColor(campaignColor)
+  const plan = planBadgeApply({
+    tags: text,
+    color,
+    campaign,
+    campaignColor,
+    writeCampaign: campaignOn,
+  })
+  const canApply = Boolean(plan.badge || plan.sub) && !busy
 
-  /* 每次打开都从空白开始：上一次的黑五不该成为下一次的默认值。 */
+  /* 每次打开都从空白开始：上一次的标签不该成为下一次的默认值。 */
   useEffect(() => {
     if (!open) return
     setText('')
     setColor('')
-    setMode('append')
-    setSubOn(false)
-    setSubText('')
-    setSubColor('')
+    setCampaignOn(false)
+    setCampaign('')
+    setCampaignColor('')
     setBusy(false)
   }, [open])
 
-  /* `undefined` = 这一次完全不碰大促标那一列（见 badgeWriteFor）。 */
-  const sub = !overwrite && subOn && !subColumnMissing ? subDraft : undefined
-
   const apply = async () => {
-    if ((!draft.tag && !sub) || busy) return
+    if (!canApply) return
     setBusy(true)
     try {
-      await onApply(draft, sub, mode)
+      await onApply({
+        tags: text,
+        color,
+        campaign,
+        campaignColor,
+        writeCampaign: campaignOn,
+      })
     } finally {
       setBusy(false)
     }
@@ -2271,50 +2260,16 @@ function BatchBadgeDialog({
   }
 
   return (
-    <Modal open={open} onClose={onClose} title="批量改角标" maxWidth="max-w-md">
+    <Modal open={open} onClose={onClose} title="批量设置标签" maxWidth="max-w-md">
       <div className="px-5 pb-5 pt-5 sm:px-6">
         <p className="text-[11.5px] leading-relaxed text-charcoal-light">
           给 <span className="font-medium text-charcoal">{count} 件商品</span>
-          统一设置角标。只写角标文字和颜色两列 —— 价格、秒杀、库存原样不动。
+          统一设置运营标签。只写标签和颜色两列 —— 价格、秒杀、库存原样不动。
         </p>
-
-        {/* ── 写哪一行 ──
-            前台两行**都是文字角标**：第一行身份（大促标 / Limited Deal）、
-            第二行运营标签；折扣不再是角标（手机端第二行会压住商品图）。所以
-            顺序是"先定行、再写字"。以前是先写字再选"追加/覆盖"，而覆盖其实
-            只写了第二行的槽位 —— 运营选完覆盖发现没变，只会怀疑功能坏了。 */}
-        <div className="mt-4 space-y-1.5">
-          {BADGE_WRITE_MODES.map((option) => {
-            const active = mode === option.id
-            return (
-              <label
-                key={option.id}
-                className={`flex cursor-pointer items-start gap-2 rounded-xl px-3 py-2.5 transition ${
-                  active ? 'bg-cream-dark/70 ring-1 ring-charcoal/15' : 'hover:bg-cream-dark/40'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="batch-badge-mode"
-                  value={option.id}
-                  checked={active}
-                  onChange={() => setMode(option.id)}
-                  className="mt-0.5 h-3.5 w-3.5 accent-charcoal"
-                />
-                <span className="min-w-0">
-                  <span className="text-[12px] font-medium text-charcoal">{option.label}</span>
-                  <span className="mt-0.5 block text-[10.5px] leading-relaxed text-charcoal-light">
-                    {t(option.hint)}
-                  </span>
-                </span>
-              </label>
-            )
-          })}
-        </div>
 
         <label className="mt-4 block">
           <span className="text-[10px] font-medium uppercase tracking-wider text-charcoal-light">
-            {overwrite ? '活动标文字（第一行）' : '普通标文字（第二行）'}
+            标签文字
           </span>
           <input
             type="text"
@@ -2324,15 +2279,19 @@ function BatchBadgeDialog({
               if (event.key === 'Enter') apply()
             }}
             maxLength={BATCH_BADGE_MAX}
-            placeholder="例如 Black Friday"
-            aria-label="Batch badge text"
+            placeholder="例如 Bestseller, New"
+            aria-label="Batch badge tags, comma separated"
             className="input-field mt-1 text-[13px]"
           />
+          <span className="mt-1 block text-[10.5px] leading-relaxed text-charcoal-light">
+            多个标签用逗号、顿号或竖线分隔，最多 {BATCH_BADGE_MAX_TAGS} 枚。
+            前台按顺序显示成并排的小徽章。
+          </span>
         </label>
 
         <div className="mt-2 flex flex-wrap gap-1.5">
           {BATCH_BADGE_QUICK_PICKS.map((pick) => {
-            const on = text === pick
+            const on = text.trim() === pick
             return (
               <button
                 key={pick}
@@ -2351,7 +2310,7 @@ function BatchBadgeDialog({
 
         <div className="mt-4">
           <span className="text-[10px] font-medium uppercase tracking-wider text-charcoal-light">
-            颜色
+            文字颜色
           </span>
           <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
             {BADGE_COLOR_PRESETS.map((preset) => {
@@ -2371,8 +2330,8 @@ function BatchBadgeDialog({
               )
             })}
 
-            {/* 任意颜色，不限于这六个：系统取色器只有一次点击的距离，文字色
-                按底色亮度算（utils/badge.js），所以随便挑一个十六进制也读得清。 */}
+            {/* 任意颜色：系统取色器只有一次点击的距离。徽章是线框样式，这个
+                颜色会同时作用于边框和文字（无底色），所以深色更好读。 */}
             <label
               className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-white text-[11px] text-charcoal-light ring-1 ring-charcoal/15 transition hover:ring-charcoal/35"
               title="Pick any colour"
@@ -2399,217 +2358,145 @@ function BatchBadgeDialog({
           </div>
         </div>
 
-        <div className="mt-4 flex items-center gap-2 rounded-xl bg-cream-dark/60 px-3 py-2.5">
-          <span className="text-[10px] uppercase tracking-wider text-charcoal-light">预览</span>
-          <span
-            style={pill || undefined}
-            className={`max-w-[70%] truncate rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide ${
-              pill ? '' : 'bg-charcoal/80 text-cream'
-            }`}
-          >
-            {draft.tag || '角标文字'}
-          </span>
-          {draft.tag.length >= BATCH_BADGE_MAX && (
-            <span className="text-[10px] text-amber-700">已截断到 {BATCH_BADGE_MAX} 字</span>
-          )}
-        </div>
-
-        {/* 落位统计：这一块是"点完到底看得见几件"的答案。第二行模式里，正在
-            秒杀的商品第一行是 Limited Deal，新标只能排第二行 —— 但**看得见**，
-            所以这里老老实实写"第二行"，不再骗人说什么"被折扣挤掉"。 */}
-        <div className="mt-2 grid grid-cols-3 gap-2">
-            <div className="rounded-xl bg-emerald-50 px-2.5 py-2 ring-1 ring-emerald-200/60">
-              <div className="text-[16px] font-semibold tabular-nums text-emerald-700">
-                {placement.first}
-              </div>
-              <div className="text-[10px] text-emerald-800/70">显示在第一行</div>
-            </div>
-            <div className="rounded-xl bg-cream-dark/60 px-2.5 py-2 ring-1 ring-charcoal/10">
-              <div className="text-[16px] font-semibold tabular-nums text-charcoal-light">
-                {placement.second}
-              </div>
-              <div className="text-[10px] text-charcoal-light/70">排在第二行</div>
-            </div>
-            <div className="rounded-xl bg-amber-50 px-2.5 py-2 ring-1 ring-amber-200/60">
-              <div className="text-[16px] font-semibold tabular-nums text-amber-700">
-                {placement.hidden}
-              </div>
-              <div className="text-[10px] text-amber-800/70">完全看不见</div>
-            </div>
-        </div>
-
-        {/* ── 大促标（sub_tag） ──
-            只在"第二行"模式下出现：第一行模式本身写的就是大促标，再给一个
-            同义输入框只会让人猜"这两个是不是打架"。不勾选就完全不碰那一列。 */}
-        {!overwrite && (
+        {/* ── 大促标签（sub_tag） ──
+            独立开关：不勾选就完全不碰那一列。它不上卡片，只决定这批商品进
+            哪个大促专区 Tab（黑五换网一改的就是它）。 */}
         <div className="mt-4 rounded-xl bg-white p-3 ring-1 ring-charcoal/5">
           <label className="flex cursor-pointer items-start gap-2">
             <input
               type="checkbox"
-              checked={subOn}
-              onChange={(event) => setSubOn(event.target.checked)}
-              aria-label="Also update secondary badge"
+              checked={campaignOn}
+              onChange={(event) => setCampaignOn(event.target.checked)}
+              aria-label="Also update campaign tag"
               className="mt-0.5 h-3.5 w-3.5 accent-charcoal"
             />
             <span className="min-w-0">
               <span className="block text-[12px] font-medium text-charcoal">
-                同时设置第一行的大促标（如 Black Friday）
+                同时修改大促标签
               </span>
               <span className="mt-0.5 block text-[10.5px] leading-relaxed text-charcoal-light">
-                不勾选则完全不动这一列。大促标永远第一行 —— 秒杀派生的 Limited Deal 压不住它。
+                只决定商品进哪个大促专区 Tab，不显示在卡片上。不勾选就保持原样。
               </span>
             </span>
           </label>
 
-          {subOn && (
-            <div className="mt-2.5 space-y-2">
+          {campaignOn && (
+            <div className="mt-3">
               <div className="flex items-center gap-1.5">
                 <input
                   type="text"
-                  value={subText}
-                  onChange={(event) => setSubText(event.target.value)}
+                  value={campaign}
+                  onChange={(event) => setCampaign(event.target.value)}
                   maxLength={BATCH_BADGE_MAX}
-                  placeholder="Black Friday"
-                  aria-label="Batch secondary badge text"
+                  placeholder="例如 Black Friday"
+                  aria-label="Batch campaign tag text"
                   className="input-field min-w-0 flex-1 text-[13px]"
                 />
                 <span
                   className="relative flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-lg ring-1 ring-charcoal/10"
-                  style={{ backgroundColor: normaliseBadgeColor(subColor) || '#2B2B2B' }}
+                  style={{ backgroundColor: pickedCampaignColor || '#2B2B2B' }}
                   title="Pick any colour"
                 >
                   <input
                     type="color"
-                    value={normaliseBadgeColor(subColor) || '#2B2B2B'}
-                    onChange={(event) => setSubColor(event.target.value.toUpperCase())}
-                    aria-label="Batch secondary badge colour"
+                    value={pickedCampaignColor || '#2B2B2B'}
+                    onChange={(event) => setCampaignColor(event.target.value)}
+                    aria-label="Batch campaign tag colour"
                     className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                   />
                 </span>
-                <span
-                  style={subPill || undefined}
-                  className={`max-w-[30%] shrink-0 truncate rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                    subPill ? '' : 'bg-charcoal/80 text-cream'
-                  }`}
-                >
-                  {subDraft.subTag || '—'}
-                </span>
               </div>
 
-              <div className="flex flex-wrap items-center gap-1">
-                {BATCH_BADGE_QUICK_PICKS.map((pick) => (
+              <div className="mt-1.5 flex flex-wrap items-center gap-1">
+                {CAMPAIGN_QUICK_PICKS.map((word) => (
                   <button
-                    key={pick}
+                    key={word}
                     type="button"
-                    onClick={() => setSubText(pick)}
-                    aria-pressed={subText === pick}
+                    onClick={() => setCampaign(word)}
+                    aria-pressed={campaign === word}
                     className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium transition ${
-                      subText === pick
+                      campaign === word
                         ? 'bg-charcoal text-cream'
                         : 'bg-cream-dark text-charcoal/70 hover:text-charcoal'
                     }`}
                   >
-                    {pick}
+                    {word}
                   </button>
                 ))}
-                {subText && (
+                {campaign && (
                   <button
                     type="button"
-                    onClick={() => setSubText('')}
+                    onClick={() => setCampaign('')}
                     className="ml-1 text-[10px] text-charcoal-light transition hover:text-charcoal"
                   >
-                    清除
+                    清空（勾选状态下才会清）
                   </button>
                 )}
               </div>
-
-              {!subDraft.subTag && (
-                <p className="text-[10px] leading-relaxed text-amber-700">
-                  文字留空会把所选商品的大促标全部清掉。
-                </p>
-              )}
-
-              {subColumnMissing && (
-                <p className="rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 ring-1 ring-amber-200">
-                  sub_tag 列不存在，大促标存不进去。先在 Supabase 跑一次
-                  supabase/11-sub-badge-deal-priority.sql。
-                </p>
-              )}
             </div>
           )}
         </div>
-        )}
 
-        {/* 第二行模式下最该说清的一件事：正在秒杀的商品，第一行是系统派生的
-            Limited Deal，标题只会出现在第二行。想让它当第一行，切到「第一行 ·
-            活动标」—— 这句话以前写成"前台看不到"，那是错的。 */}
-        {!columnMissing && mode === 'append' && placement.second > 0 && (
-          <p className="mt-3 rounded-lg bg-cream-dark/60 px-2 py-1.5 text-[10px] leading-relaxed text-charcoal-light ring-1 ring-charcoal/10">
-            其中 {placement.second} 件已经有身份（大促标 / 秒杀）：常规目录里标题排在第二行，
-            秒杀专区里它自己会升到第一行。想让「{draft.tag || '这段文字'}」直接当第一行，
-            请改选「第一行 · 活动标」。
-          </p>
-        )}
-
-        {!columnMissing && mode === 'overwrite' && (
-          <p className="mt-3 rounded-lg bg-cream-dark/60 px-2 py-1.5 text-[10px] leading-relaxed text-charcoal-light ring-1 ring-charcoal/10">
-            这段文字会写进<strong>大促标</strong>（替换原来那枚，普通标不动）。
-            进了同名专区（如 Black Friday 专区）之后它会自动隐藏 —— 整页都是这场活动，不必每张卡再挂一遍。
-          </p>
-        )}
-
-        {!columnMissing && mode === 'append' && placement.hidden > 0 && (
-          <p className="mt-3 rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 ring-1 ring-amber-200">
-            另外 {placement.hidden} 件是 Coming Soon：那枚角标独占一行，写进去也不会显示。
-          </p>
-        )}
+        {/* 预览用的就是前台那枚线框徽章：所见即所得。 */}
+        <div className="mt-4 flex flex-wrap items-center gap-1.5 rounded-xl bg-cream-dark/60 px-3 py-2.5">
+          <span className="text-[10px] uppercase tracking-wider text-charcoal-light">预览</span>
+          {tags.length ? (
+            tags.map((tag) => (
+              <span
+                key={tag}
+                style={
+                  pickedColor ? { borderColor: pickedColor, color: pickedColor } : undefined
+                }
+                className="max-w-[70%] truncate rounded-[2px] border border-charcoal/50 px-1.5 py-px text-[10px] font-semibold leading-4"
+              >
+                {tag}
+              </span>
+            ))
+          ) : (
+            <span className="text-[10.5px] text-charcoal-light/60">还没有输入标签</span>
+          )}
+        </div>
 
         {columnMissing && (
           <p className="mt-3 rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 ring-1 ring-amber-200">
-            badge_color 列不存在，颜色存不进去（文字会照常保存）。先在 Supabase 跑一次
-            supabase/07-badge-color.sql。
+            颜色暂时<strong>存不进去</strong>：数据库里没有{' '}
+            <code className="font-mono">badge_color</code> 列。先到 Supabase SQL Editor 跑一次{' '}
+            <code className="font-mono">supabase/07-badge-color.sql</code>，再刷新这个页面。
+            标签文字仍然照常保存。
           </p>
         )}
 
-        <div className="mt-5 flex items-center gap-2">
-          <button
-            type="button"
-            onClick={clear}
-            disabled={busy}
-            className="mr-auto rounded-full px-2.5 py-2 text-[11.5px] font-medium text-red-600 transition hover:bg-red-50 disabled:opacity-40"
-          >
-            清空角标
-          </button>
+        <div className="mt-5 flex gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-cream-dark px-4 py-2.5 text-[12.5px] font-medium text-charcoal/75 transition hover:text-charcoal"
+            className="flex-1 rounded-full bg-cream-dark py-2.5 text-[12px] font-medium text-charcoal/70 transition hover:text-charcoal"
           >
             取消
           </button>
           <button
             type="button"
             onClick={apply}
-            disabled={(!draft.tag && !sub) || busy}
-            className="rounded-full bg-charcoal px-4 py-2.5 text-[12.5px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+            disabled={!canApply}
+            className="flex flex-[1.6] items-center justify-center gap-1.5 rounded-full bg-accent py-2.5 text-[12px] font-medium text-white transition hover:bg-accent-dark active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {busy ? '保存中…' : `应用到 ${count} 件`}
+            {busy ? '正在应用…' : `应用到 ${count} 件`}
           </button>
         </div>
+
+        <button
+          type="button"
+          onClick={clear}
+          disabled={busy}
+          className="mt-2 w-full rounded-full py-2 text-[11px] text-charcoal-light transition hover:text-red-600 disabled:opacity-40"
+        >
+          清空这些商品的标签
+        </button>
       </div>
     </Modal>
   )
 }
 
-/* ───────────────── bulk delete ───────────────── */
-
-/**
- * Shield 2 — the circuit breaker.
- * Below 30% of the catalogue this is a normal one-click confirm. Above it the
- * selection is almost certainly a mistake (a stray "select all" on 190 rows),
- * so the confirm button is dead until the operator types the word DELETE — a
- * deliberate, keyboard-only act that a click cannot stumble into.
- */
 function BulkDeleteDialog({ open, products, totalCount, onCancel, onConfirm }) {
   const count = products.length
   const guard = computeBulkDeleteGuard(count, totalCount)

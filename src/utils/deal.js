@@ -846,6 +846,47 @@ export function badgeStackFor(
 }
 
 /**
+ * 货架上的"信任标" —— 只保留运营手填的**商品属性**标签（Bestseller / New）。
+ *
+ * 为什么不复用 `badgeStackFor`：那儿回答的是"这件商品此刻是什么货架身份"，
+ * 顺序是 大促 > 秒杀 > 预告 > 运营标。参考 Lululemon 的做法，常规货架的卡片
+ * 上不该出现 `Black Friday` / `Limited Deal`：想看大促的人会去顶部的专区，
+ * 不需要在每张商品图上贴一张活动海报。这里只回答一个问题 —— 这件的**属性**
+ * 是什么，那是运营手写的，也是真正建立信任的信息。
+ *
+ * 即便有人把活动名（`Black Friday`、`50% OFF`、或当前 Tab 的活动名）填进了
+ * `tag`，也不上卡片 —— 那是活动身份，不是商品属性。
+ *
+ * @param {object} product
+ * @param {{ campaign?: string }} [options] 当前专区的活动名（用于识别自定义活动）
+ * @returns {{ text: string, value: string, kind: 'tag' } | null}
+ */
+export function trustBadgesFor(product, { campaign = '', max = 3 } = {}) {
+  const raw = String(product?.tag ?? '').trim()
+  if (!raw) return []
+  /* 一个 `tag` 列里可以写多枚：`Bestseller, New`（逗号 / 顿号 / 竖线都认）。
+   * 分隔符是运营手写时最自然的表达，不需要为"多标签"再加一张表。 */
+  return raw
+    .split(/[,，、|]/)
+    .map((part) => part.trim())
+    .filter(Boolean)
+    .filter((text) => !isCampaignLabel(text) && !isSameCampaign(text, campaign))
+    .slice(0, max)
+    .map((text) => ({ text, value: product?.badgeColor || '', kind: 'tag' }))
+}
+
+/**
+ * 单枚版本（详情页、逻辑判断用）。
+ *
+ * @param {object} product
+ * @param {{ campaign?: string }} [options]
+ * @returns {{ text: string, value: string, kind: 'tag' } | null}
+ */
+export function trustBadgeFor(product, options) {
+  return trustBadgesFor(product, options)[0] || null
+}
+
+/**
  * 单角标视图 —— **只返回第一行**。
  *
  * 保留这个名字是因为它已经被几处"只要知道是什么身份"的地方用了。

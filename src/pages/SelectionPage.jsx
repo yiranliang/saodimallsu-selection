@@ -268,7 +268,7 @@ export default function SelectionPage() {
 
   /* The search box stays fully responsive while the grid catches up.
    *
-   * Typing used to re-filter 273 products and re-render 24 cards on every
+   * Typing used to re-filter 273 products and re-render 25 cards on every
    * keystroke, synchronously, on the same thread that has to echo the character
    * into the input. `useDeferredValue` lets React paint the input first and
    * re-run the filter at lower priority. On a slow phone that is the difference
@@ -279,9 +279,9 @@ export default function SelectionPage() {
   const deferredQuery = useDeferredValue(query)
 
   /* ── 首页推荐位（Featured for You）──
-   * 24 件、按分类加权，纯前端采样（见 utils/featured.js）：每个分类先保 1–2 件，
-   * 剩下的名额随机补满。**只读目录**，不碰 `sort_order`，所以下方网格的顺序
-   * 仍然完全由后台拖拽决定。
+   * 25 件，纯前端采样（见 utils/featured.js）：**整库洗牌取前 25 件**，不按
+   * 分类保底 —— 分类加权会让推荐位在几次 Shuffle 之后变得可预测。**只读目录**，
+   * 不碰 `sort_order`，所以下方网格的顺序仍然完全由后台拖拽决定。
    *
    * 只在 All + 没搜索 + 不在秒杀专区时出现：搜索时她要的是结果，不是又一次
    * 随机；专区里已经按紧迫度 / 折扣排好了，再叠一层推荐会互相打架。
@@ -344,7 +344,7 @@ export default function SelectionPage() {
   }, [catalogue, dealSearch, isDeals, isCampaign, dealBucket, activeCategory, deferredQuery])
 
   /* Badge first, THEN page. The order of those two steps is the whole feature:
- * slicing first would only shuffle the 24 cards already on screen, so a badged
+ * slicing first would only shuffle the 25 cards already on screen, so a badged
  * style sitting at sort_order 191 would stay invisible until eight "Load more"
  * clicks — priority that nobody ever sees is not priority. Measured: three of
  * the 7 badged styles are at rank 191/194/196.
@@ -636,8 +636,10 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
           onIncrement={increment}
           onDecrement={decrement}
           onOpenDetail={setDetailProduct}
-          /* 这张网格在哪个面上：决定价格行、角标栈和倒计时。
-             大促的角标一律不挂活动身份，常规秒杀挂 Limited Deal（见 badgeStackFor）。 */
+          /* 这张网格在哪个面上：决定价格行和倒计时。
+             卡片上的角标**不再看这个**：按 Lululemon 的做法，图片左上角只挂
+             运营手填的属性标（Bestseller / New），大促和秒杀身份一律不上图
+             （见 `trustBadgeFor`）。`zone` 仍然传给卡片，用于价格行。 */
           zone={
             isCampaign
               ? BADGE_ZONE.CAMPAIGN
@@ -647,9 +649,9 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
           }
           /* 只有常规秒杀那屏需要跟着时钟走。 */
           now={isDeals ? dealNow : undefined}
-          /* 大促专区的名字：`badgeStackFor` 用它比对**自定义**活动名（词表认得
-             的 Black Friday / Cyber Monday 不用它也摘得掉）。常规货架上
-             Black Friday 不是重复，是这件商品的关键信息。 */
+          /* 大促专区的名字：`trustBadgeFor` 用它比对**自定义**活动名，避免
+             运营把 `Spring Refresh` 这类名字填进 tag 之后又被当成属性标显示。
+             词表认得的 Black Friday / Cyber Monday 不用它也摘得掉。 */
           campaign={isCampaign ? campaignTabLabel : ''}
           atCap={atCap}
         />

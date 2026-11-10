@@ -59,8 +59,8 @@ check('empty → no srcset', imageSrcSet(''), undefined)
 
 /* ── 4. sizes ── */
 console.log('\n[4] sizes hints')
-check('3 breakpoints match the grid', CARD_IMAGE_SIZES.split(',').length, 3)
-check('phones get ~half the viewport', /46vw/.test(CARD_IMAGE_SIZES), true)
+check('4 breakpoints match the grid', CARD_IMAGE_SIZES.split(',').length, 4)
+check('phones get ~half the viewport', /48vw/.test(CARD_IMAGE_SIZES), true)
 
 console.log(`\n${'─'.repeat(44)}`)
 console.log(`Passed ${passed}${failed ? `, failed ${failed}` : ''}`)

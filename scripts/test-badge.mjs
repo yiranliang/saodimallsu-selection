@@ -22,6 +22,7 @@ import {
   normaliseBadgeColor,
 } from '../src/utils/badge.js'
 import { normalizeProduct, productToRow, rowToProduct } from '../src/store/mapping.js'
+import { trustBadgeFor, trustBadgesFor } from '../src/utils/deal.js'
 
 let passed = 0
 let failed = 0
@@ -191,6 +192,52 @@ check('no colour at all is not a match', badgeTemplateMatch('Trending', ''), nul
 check('an unparseable colour is not a match', badgeTemplateMatch('Trending', 'violet'), null)
 check('a non-string tag is not a match', badgeTemplateMatch(null, trending.value), null)
 check('free text that happens to share a prefix is not a match', badgeTemplateMatch('Trending 2026', trending.value), null)
+
+/* ── 8. 货架上的"信任标" ──
+ *
+ * 参考 Lululemon：常规货架的卡片上只留运营手填的属性标（Bestseller / New），
+ * 大促/秒杀身份（Black Friday / Limited Deal）一律不上图。规则在
+ * `trustBadgeFor` 里，卡片和详情弹层共用同一个函数 —— 这里锁住边界。 */
+console.log('\n[8] trust badge (attributes only)')
+
+const trust = (tag, color = '', campaign = '') =>
+  trustBadgeFor({ tag, badgeColor: color }, { campaign })
+
+check('a plain attribute tag is kept', trust('Bestseller').text, 'Bestseller')
+check('New is kept too', trust('New').text, 'New')
+check('the colour travels with it', trust('Bestseller', '#1F7A55').value, '#1F7A55')
+check('no colour means the default ink', trust('Bestseller').value, '')
+check('an empty tag has no badge', trust(''), null)
+check('a whitespace tag has no badge', trust('   '), null)
+check('a missing product has no badge', trustBadgeFor(null), null)
+
+check('Black Friday is a campaign, not an attribute', trust('Black Friday'), null)
+check('Cyber Monday is dropped', trust('Cyber Monday'), null)
+check('a percentage is a campaign', trust('50% OFF'), null)
+check('"off" language is a campaign', trust('20% off everything'), null)
+check('a custom campaign name is dropped via the zone', trust('Spring Refresh', '', 'Spring Refresh'), null)
+check('the same words without that zone are kept', trust('Spring Refresh', '', 'Black Friday').text, 'Spring Refresh')
+check('Limited Deal typed into tag is still a deal name', trust('Limited Deal'), null)
+
+/* 一个 tag 列里写多枚：`Bestseller, New`。 */
+const multi = trustBadgesFor({ tag: 'Bestseller, New' })
+check('a comma-separated tag becomes two badges', multi.length, 2)
+check('order is preserved', multi.map((b) => b.text), ['Bestseller', 'New'])
+check('the ideographic comma works too', trustBadgesFor({ tag: 'New、Bestseller' }).length, 2)
+check(
+  'campaign words inside the list are dropped',
+  trustBadgesFor({ tag: 'Bestseller, Black Friday' }).map((b) => b.text),
+  ['Bestseller'],
+)
+check('a list of nothing but campaigns is empty', trustBadgesFor({ tag: 'Black Friday, 50% OFF' }), [])
+check('at most three badges', trustBadgesFor({ tag: 'A, B, C, D, E' }).length, 3)
+
+/* 秒杀窗口本身不该凭空造出一枚标 —— 那正是这一轮要去掉的东西。 */
+check(
+  'a live deal with no tag has no trust badge',
+  trustBadgeFor({ tag: '', saleStart: '2026-11-01 00:00', saleEnd: '2026-12-01 23:59' }),
+  null,
+)
 
 console.log(`\n${'─'.repeat(44)}`)
 console.log(`Passed ${passed}${failed ? `, failed ${failed}` : ''}`)

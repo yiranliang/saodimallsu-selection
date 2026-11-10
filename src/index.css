@@ -46,10 +46,12 @@
   /* 商品卡片 */
   /* 商品卡：白底、无边框。灰边会让 contain 的留白显形成一块面板，
      而页面底色是 bg-cream，白色卡片自己就有边界。hover 只加投影。 */
+  /* 商品卡片：**没有卡片**。
+   * 参考 Free People 的做法 —— 图片和文字直接落在页面底色上，没有白底、
+   * 没有圆角、没有阴影。白底+圆角+阴影会把每一件商品装进一个"盒子"里，
+   * 网格看起来就碎；去掉之后照片自己就是唯一的主角。 */
   .product-card {
-    @apply bg-white rounded-2xl overflow-hidden
-           transition-all duration-300
-           hover:shadow-md cursor-pointer;
+    @apply cursor-pointer;
   }
 
   /* 输入框 */

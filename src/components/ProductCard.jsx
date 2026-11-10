@@ -10,11 +10,11 @@ import { badgeStyle } from '../utils/badge.js'
 import { isTeaser } from '../utils/teaser.js'
 import {
   BADGE_ZONE,
-  badgeStackFor,
   cardCountdown,
   dealPhase,
   dealPriceInfo,
   dealWindow,
+  trustBadgesFor,
 } from '../utils/deal.js'
 
 /**
@@ -92,23 +92,16 @@ function ProductCard({
   const { all: allSoldOut } = soldOutSummary(product, asinLookup)
   const orderable = specTypes.length === 0 || !allSoldOut
 
-  /* 左上角的角标栈 —— 最多两行（规则全部在 `badgeStackFor`，卡片和详情
-   * 弹层共用，避免两边各写一遍然后漂移）。
+  /* 运营徽章 —— 图片上**不再有任何角标**（0 遮挡），徽章挪进信息区，用极细
+   * 线框渲染。
    *
-   * **面不同，内容不同**：
-   *   - 常规货架：身份 + 强推标，**永不出现折扣** —— 折扣在手机上是第二行，
-   *     正好压住商品图。
-   *   - ⚡ 常规秒杀：`Limited Deal` 讲身份与紧迫度，活动标（Black Friday）不挂。
-   *   - 🔥 大促：**所有活动身份都不挂**（Limited Deal 也不挂，整区都在大促），
-   *     只留 `NEW` / `Highly Recommend` 这类非活动类运营标。
-   *   - ACC 在卡片上不出现 —— 佣金是点进去才判断的事，详情页有一整块。
-   *
-   * `campaign` 是这个专区的活动名（后台可改的那个 Tab 名）。词表认得的活动名
-   * 不用它也摘得掉，它负责的是**自定义**活动（`Spring Refresh`）—— 那种名字
-   * 只能靠和当前 Tab 比对。判定在 `badgeStackFor` 里，卡片只负责把名字带过去。 */
+   * 只认运营手填的属性标（Bestseller / New）。大促/秒杀身份（Black Friday /
+   * Limited Deal）一律不显示：想看大促的人会去顶部专区，货架上不该被活动标
+   * 刷屏。`campaign` 仍要传进去 —— 自定义活动名（`Spring Refresh`）没有词表
+   * 可认，只能靠和当前 Tab 比对来识别并隐藏。 */
   const teaser = isTeaser(product)
   const nowValue = now ?? Date.now()
-  const badges = badgeStackFor(product, nowValue, { zone, campaign })
+  const trustBadges = trustBadgesFor(product, { campaign })
   /* 价格行只在两个秒杀专区出现：货架上每件都在被比较，价格要到专区里才有意义。 */
   const showPrice = zone !== BADGE_ZONE.CATALOGUE
 
@@ -159,7 +152,7 @@ function ProductCard({
 
           The hover zoom is safe with `contain` — it grows into its own padding
           first, so nothing is cut off. */}
-      <div className="relative aspect-square overflow-hidden bg-white">
+      <div className="relative aspect-square overflow-hidden bg-white p-0">
         {/* 320/640 instead of whatever the listing page asked for: a tile is
             ~169 CSS px on a phone, so the 741 px file was 3× the pixels and 3×
             the bytes. `sizes` matches ProductGrid's columns exactly — overstate
@@ -172,36 +165,6 @@ function ProductCard({
           alt={product.name}
           className="h-full w-full object-contain transition-transform duration-500 ease-out group-hover:scale-105"
         />
-
-        {(badges.length > 0 || allSoldOut) && (
-          /* 纵向 Flex，6px 间距（gap-1.5）：两行之间留白足够，又不会把照片
-             压掉太多。`max-w` 按卡片宽度算，长文案一律截断 —— 一枚角标撑到
-             照片中间比没有角标更难看。 */
-          <div
-            data-badge-stack
-            className="absolute left-2.5 top-2.5 flex max-w-[calc(100%-1.25rem)] flex-col items-start gap-1.5"
-          >
-            {badges.map((entry, index) => {
-              const style = badgeStyle(entry.value)
-              return (
-                <span
-                  key={`${entry.kind}-${index}`}
-                  style={style || undefined}
-                  className={`max-w-full truncate rounded-full px-2 py-0.5 text-[10px] font-medium tracking-wide ${
-                    style ? '' : 'bg-charcoal/80 text-cream backdrop-blur-sm'
-                  }`}
-                >
-                  {entry.text}
-                </span>
-              )
-            })}
-            {allSoldOut && (
-              <span className="rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-semibold tracking-wide text-charcoal/70 shadow-sm backdrop-blur-sm">
-                Sold out
-              </span>
-            )}
-          </div>
-        )}
 
         <button
           type="button"
@@ -228,22 +191,19 @@ function ProductCard({
         {/* Units badge — the only place the card shows a count when there are
             several variants, since the stepper is replaced by Manage */}
         {!single && units > 0 && (
-          <span className="absolute bottom-2.5 right-2.5 rounded-full bg-charcoal/85 px-2 py-0.5 text-[10px] font-semibold tabular-nums text-cream backdrop-blur-sm">
+          <span className="absolute bottom-3 right-3 rounded-full bg-white/90 px-2 py-0.5 text-[10px] font-medium tabular-nums text-charcoal shadow-sm">
             × {units}
           </span>
         )}
       </div>
 
       {/* ── info ── */}
-      <div className="flex flex-1 flex-col p-3 sm:p-4">
-        {/* Three lines on a phone, two from sm up. A card is only ~169px wide
-            there, so two lines held about 20 characters — long names read as a
-            single chopped-off line. The min-height matches the clamp so cards
-            with a short name still occupy the same box and the grid rows stay
-            aligned. `title` gives desktop users the full name on hover. */}
+      <div className="flex flex-1 flex-col pb-1 pt-2.5">
+        {/* 标题：字号 14/15px、行距收紧，跟图片上那枚 11px 的标拉开两级 ——
+            读起来是"标题 + 小标"，而不是两块同重的文字。 */}
         <h3
           title={product.name}
-          className="line-clamp-3 min-h-[54px] text-[13px] font-medium leading-snug text-charcoal sm:line-clamp-2 sm:min-h-[42px] sm:text-[15px]"
+          className="line-clamp-2 text-[14px] font-medium leading-[1.35] tracking-[-0.01em] text-charcoal sm:text-[15px]"
         >
           {product.name}
         </h3>
@@ -326,7 +286,36 @@ function ProductCard({
           )}
         </div>
 
-        <div className="mt-auto flex items-center justify-end pt-2.5">
+        {/* 运营徽章：图片上已清空，改到这里用**极细线框**显示 —— 无底色、
+            10px、深灰字、2px 小圆角。`flex-wrap` + `gap-1`：一个 tag 里写
+            `Bestseller, New` 会并排成两枚，写不下的自然换行。 */}
+        {trustBadges.length > 0 && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+            {trustBadges.map((badge) => {
+              const custom = badgeStyle(badge.value)
+              return (
+                <span
+                  key={badge.text}
+                  style={
+                    custom
+                      ? { borderColor: custom.backgroundColor, color: custom.backgroundColor }
+                      : undefined
+                  }
+                  className="max-w-full truncate rounded-[2px] border border-charcoal/50 px-1.5 py-px text-[10px] font-semibold leading-4"
+                >
+                  {badge.text}
+                </span>
+              )
+            })}
+          </div>
+        )}
+
+        {/* 转化按钮：**没有按钮**。
+            参考独立站的做法 —— 一行带细下划线的深灰文字，悬停时下划线变深。
+            实心黑胶囊会把视线从照片上抢走，而照片才是这张卡的主角。
+            触摸面积靠 `min-h-[44px]` + 左右各 4px 的不可见内边距撑住，
+            手机上点起来和原来的胶囊一样大，只是看起来轻。 */}
+        <div className="mt-auto flex items-center pt-1">
           {single ? (
             <QuantityStepper
               qty={lines[0].qty}
@@ -338,26 +327,21 @@ function ProductCard({
             <button
               type="button"
               onClick={openDetail}
-              className="flex w-full items-center justify-center gap-1 rounded-full bg-cream-dark px-3 py-1.5 text-[11px] font-medium text-charcoal transition hover:bg-cream-dark/70 active:scale-95 sm:text-xs"
+              className="-ml-1 inline-flex min-h-[44px] items-center gap-1 px-1 text-[11.5px] font-medium text-charcoal underline decoration-charcoal/25 underline-offset-4 transition hover:decoration-charcoal/60 active:opacity-60 sm:text-xs"
             >
               Manage
-              <span className="tabular-nums text-charcoal/50">{lines.length}</span>
+              <span className="tabular-nums text-charcoal/45">{lines.length}</span>
               <ChevronDown className="h-3 w-3" />
             </button>
           ) : !orderable ? (
-            <button
-              type="button"
-              disabled
-              aria-disabled="true"
-              className="w-full cursor-not-allowed rounded-full bg-cream-dark/60 px-3 py-1.5 text-[11px] font-medium text-charcoal/40 sm:text-xs"
-            >
+            <span className="inline-flex min-h-[44px] items-center text-[11.5px] font-medium text-charcoal/35 sm:text-xs">
               Sold out
-            </button>
+            </span>
           ) : (
             <button
               type="button"
               onClick={handleToggle}
-              className="w-full rounded-full bg-charcoal px-3 py-1.5 text-[11px] font-medium text-cream transition-all duration-200 hover:bg-charcoal/85 active:scale-90 sm:text-xs"
+              className="-ml-1 inline-flex min-h-[44px] items-center px-1 text-[11.5px] font-medium text-charcoal underline decoration-charcoal/25 underline-offset-4 transition hover:decoration-charcoal/60 active:opacity-60 sm:text-xs"
             >
               {specTypes.length > 0 ? 'Choose options' : 'Select'}
             </button>

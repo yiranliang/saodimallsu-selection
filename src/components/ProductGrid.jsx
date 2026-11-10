@@ -1,10 +1,12 @@
 import ProductCard from './ProductCard.jsx'
 import { Bag } from './icons.jsx'
 import { brandConfig } from '../data/products.js'
+import { PAGE_SIZE } from '../utils/catalogue.js'
 
-/** How many placeholders the skeleton draws. 10 fills a phone (2×5) without
- *  painting a wall of grey on a desktop 4-column grid. */
-const SKELETON_CARDS = 10
+/** 骨架屏画多少块：和一次加载的页数一致（25）。宽屏 5 列正好 5 行整，
+ *  手机 2 列是 12 行半 —— 骨架比真实内容多一点也不会有"跳一下"的错觉，
+ *  少才会。 */
+const SKELETON_CARDS = PAGE_SIZE
 
 /**
  * Product grid
@@ -99,7 +101,7 @@ export default function ProductGrid({
     <div className="mx-auto max-w-7xl px-5 sm:px-8">
       {/* `fade-up` fires once, when this element replaces the skeleton. CSS only —
           no library, no image, no extra request. */}
-      <div className="fade-up grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
+      <div className="fade-up grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-4 sm:gap-y-8 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
         {products.map((product) => (
           <ProductCard
             key={product.id}
@@ -149,14 +151,15 @@ function GridSkeleton() {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-3 sm:gap-4 md:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6" aria-hidden="true">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-4 sm:gap-y-8 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" aria-hidden="true">
         {Array.from({ length: SKELETON_CARDS }).map((_, i) => (
-          <div key={i} className="overflow-hidden rounded-2xl bg-white">
+          /* 骨架和真实卡片同一个版式：没有白底卡片、白框只在图片里、文字区
+             没有左右内边距 —— 否则加载完成的一瞬间会跳一下。 */
+          <div key={i}>
             <div className="aspect-square animate-pulse bg-cream-dark" />
-            <div className="space-y-2 p-3 sm:p-4">
+            <div className="space-y-2 pb-1 pt-2.5">
               <div className="h-3 w-4/5 animate-pulse rounded bg-cream-dark" />
               <div className="h-2.5 w-3/5 animate-pulse rounded bg-cream-dark" />
-              <div className="h-6 w-full animate-pulse rounded-full bg-cream-dark" />
             </div>
           </div>
         ))}

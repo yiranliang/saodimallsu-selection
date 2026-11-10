@@ -163,9 +163,10 @@
 | **极简骨架屏** | `src/pages/SelectionPage.jsx`（`holdSkeleton`）+ `index.html` 的 boot ring | 首屏立刻出骨架，不做固定 450 ms 等待；数据到齐后短暂 hold 再淡出，避免闪一下 |
 | **首页推荐位 Featured for You** | `src/utils/featured.js`、`src/components/FeaturedSection.jsx` | 网格上方 24 件；种子在挂载时取一次，只有「Shuffle」按钮会换（纯本地重算，不发请求），滚动/加购不重洗。**全库纯随机**（洗牌后取前 24，不按分类保底 —— 保底会让小类目每次都是同一件）。**只读目录、不碰 `sort_order`**，下方网格顺序不变；只在 All + 无搜索时出现 |
 | **秒杀系统（两个专区）** | `supabase/09-deal.sql`、`supabase/13-campaign.sql`、`src/utils/deal.js`、`src/utils/dealImport.js` | 导入/批量开秒杀时**必选归属**：`is_campaign=false` → ⚡ `Limited Deals`（按紧迫度、卡片带倒计时）；`true` → 🔥 大促 Tab（名字读 `settings.deals_tab_label`，按折扣区间 chip 过滤、按折扣从高到低排）。两个 Tab 计数为 0 时各自隐藏 |
-| **双角标堆叠** | `src/utils/deal.js` 的 `badgeStackFor()` + `BADGE_ZONE`、`supabase/11-sub-badge-deal-priority.sql` | 第一行是**身份**（大促标 / Limited Deal），第二行是**决定**（运营手填 `sub_tag`）。`sale_*` 是实时算出的状态，`sub_tag` 是人填的决定——所以是两列，不是塞进同一个 `tag`。两个秒杀专区对活动标的处理**相反**：常规区摘掉活动标、统一显示 `Limited Deal`；大促区反过来，**显示商品自己的活动标（Black Friday）、永不显示 `Limited Deal`**。归属判定见 `isCampaignDeal()`：`is_campaign` 优先，`sub_tag` / `tag` 里的**有名字的活动**兜底 |
+| **运营标签（前台）** | `src/utils/deal.js` 的 `trustBadgesFor()`、`src/components/ProductCard.jsx` | **图片上不挂任何角标**。运营手填的 `tag` 允许多枚（`Bestseller, New`，逗号/顿号/竖线分隔，最多 3 枚），渲染成信息区的**线框小徽章**（10px、深灰、无底色）。大促/秒杀身份（`Black Friday`、`Limited Deal`、当前专区名）一律**不上卡片**——想看大促去顶部专区。`badgeStackFor()` / `BADGE_ZONE` 仍然存在（详情页文案、测试用），但卡片不再调用它。`sub_tag` 只由秒杀导入维护，后台 UI 已不再暴露 |
 | **后台全中文** | `src/i18n/admin.js` + `scripts/test-admin-i18n.mjs` | 新增后台文案必须中文；漏翻会被测试拦下 |
-| **批量改角标 / 分类** | `src/utils/batchBadge.js`、`src/utils/batchOps.js` | 支持快捷模板（Black Friday / Cyber Monday / 50% OFF）、颜色、批量分类；有 `max 32` 等约束与"会被遮住多少"的预览 |
+| **后台改大促标签（sub_tag）** | `src/utils/batchBadge.js` 的 `normaliseCampaignDraft` / `planBadgeApply`、`src/store/productStore.js` 的 `setProductsBadge` | 编辑器和批量弹窗都能单独改 `sub_tag`：它**不上卡片**，只决定商品进哪个大促专区 Tab（`isCampaignDeal`）。两个字段互相独立、可只写其一：传 `undefined` = 完全不碰那一列，所以"改运营标签"永远清不掉大促标签（反之亦然）。批量弹窗里大促标签是一个**独立勾选框** |
+| **批量设置标签 / 分类** | `src/utils/batchBadge.js`、`src/utils/batchOps.js` | 运营标签只有一个文本输入框 + 颜色：多个写成 `Bestseller, New`（去重、最多 3 枚），写库只碰 `tag` + `badge_color`；另有"清空所有标签"。批量分类见 `CATEGORY_MODES` |
 | **图片懒加载** | `src/components/ProductImage.jsx`（`loading` / `decoding`）+ `src/utils/image.js`（`sizedImage` / `imageSrcSet`） | 变体图与列表图都走 srcset；详情用大图尺寸 |
 | 商品拖拽排序 | `src/pages/admin/ProductsPage.jsx` + `reorder_products` RPC | 主路径是拖拽，另有置顶/置底/上移/下移/批量；筛选状态下拖拽关闭 |
 | 改名迁移 | `src/utils/variantRename.js` | 改颜色/尺码名连带迁移 asins / sold_out_variants / variant_images |
