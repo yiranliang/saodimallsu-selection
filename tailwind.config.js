@@ -18,16 +18,20 @@ export default {
           raw: '(min-width: 1024px), (min-width: 768px) and (orientation: landscape)',
         },
       },
+      /* 调色板全部走 CSS 变量（RGB 通道 + <alpha-value>）：
+       *   - 主题切换只改 index.css 里的十来个变量，组件一个类名都不用动；
+       *   - `/70` 这种透明度修饰符照样生效（这是不能用裸 `var(--x)` 的原因：
+       *     那样会丢掉 alpha 通道，全站的 `text-charcoal/60` 会一起坏掉）。
+       * 默认值（极简米白）写在 index.css 的 `:root`，`[data-theme=…]` 里覆盖。 */
       colors: {
-        // 低饱和中性色系
-        cream: '#FAF8F5',      // 米白背景
-        'cream-dark': '#F2EEE8',
-        charcoal: '#2B2B2B',    // 深色文字
-        'charcoal-light': '#6B6B6B',
-        // 强调色 — 暖棕橘（买手店质感）
-        accent: '#C8855A',
-        'accent-dark': '#B0724A',
-        'accent-light': '#D9A57E',
+        cream: 'rgb(var(--c-cream) / <alpha-value>)',
+        'cream-dark': 'rgb(var(--c-cream-dark) / <alpha-value>)',
+        charcoal: 'rgb(var(--c-charcoal) / <alpha-value>)',
+        'charcoal-light': 'rgb(var(--c-charcoal-light) / <alpha-value>)',
+        accent: 'rgb(var(--c-accent) / <alpha-value>)',
+        'accent-dark': 'rgb(var(--c-accent-dark) / <alpha-value>)',
+        'accent-light': 'rgb(var(--c-accent-light) / <alpha-value>)',
+        white: 'rgb(var(--c-white) / <alpha-value>)',
       },
       fontFamily: {
         /* System stack, no webfont. index.html explains why: Inter was a

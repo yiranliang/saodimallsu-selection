@@ -59,7 +59,7 @@ check('empty → no srcset', imageSrcSet(''), undefined)
 
 /* ── 4. sizes ── */
 console.log('\n[4] sizes hints')
-check('4 breakpoints match the grid', CARD_IMAGE_SIZES.split(',').length, 4)
+check('5 breakpoints match the grid', CARD_IMAGE_SIZES.split(',').length, 5)
 check('phones get ~half the viewport', /48vw/.test(CARD_IMAGE_SIZES), true)
 
 console.log(`\n${'─'.repeat(44)}`)

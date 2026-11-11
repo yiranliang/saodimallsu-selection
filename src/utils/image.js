@@ -62,9 +62,11 @@ export function imageSrcSet(url, widths = [320, 640]) {
  * doubles the bytes.
  */
 /* 每档都略大于实际渲染宽度：宁可多下 20%，也不要让浏览器挑小一档、
- * 把商品图放大成糊的。列数变了（lg 4 / xl 5）之后这组值跟着改。 */
+ * 把商品图放大成糊的。列数变了（md 3 / lg 4 / xl 6）之后这组值跟着改：
+ * 6 列时单卡在 1280 上约 190px（≈15vw），1440 以上封顶在 1216px 内容宽里
+ * 同样约 190px（≈13vw @1440，≈10vw @1920）—— 所以 1600 以上再降一档。 */
 export const CARD_IMAGE_SIZES =
-  '(min-width: 1280px) 20vw, (min-width: 1024px) 26vw, (min-width: 768px) 32vw, 48vw'
+  '(min-width: 1600px) 13vw, (min-width: 1280px) 17vw, (min-width: 1024px) 26vw, (min-width: 768px) 32vw, 48vw'
 
 /** The detail sheet is a square filling the sheet, capped at max-w-lg */
 export const DETAIL_IMAGE_SIZES = '(min-width: 512px) 512px, 92vw'

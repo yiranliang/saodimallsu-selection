@@ -4,8 +4,8 @@ import { BADGE_ZONE } from '../utils/deal.js'
 /**
  * Featured for You
  * ─────────────────
- * 网格上方的一排 25 件随机推荐 —— 为了让第二屏以后的款式也有曝光（见
- * `utils/featured.js`：全库洗牌后取前 25，不按分类保底）。
+ * 网格上方的一排 24 件随机推荐 —— 为了让第二屏以后的款式也有曝光（见
+ * `utils/featured.js`：全库洗牌后取前 24，不按分类保底）。
  *
  * 为什么复用 `ProductCard` 而不是另写一个"推荐卡"：
  * 角标、断货置灰、"no ASIN = Sold out"、加购/步进器、详情弹层全都长在卡片里，
@@ -102,7 +102,7 @@ export default function FeaturedSection({
           `prefers-reduced-motion` 下 `.fade-up` 本来就被关掉，等于直接替换。 */}
       <div
         key={seed}
-        className="fade-up grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-4 sm:gap-y-8 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5"
+        className="fade-up grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-4 sm:gap-y-8 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
       >
         {products.map((product) => (
           <ProductCard

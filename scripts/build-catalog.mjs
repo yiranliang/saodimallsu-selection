@@ -79,6 +79,9 @@ const BRAND_CONFIG = {
     'Knitwear made for real life: comfortable, flattering, and easy to make your own.',
   mission: 'Inclusive knitwear that helps women feel comfortable, confident, and seen.',
   logoText: 'S',
+  /* 'minimal' —— 前台默认皮肤：米白底、炭黑字、无卡片装饰。`SAODIMALLSU.setTheme()`
+     的机制保留着，将来加皮肤时在 THEMES 里加个名字 + index.css 加一段变量即可。 */
+  theme: 'minimal',
 }
 
 /* ───────────────── args ───────────────── */
@@ -766,6 +769,7 @@ export const brandConfig = {
   welcome: ${quote(BRAND_CONFIG.welcome)},
   tagline: ${quote(BRAND_CONFIG.tagline)},
   logoText: ${quote(BRAND_CONFIG.logoText)},
+  theme: ${quote(BRAND_CONFIG.theme)},
 }
 `
 }

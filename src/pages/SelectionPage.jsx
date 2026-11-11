@@ -268,7 +268,7 @@ export default function SelectionPage() {
 
   /* The search box stays fully responsive while the grid catches up.
    *
-   * Typing used to re-filter 273 products and re-render 25 cards on every
+   * Typing used to re-filter 273 products and re-render 24 cards on every
    * keystroke, synchronously, on the same thread that has to echo the character
    * into the input. `useDeferredValue` lets React paint the input first and
    * re-run the filter at lower priority. On a slow phone that is the difference
@@ -279,7 +279,7 @@ export default function SelectionPage() {
   const deferredQuery = useDeferredValue(query)
 
   /* ── 首页推荐位（Featured for You）──
-   * 25 件，纯前端采样（见 utils/featured.js）：**整库洗牌取前 25 件**，不按
+   * 24 件，纯前端采样（见 utils/featured.js）：**整库洗牌取前 24 件**，不按
    * 分类保底 —— 分类加权会让推荐位在几次 Shuffle 之后变得可预测。**只读目录**，
    * 不碰 `sort_order`，所以下方网格的顺序仍然完全由后台拖拽决定。
    *
@@ -344,7 +344,7 @@ export default function SelectionPage() {
   }, [catalogue, dealSearch, isDeals, isCampaign, dealBucket, activeCategory, deferredQuery])
 
   /* Badge first, THEN page. The order of those two steps is the whole feature:
- * slicing first would only shuffle the 25 cards already on screen, so a badged
+ * slicing first would only shuffle the 24 cards already on screen, so a badged
  * style sitting at sort_order 191 would stay invisible until eight "Load more"
  * clicks — priority that nobody ever sees is not priority. Measured: three of
  * the 7 badged styles are at rank 191/194/196.

@@ -14,6 +14,21 @@ import { loadLinks } from './store/linkStore.js'
 import { bootstrapAuth, getAuthState, subscribeAuth } from './lib/auth.js'
 import { startRealtime } from './lib/realtime.js'
 import { isConfigured } from './lib/supabase.js'
+import { brandConfig } from './data/products.js'
+import { applyTheme, currentTheme, resolveTheme, THEME_STORAGE_KEY } from './utils/theme.js'
+
+/* 皮肤：在 React 挂载**之前**就把 data-theme 画上去，避免首屏闪一下默认色。
+ * 默认值来自 brandConfig.theme；只有 `SAODIMALLSU.setTheme()` 会在浏览器里
+ * 覆盖它（记在 localStorage），URL 参数不参与 —— 见 utils/theme.js。 */
+function bootTheme() {
+  let stored = ''
+  try {
+    stored = globalThis.localStorage?.getItem(THEME_STORAGE_KEY) || ''
+  } catch {
+    stored = ''
+  }
+  return applyTheme(resolveTheme({ stored, fallback: brandConfig.theme }), { persist: false })
+}
 
 /**
  * Developer surface
@@ -62,6 +77,11 @@ window.SAODIMALLSU = {
    * 冒烟脚本也用它构造示例，而不是再写死一遍字符串。 */
   codePrefix: CODE_PREFIX,
   configured: isConfigured,
+  /* 皮肤："一键切回"就用它 —— `SAODIMALLSU.setTheme('cross-stitch')`。
+   * 选择会记在 localStorage，下次打开还是这一套；清掉用
+   * `SAODIMALLSU.setTheme('minimal')`。 */
+  setTheme: (theme) => applyTheme(theme),
+  theme: () => currentTheme(),
 }
 window.MAKO = window.SAODIMALLSU
 
@@ -127,6 +147,7 @@ function scheduleRealtime() {
   else setTimeout(start, 1500)
 }
 
+bootTheme()
 bootstrap()
 
 ReactDOM.createRoot(document.getElementById('root')).render(

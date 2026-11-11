@@ -101,7 +101,7 @@ export default function ProductGrid({
     <div className="mx-auto max-w-7xl px-5 sm:px-8">
       {/* `fade-up` fires once, when this element replaces the skeleton. CSS only —
           no library, no image, no extra request. */}
-      <div className="fade-up grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-4 sm:gap-y-8 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
+      <div className="fade-up grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-4 sm:gap-y-8 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
         {products.map((product) => (
           <ProductCard
             key={product.id}
@@ -151,7 +151,7 @@ function GridSkeleton() {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-4 sm:gap-y-8 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5" aria-hidden="true">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-4 sm:gap-y-8 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6" aria-hidden="true">
         {Array.from({ length: SKELETON_CARDS }).map((_, i) => (
           /* 骨架和真实卡片同一个版式：没有白底卡片、白框只在图片里、文字区
              没有左右内边距 —— 否则加载完成的一瞬间会跳一下。 */

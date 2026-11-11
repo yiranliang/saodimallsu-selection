@@ -2,6 +2,25 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ═══ 主题变量 ═══
+ *
+ * 调色板不写死在组件里，而是这十来个 RGB 通道变量。将来要做第二套皮肤，
+ * 只需给 <html> 换一个 `data-theme`、再覆盖这几个变量 —— 组件一个类名都不用
+ * 动，也不会出现"某个角落忘了换皮"。
+ *
+ * 目前只有一套：极简（米白 + 炭黑 + 暖棕橘），也就是 `brandConfig.theme`
+ * 的默认值 `'minimal'`。 */
+:root {
+  --c-cream: 250 248 245;
+  --c-cream-dark: 242 238 232;
+  --c-charcoal: 43 43 43;
+  --c-charcoal-light: 107 107 107;
+  --c-accent: 200 133 90;
+  --c-accent-dark: 176 114 74;
+  --c-accent-light: 217 165 126;
+  --c-white: 255 255 255;
+}
+
 /* ===== 全局基础样式 ===== */
 @layer base {
   html {

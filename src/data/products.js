@@ -1723,4 +1723,8 @@ export const brandConfig = {
      最轻的一档字号/灰度 —— 读到这里的人已经在浏览了，不需要再被推销。 */
   mission: 'Inclusive knitwear that helps women feel comfortable, confident, and seen.',
   logoText: 'S',
+  /* 'minimal' | 'cross-stitch' —— 前台默认皮肤（现在是十字绣）。只有控制台
+     SAODIMALLSU.setTheme('minimal') 能在运行时临时切回，选择记在 localStorage；
+     URL 参数不再参与切换（见 utils/theme.js）。 */
+  theme: 'minimal',
 }

@@ -68,7 +68,7 @@ const ids = (list) => list.map((item) => item.id)
 
 /* ── 1. page size ── */
 console.log('\n[1] Batch size')
-check('one batch is 25 cards', PAGE_SIZE, 25)
+check('one batch is 24 cards', PAGE_SIZE, 24)
 
 /* ── 2. query normalising ── */
 console.log('\n[2] Query normalising')
@@ -145,7 +145,7 @@ check(
 console.log('\n[7] Paging')
 const hundred = Array.from({ length: 100 }, (_, i) => product(`p${i}`, `Item ${i}`, `S${i}`, 'Tops'))
 
-check('first batch', slicePage(hundred, PAGE_SIZE).length, 25)
+check('first batch', slicePage(hundred, PAGE_SIZE).length, 24)
 check('second batch ends at 48', slicePage(hundred, 48).length, 48)
 check('a short list is returned whole', slicePage(catalogue, PAGE_SIZE).length, 5)
 check('limit 0 renders nothing', slicePage(hundred, 0), [])
@@ -157,12 +157,12 @@ check('empty input is safe', slicePage(null, 24), [])
 
 /* ── 8. next batch size ── */
 console.log('\n[8] Next limit')
-check('adds one batch', nextLimit(25, 100), 50)
+check('adds one batch', nextLimit(24, 100), 48)
 check('clamps at the end', nextLimit(96, 100), 100)
 check('never runs past the end', nextLimit(100, 100), 100)
-check('from zero', nextLimit(0, 100), 25)
+check('from zero', nextLimit(0, 100), 24)
 check('empty set stays empty', nextLimit(0, 0), 0)
-check('custom step', nextLimit(25, 100, 36), 61)
+check('custom step', nextLimit(24, 100, 36), 60)
 
 /* ── 9. has more ── */
 console.log('\n[9] Has more')
@@ -177,7 +177,7 @@ const tops = filterCatalogue(hundred.map((p, i) => ({ ...p, category: i < 30 ? '
   category: 'Tops',
 })
 check('filtered total is the category size', tops.length, 30)
-check('first page of a filtered set', slicePage(tops, PAGE_SIZE).length, 25)
+check('first page of a filtered set', slicePage(tops, PAGE_SIZE).length, 24)
 check('second page of a filtered set', slicePage(tops, nextLimit(PAGE_SIZE, tops.length)).length, 30)
 check('the second page never leaks other categories', slicePage(tops, 30).every((p) => p.category === 'Tops'), true)
 

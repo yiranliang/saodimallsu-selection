@@ -63,12 +63,12 @@ const seeded = (seed, list = CATALOGUE) => pickFeatured(list, { random: mulberry
 const seeds = [1, 2, 3, 7, 11, 42, 99, 123, 777, 2026]
 
 /* ── 1. 基础形状 ── */
-console.log('\n[1] pickFeatured — 25 件，且不重样')
+console.log('\n[1] pickFeatured — 24 件，且不重样')
 
-check('25 by default', seeded(1).length, 25)
-check('the constant is 25', FEATURED_SIZE, 25)
-check('no duplicates', new Set(texts(seeded(1))).size, 25)
-check('and no duplicates on any seed', seeds.every((seed) => new Set(texts(seeded(seed))).size === 25), true)
+check('24 by default', seeded(1).length, 24)
+check('the constant is 24', FEATURED_SIZE, 24)
+check('no duplicates', new Set(texts(seeded(1))).size, 24)
+check('and no duplicates on any seed', seeds.every((seed) => new Set(texts(seeded(seed))).size === 24), true)
 check('every pick is a real product', seeded(1).every((p) => CATALOGUE.includes(p)), true)
 check('a short catalogue returns what it has', pickFeatured(CATALOGUE.slice(0, 7), { random: mulberry32(3) }).length, 7)
 check(
@@ -93,14 +93,14 @@ check(
 )
 
 /* 反过来，也不能"永远轮不到"某个商品：40 次抽样里每个商品都要出现过。
- * 单次命中率 25/58 ≈ 43%，连漏 40 次的美妙概率是 0.59^40，实际不可能。 */
+ * 单次命中率 24/58 ≈ 41%，连漏 40 次的美妙概率是 0.59^40，实际不可能。 */
 const seenOver40 = new Set()
 for (let seed = 0; seed < 40; seed += 1) {
   texts(seeded(seed)).forEach((id) => seenOver40.add(id))
 }
 check('every product can appear', seenOver40.size, CATALOGUE.length)
 
-/* 分布不会严格均匀，但也不该偏到某个商品几乎不出现。期望次数 = 200 × 25/58 ≈ 86。 */
+/* 分布不会严格均匀，但也不该偏到某个商品几乎不出现。期望次数 = 200 × 24/58 ≈ 83。 */
 const appearances = new Map()
 for (let seed = 0; seed < 200; seed += 1) {
   texts(seeded(seed)).forEach((id) => appearances.set(id, (appearances.get(id) || 0) + 1))
@@ -110,7 +110,7 @@ check('every product is drawn', appearances.size, CATALOGUE.length)
 check('no product is starved', Math.min(...counts) >= 40, true)
 check('nor is any product over-drawn', Math.max(...counts) <= 130, true)
 
-/* 展示顺序不是按分类成块：25 个位置里相邻换类的次数应该很多，而不是 6 次
+/* 展示顺序不是按分类成块：24 个位置里相邻换类的次数应该很多，而不是 6 次
  * （每个分类一段）。 */
 check(
   'the display order is not grouped by category',
@@ -127,8 +127,8 @@ check(
 
 /* 也不是"取输入的前 24 个"：随机之后顺序应当和输入不同。 */
 check(
-  'the order is not just the first 25 of the catalogue',
-  seeds.some((seed) => texts(seeded(seed)).join() !== texts(CATALOGUE.slice(0, 25)).join()),
+  'the order is not just the first 24 of the catalogue',
+  seeds.some((seed) => texts(seeded(seed)).join() !== texts(CATALOGUE.slice(0, 24)).join()),
   true,
 )
 
