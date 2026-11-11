@@ -133,26 +133,23 @@ function ProductCard({
       aria-label={`View ${product.name}`}
     >
       {/* ── image ──
-          Amazon's layout: square frame, white, `object-contain`, no chrome.
+          Amazon's layout: white frame, `object-contain`, no chrome.
 
-          The square is the part that matters. It is the only ratio that tiles
-          cleanly when the source photos run from 1:2.3 trousers to near-square
-          bras — any other frame leaves one category looking shrunken or sliced.
+          画框是 **4:5 的竖长方形**（比 1:1 更接近 Lookbook，模特能露更多），
+          但**照片一律 `contain`、绝不裁切**：原图从 1:2.3 的裤子到接近方形
+          的胸衣都有，用 `cover` 会把两侧或上下切掉，衣服直接变形。
+          多出来的空白由画框的 `bg-white` 兜底 —— 商品图本来就是白底拍的，
+          所以留白和背景融为一体，看不出"画框"的边界。这正是它显干净的原因。
 
-          `contain` inside a square is what makes the size *differences* stop
-          reading as a mistake: every photo is fully visible, and whatever gap
-          is left over is filled with the same white the photos were shot on, so
-          the frame has no visible edge at all. That is the whole trick — the
-          white is doing the work, not the fit.
-
-          Which is also why there is no border here and none on the card: a grey
-          hairline next to a letterboxed photo turns invisible padding into a
-          visible box, and the product starts to look small inside a panel. On
-          `bg-cream` the white card still has an edge of its own.
+          居中（`object-center`）+ 绝对定位填满：图片的固有比例永远影响不到
+          画框尺寸，网格因此不会因为某张长图而错位。
 
           The hover zoom is safe with `contain` — it grows into its own padding
           first, so nothing is cut off. */}
-      <div className="relative aspect-square overflow-hidden bg-white p-0">
+      <div
+        style={{ aspectRatio: '4 / 5' }}
+        className="relative aspect-[4/5] w-full shrink-0 overflow-hidden bg-white p-0"
+      >
         {/* 320/640 instead of whatever the listing page asked for: a tile is
             ~169 CSS px on a phone, so the 741 px file was 3× the pixels and 3×
             the bytes. `sizes` matches ProductGrid's columns exactly — overstate
@@ -163,7 +160,7 @@ function ProductCard({
           sizes={CARD_IMAGE_SIZES}
           fallback={PLACEHOLDER_IMAGE}
           alt={product.name}
-          className="h-full w-full object-contain transition-transform duration-500 ease-out group-hover:scale-105"
+          className="absolute inset-0 h-full w-full object-contain object-center transition-transform duration-500 ease-out group-hover:scale-105"
         />
 
         <button
@@ -198,12 +195,12 @@ function ProductCard({
       </div>
 
       {/* ── info ── */}
-      <div className="flex flex-1 flex-col pb-1 pt-2.5">
+      <div className="flex flex-1 flex-col pb-0.5 pt-2">
         {/* 标题：字号 14/15px、行距收紧，跟图片上那枚 11px 的标拉开两级 ——
             读起来是"标题 + 小标"，而不是两块同重的文字。 */}
         <h3
           title={product.name}
-          className="line-clamp-2 text-[14px] font-medium leading-[1.35] tracking-[-0.01em] text-charcoal sm:text-[15px]"
+          className="line-clamp-2 text-[14px] font-medium leading-[1.3] tracking-[-0.01em] text-charcoal sm:text-[15px]"
         >
           {product.name}
         </h3>
@@ -242,17 +239,17 @@ function ProductCard({
             target="_blank"
             rel="noopener noreferrer"
             onClick={(e) => e.stopPropagation()}
-            className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-charcoal-light/80 underline decoration-charcoal/20 underline-offset-2 transition hover:text-charcoal hover:decoration-charcoal/50"
+            className="mt-0.5 inline-flex items-center gap-1 text-[11px] font-medium text-charcoal-light/80 underline decoration-charcoal/20 underline-offset-2 transition hover:text-charcoal hover:decoration-charcoal/50"
           >
             View on Amazon
             <span aria-hidden="true">↗</span>
           </a>
         ) : (
-          <span className="mt-1 text-[11px] text-charcoal-light/45">Listing not linked yet</span>
+          <span className="mt-0.5 text-[11px] text-charcoal-light/45">Listing not linked yet</span>
         )}
 
         {/* Variants */}
-        <div className="mt-1.5 min-h-[20px]">
+        <div className="mt-1 min-h-[18px]">
           {specTypes.length === 0 ? (
             <span className="text-[11px] text-charcoal-light/70">One size</span>
           ) : lines.length > 0 ? (
@@ -290,7 +287,7 @@ function ProductCard({
             10px、深灰字、2px 小圆角。`flex-wrap` + `gap-1`：一个 tag 里写
             `Bestseller, New` 会并排成两枚，写不下的自然换行。 */}
         {trustBadges.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap items-center gap-1">
+          <div className="mt-1 flex flex-wrap items-center gap-1">
             {trustBadges.map((badge) => {
               const custom = badgeStyle(badge.value)
               return (
@@ -315,7 +312,7 @@ function ProductCard({
             实心黑胶囊会把视线从照片上抢走，而照片才是这张卡的主角。
             触摸面积靠 `min-h-[44px]` + 左右各 4px 的不可见内边距撑住，
             手机上点起来和原来的胶囊一样大，只是看起来轻。 */}
-        <div className="mt-auto flex items-center pt-1">
+        <div className="mt-auto flex items-center">
           {single ? (
             <QuantityStepper
               qty={lines[0].qty}

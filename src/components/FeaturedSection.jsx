@@ -102,7 +102,7 @@ export default function FeaturedSection({
           `prefers-reduced-motion` 下 `.fade-up` 本来就被关掉，等于直接替换。 */}
       <div
         key={seed}
-        className="fade-up grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-4 sm:gap-y-8 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6"
+        className="fade-up grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-5 sm:gap-y-10 md:grid-cols-3 xl:grid-cols-4"
       >
         {products.map((product) => (
           <ProductCard

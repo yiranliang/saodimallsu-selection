@@ -18,7 +18,7 @@
 import { isTeaser } from './teaser.js'
 
 /** How many cards one batch adds */
-export const PAGE_SIZE = 24
+export const PAGE_SIZE = 20
 
 /** Normalise a search box value: trim, collapse runs of spaces, lowercase */
 export function normaliseQuery(raw) {

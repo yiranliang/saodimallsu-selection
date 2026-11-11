@@ -101,7 +101,7 @@ export default function ProductGrid({
     <div className="mx-auto max-w-7xl px-5 sm:px-8">
       {/* `fade-up` fires once, when this element replaces the skeleton. CSS only —
           no library, no image, no extra request. */}
-      <div className="fade-up grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-4 sm:gap-y-8 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6">
+      <div className="fade-up grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-5 sm:gap-y-10 md:grid-cols-3 xl:grid-cols-4">
         {products.map((product) => (
           <ProductCard
             key={product.id}
@@ -151,13 +151,16 @@ function GridSkeleton() {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-3 gap-y-6 sm:gap-x-4 sm:gap-y-8 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6" aria-hidden="true">
+      <div className="grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-5 sm:gap-y-10 md:grid-cols-3 xl:grid-cols-4" aria-hidden="true">
         {Array.from({ length: SKELETON_CARDS }).map((_, i) => (
           /* 骨架和真实卡片同一个版式：没有白底卡片、白框只在图片里、文字区
              没有左右内边距 —— 否则加载完成的一瞬间会跳一下。 */
           <div key={i}>
-            <div className="aspect-square animate-pulse bg-cream-dark" />
-            <div className="space-y-2 pb-1 pt-2.5">
+            <div
+                style={{ aspectRatio: '4 / 5' }}
+                className="aspect-[4/5] w-full shrink-0 animate-pulse bg-cream-dark"
+              />
+            <div className="space-y-2 pb-0.5 pt-2">
               <div className="h-3 w-4/5 animate-pulse rounded bg-cream-dark" />
               <div className="h-2.5 w-3/5 animate-pulse rounded bg-cream-dark" />
             </div>
