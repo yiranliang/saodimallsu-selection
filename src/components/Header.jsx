@@ -61,20 +61,27 @@ function Header({ influencerName }) {
         <div className="flex items-start justify-between gap-4">
           {/* Brand */}
           <div className="flex items-center gap-3">
-            <div className="relative">
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-accent text-[15px] font-bold text-white sm:h-10 sm:w-10">
-                {brandConfig.logoText}
+            <div className="relative shrink-0">
+              {/* 字母 S：就是一句**普通文本**，衬线体 + 半粗，靠 flex 居中。
+                  没有 SVG 路径、没有 transform、没有旋转 —— 任何"手画"的曲线在
+                  36px 的小方块里都会被缩放成歪的，直接用系统字体最稳。
+                  `leading-none` 消除行高带来的视觉偏移，`select-none` 防止拖动选字。 */}
+              <div className="flex h-9 w-9 select-none items-center justify-center rounded-xl bg-accent leading-none text-white sm:h-10 sm:w-10">
+                <span className="font-serif text-[17px] font-semibold leading-none tracking-normal sm:text-[19px]">
+                  {brandConfig.logoText}
+                </span>
               </div>
 
-              {/* 圣诞帽 —— 纯 CSS：红色三角 + 白帽檐 + 帽尖小球，斜扣在 Logo
-                  右上角。没有图片、没有额外请求；`aria-hidden` 让读屏软件跳过。 */}
+              {/* 圣诞帽 —— 纯 CSS：红色三角 + 白帽檐 + 帽尖小球。
+                  挂在方块**外侧**的右上角（-right-2 -top-2），尺寸收到 12px，
+                  所以只和圆角擦边、不会压到 S 的任何笔画。`aria-hidden` 让读屏跳过。 */}
               <span
                 aria-hidden="true"
-                className="santa-glow pointer-events-none absolute -right-1 -top-1.5 z-10 block h-3.5 w-3.5 rotate-12"
+                className="pointer-events-none absolute -right-2 -top-2 z-10 block h-3 w-3 rotate-12"
               >
-                <span className="absolute bottom-[3px] left-1/2 h-0 w-0 -translate-x-1/2 border-b-[8px] border-l-[5px] border-r-[5px] border-b-red-600 border-l-transparent border-r-transparent" />
-                <span className="absolute bottom-0 left-0 h-[3px] w-full rounded-full bg-white ring-1 ring-charcoal/10" />
-                <span className="absolute left-1/2 top-0 h-1.5 w-1.5 -translate-x-1/2 rounded-full bg-white ring-1 ring-charcoal/10" />
+                <span className="absolute bottom-[2px] left-1/2 h-0 w-0 -translate-x-1/2 border-b-[7px] border-l-[4px] border-r-[4px] border-b-red-600 border-l-transparent border-r-transparent" />
+                <span className="absolute bottom-0 left-0 h-[2px] w-full rounded-full bg-white ring-1 ring-charcoal/10" />
+                <span className="absolute left-1/2 top-0 h-1 w-1 -translate-x-1/2 rounded-full bg-white ring-1 ring-charcoal/10" />
               </span>
             </div>
             <div className="leading-tight">

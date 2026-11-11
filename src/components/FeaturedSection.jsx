@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import ProductCard from './ProductCard.jsx'
 import { BADGE_ZONE } from '../utils/deal.js'
 
@@ -39,6 +40,35 @@ export default function FeaturedSection({
   /* 整份选款已满（`MAX_CART_ITEMS`）：卡片步进器的 `+` 置灰。 */
   atCap = false,
 }) {
+  /* 吸顶按钮的"紧凑态"。
+   *
+   * 吸附本身是**纯 CSS**：按钮外面那层 `sticky` 的父级是 `<section>`，所以它只会
+   * 在这块推荐区内吸附（滚过最后一张卡就跟着页面走），`top` 读分类栏自己量出来的
+   * `--site-nav-h`，正好贴在导航下方。不需要任何滚动监听。
+   *
+   * 这里唯一的 JS 只回答一个问题：**标题行走没走**。走了就把胶囊收成一枚小圆点
+   * （只留图标），免得挡住下面的商品。用 IntersectionObserver 而不是滚动监听：
+   * 回调只在进出视口那一刻来一次，滚动全程零主线程开销。
+   *
+   * hooks 必须写在 `if (!products.length)` 之前：数量不能随渲染变化。 */
+  const headRef = useRef(null)
+  const [compact, setCompact] = useState(false)
+
+  useEffect(() => {
+    const node = headRef.current
+    if (!node || typeof IntersectionObserver !== 'function') return undefined
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        /* 只认"标题行在视口上方"：`!isIntersecting` 也包含"还没滚到"，
+         * 两种状态的 rect.bottom 一正一负，用 <= 0 区分。 */
+        setCompact(!entry.isIntersecting && entry.boundingClientRect.bottom <= 0)
+      },
+      { threshold: 0 },
+    )
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [products.length])
+
   if (!products.length) return null
 
   return (
@@ -47,10 +77,47 @@ export default function FeaturedSection({
       data-featured
       className="mx-auto mb-10 max-w-7xl px-5 sm:mb-14 sm:px-8"
     >
-      <div className="mb-4 sm:mb-5">
-        {/* 标题独占一行；副标题和右侧的操作区共用一行，并且 `items-center` ——
-            按钮的垂直中线跟着副标题走，而不是贴着整块的底边（原来 `items-end`
-            在标题变高之后会让按钮看起来"掉下去"）。 */}
+      {onShuffle && (
+        /* 吸附轨道：高度 0、不占位，作为 `<section>` 的直接子元素 —— 这就是
+         * "只在推荐区内吸附"的关键（sticky 的边界是它的父级）。
+         * `pointer-events-none` 让这条看不见的轨道不吃点击，按钮自己恢复。 */
+        <div
+          style={{ top: 'var(--site-nav-h, 0px)' }}
+          className="pointer-events-none sticky z-30 flex h-0 items-start justify-end pr-0.5 sm:pr-1"
+        >
+          <button
+            type="button"
+            onClick={onShuffle}
+            data-shuffle
+            aria-label="Shuffle featured picks"
+            /* `shrink-0` + `items-start`（在外层轨道上）是关键：轨道是 `h-0` 的，
+             * 默认 `items-stretch` 会把按钮压成 0 高、看起来像一条扁片。 */
+            className={`pointer-events-auto inline-flex shrink-0 items-center justify-center gap-1.5 rounded-full transition-all duration-200 hover:bg-charcoal hover:text-cream active:scale-95 ${
+              compact
+                ? 'h-10 w-10 bg-white/95 text-charcoal shadow-lg shadow-charcoal/25 ring-1 ring-charcoal/10 backdrop-blur-md'
+                : 'px-4 py-2 text-[11.5px] font-semibold text-charcoal bg-charcoal/[0.06] ring-1 ring-charcoal/10'
+            }`}
+          >
+            <svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
+              className="h-3.5 w-3.5 shrink-0"
+            >
+              <path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2" />
+              <path d="M17.4 3.6v3.2h-3.2" />
+            </svg>
+            {/* 吸顶时只留图标：按钮收成一枚 36px 的小圆点，几乎不挡商品。 */}
+            {!compact && <span>Shuffle</span>}
+          </button>
+        </div>
+      )}
+
+      <div ref={headRef} className="mb-4 sm:mb-5">
         <h2 className="text-2xl font-bold leading-tight tracking-tight text-charcoal sm:text-3xl">
           Featured <span className="text-accent">for You</span>
         </h2>
@@ -58,41 +125,12 @@ export default function FeaturedSection({
         <div className="mt-1.5 flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
           <p className="min-w-0 text-[11.5px] leading-snug text-charcoal-light">
             A rotating pick from every category — shuffle for a different mix.
-          </p>
-
-          {/* `ml-auto`：手机上副标题换行后按钮落到第二行，仍然贴右边而不是回到
-              行首 —— 否则它看起来像另一个段落的一部分。 */}
-          <div className="ml-auto flex shrink-0 items-center gap-2.5">
-            <span className="hidden text-[10.5px] tabular-nums text-charcoal-light/70 sm:inline">
-              {products.length} styles
+            {/* 数量跟正文同行：右上角现在是吸顶按钮的地盘，再放一个右对齐的数字
+                会在按钮落到原位时和它打架。 */}
+            <span className="ml-1 hidden tabular-nums text-charcoal-light/60 sm:inline">
+              · {products.length} styles
             </span>
-            {/* 换一批：纯本地重算（换种子重跑 `pickFeatured`），不 fetch、不打
-                Supabase、不碰 sort_order。样式上从"文字链接"改成实心胶囊 ——
-                淡底 + 描边是常态，hover 翻成深色，箭头转 180°。 */}
-            {onShuffle && (
-              <button
-                type="button"
-                onClick={onShuffle}
-                aria-label="Shuffle featured picks"
-                className="group inline-flex items-center gap-1.5 rounded-full bg-charcoal/[0.06] px-3.5 py-2 text-[11.5px] font-semibold text-charcoal ring-1 ring-charcoal/10 transition-all duration-200 hover:bg-charcoal hover:text-cream hover:ring-charcoal active:scale-95"
-              >
-                <svg
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  aria-hidden="true"
-                  className="h-3.5 w-3.5 transition-transform duration-500 ease-out group-hover:rotate-180"
-                >
-                  <path d="M4.5 12a7.5 7.5 0 0 1 12.9-5.2" />
-                  <path d="M17.4 3.6v3.2h-3.2" />
-                </svg>
-                Shuffle
-              </button>
-            )}
-          </div>
+          </p>
         </div>
       </div>
 
@@ -120,9 +158,13 @@ export default function FeaturedSection({
         ))}
       </div>
 
-      {/* 和下方常规目录之间的那条极淡的分割线 + 大留白：没有它，推荐位的最后
-          一行和货架的第一行会长得一模一样，整块"特别推荐"就消失了。 */}
-      <div className="mt-9 h-px bg-charcoal/[0.07]" />
+      {/* 推荐区与常规目录之间的分界：2px 虚线 + 大留白 + 一行小标题。
+          没有它，最后一行推荐和货架第一行长得一模一样，整块"特别推荐"就消失了。 */}
+      <div className="mt-10 border-t-2 border-dashed border-charcoal/15 pt-5 sm:mt-12">
+        <div className="text-center text-[10px] font-medium uppercase tracking-[0.22em] text-charcoal-light/60">
+          All products
+        </div>
+      </div>
     </section>
   )
 }

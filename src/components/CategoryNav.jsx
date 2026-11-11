@@ -1,4 +1,4 @@
-import { memo } from 'react'
+import { memo, useEffect, useRef } from 'react'
 import SearchBox from './SearchBox.jsx'
 import {
   CAMPAIGN_TAB,
@@ -52,6 +52,29 @@ function CategoryNav({
   const { dealsTabLabel } = useSettings()
   const campaignName = campaignLabel || campaignTabLabelOf(dealsTabLabel)
 
+  /* 把导航的真实高度写进 CSS 变量 `--site-nav-h`：`Featured for You` 里那枚
+   * 吸顶的 Shuffle 用它当 `top`，所以无论搜索框、分类栏、秒杀 chip 是否展开，
+   * 都刚好贴在导航下方而不是盖住它。
+   *
+   * 用 ResizeObserver 而不是滚动监听 —— 只在尺寸变化时回调一次；换分类、出秒杀
+   * chip、旋转屏幕都会自动更新，不用写死像素值。 */
+  const navRef = useRef(null)
+
+  useEffect(() => {
+    const node = navRef.current
+    if (!node || typeof ResizeObserver !== 'function') return undefined
+    const publish = () => {
+      document.documentElement.style.setProperty(
+        '--site-nav-h',
+        `${Math.round(node.getBoundingClientRect().height)}px`,
+      )
+    }
+    publish()
+    const observer = new ResizeObserver(publish)
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [categories.length, dealsCount, campaignCount])
+
   const categoryRail = useDragScroll(`${categories.length}:${dealsCount}:${campaignCount}`)
   const bucketRail = useDragScroll(bucketCounts?.all ?? 0)
 
@@ -86,7 +109,7 @@ function CategoryNav({
   }
 
   return (
-    <nav className="sticky top-0 z-30 bg-cream/95 backdrop-blur-md">
+    <nav ref={navRef} className="sticky top-0 z-30 bg-cream/95 backdrop-blur-md">
       <div className="mx-auto max-w-7xl px-5 pb-1 pt-2.5 sm:px-8">
         <SearchBox value={query} onChange={onQueryChange} />
       </div>
