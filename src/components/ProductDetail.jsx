@@ -6,6 +6,7 @@ import { Close, Plus, Check, Trash, AlertCircle } from './icons.jsx'
 import { resolveProductImage, PLACEHOLDER_IMAGE } from '../utils/variantImage.js'
 import { lineKey, isComplete, sanitizeSpecs, specTypesOf } from '../utils/lines.js'
 import { isSizeType, sortSizes } from '../utils/sizes.js'
+import { specTypeLabel } from '../utils/variantImage.js'
 import { isSoldOut, isOptionAvailable } from '../utils/soldOut.js'
 import { specPair } from '../utils/sku.js'
 import { useAmazonLinks } from '../hooks/useAmazonLinks.js'
@@ -568,7 +569,7 @@ export default function ProductDetail({
                   return (
                     <div key={type} data-spec-group={type}>
                       <div className="mb-2 flex items-center gap-1.5 text-[11px] font-medium tracking-wider text-charcoal-light">
-                        {type}
+                        {specTypeLabel(type)}
                         <span className="text-charcoal/40">·</span>
                         <span
                           className={`font-normal normal-case tracking-normal ${
@@ -632,7 +633,7 @@ export default function ProductDetail({
                 being blocked as sold out (e.g. the links view is unavailable). */}
             {complete && !listingLinked && !soldOutNow && (
               <p className="mt-4 rounded-xl bg-cream-dark/70 px-3 py-2 text-[11.5px] leading-relaxed text-charcoal-light">
-                No listing linked for this colour / size yet. Your contact can
+                No listing linked for this color / size yet. Your contact can
                 confirm stock before it ships.
               </p>
             )}
@@ -776,7 +777,7 @@ export default function ProductDetail({
             <div className="flex items-start gap-2 rounded-2xl bg-red-50 px-3.5 py-3 text-[12px] leading-snug text-red-600">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>
-                This colour and size is sold out. Pick another combination — the rest of
+                This color and size is sold out. Pick another combination — the rest of
                 this piece is still available.
               </span>
             </div>

@@ -3,7 +3,7 @@ import { Heart, ChevronDown } from './icons.jsx'
 import QuantityStepper from './QuantityStepper.jsx'
 import ProductImage from './ProductImage.jsx'
 import { sizedImage, imageSrcSet, CARD_IMAGE_SIZES } from '../utils/image.js'
-import { PLACEHOLDER_IMAGE } from '../utils/variantImage.js'
+import { PLACEHOLDER_IMAGE, specTypeLabel } from '../utils/variantImage.js'
 import { soldOutSummary } from '../utils/soldOut.js'
 import { listingKnownFor } from '../store/linkStore.js'
 import { badgeStyle } from '../utils/badge.js'
@@ -276,7 +276,8 @@ function ProductCard({
               {specTypes
                 .map((type) => {
                   const n = product.specs[type].length
-                  return `${n} ${type.toLowerCase()}${n > 1 ? 's' : ''}`
+                  const label = specTypeLabel(type).toLowerCase()
+                  return `${n} ${label}${n > 1 ? 's' : ''}`
                 })
                 .join(' · ')}
             </span>

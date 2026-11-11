@@ -1080,7 +1080,7 @@ export default function ProductEditor({
                   <span
                     className="relative flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-lg ring-1 ring-charcoal/10"
                     style={{ backgroundColor: normaliseBadgeColor(draft.badgeColor) || '#2B2B2B' }}
-                    title="Pick any colour"
+                    title="Pick any color"
                   >
                     <input
                       type="color"
@@ -1217,7 +1217,7 @@ export default function ProductEditor({
                     style={{
                       backgroundColor: normaliseBadgeColor(draft.subBadgeColor) || '#2B2B2B',
                     }}
-                    title="Pick any colour"
+                    title="Pick any color"
                   >
                     <input
                       type="color"

@@ -2320,7 +2320,7 @@ function BatchBadgeDialog({ open, products, columnMissing, onClose, onApply, onC
                   key={preset.value}
                   type="button"
                   onClick={() => setColor(preset.value)}
-                  aria-label={`Batch badge colour ${preset.label}`}
+                  aria-label={`Batch badge color ${preset.label}`}
                   aria-pressed={on}
                   style={{ backgroundColor: preset.value }}
                   className={`h-6 w-6 rounded-full transition ${
@@ -2334,13 +2334,13 @@ function BatchBadgeDialog({ open, products, columnMissing, onClose, onApply, onC
                 颜色会同时作用于边框和文字（无底色），所以深色更好读。 */}
             <label
               className="flex h-6 w-6 cursor-pointer items-center justify-center rounded-full bg-white text-[11px] text-charcoal-light ring-1 ring-charcoal/15 transition hover:ring-charcoal/35"
-              title="Pick any colour"
+              title="Pick any color"
             >
               <input
                 type="color"
                 value={pickedColor || '#2B2B2B'}
                 onChange={(event) => setColor(event.target.value)}
-                aria-label="Batch badge custom colour"
+                aria-label="Batch badge custom color"
                 className="sr-only"
               />
               +
@@ -2395,13 +2395,13 @@ function BatchBadgeDialog({ open, products, columnMissing, onClose, onApply, onC
                 <span
                   className="relative flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-lg ring-1 ring-charcoal/10"
                   style={{ backgroundColor: pickedCampaignColor || '#2B2B2B' }}
-                  title="Pick any colour"
+                  title="Pick any color"
                 >
                   <input
                     type="color"
                     value={pickedCampaignColor || '#2B2B2B'}
                     onChange={(event) => setCampaignColor(event.target.value)}
-                    aria-label="Batch campaign tag colour"
+                    aria-label="Batch campaign tag color"
                     className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
                   />
                 </span>

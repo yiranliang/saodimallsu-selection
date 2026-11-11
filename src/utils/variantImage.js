@@ -30,6 +30,27 @@ export function isColourType(type) {
   return COLOUR_TYPES.has(String(type || '').trim().toLowerCase())
 }
 
+/** 尺码轴的几种写法（导入表里可能是英文或中文）。 */
+const SIZE_TYPES = new Set(['size', 'sizes', '尺码', '尺寸'])
+
+/**
+ * 规格轴的**展示用**名字。
+ *
+ * 数据里的键是 `Colour`（ASIN 表也按 `Colour|Size` 匹配，改键会打断匹配），
+ * 所以只在渲染时换成美式拼写：`Colour` → `Color`、`尺码` → `Size`。
+ * 其它自定义轴（`Length`、`Style`）原样返回。
+ *
+ * @param {unknown} type
+ * @returns {string}
+ */
+export function specTypeLabel(type) {
+  const raw = String(type ?? '').trim()
+  if (!raw) return ''
+  if (isColourType(raw)) return 'Color'
+  if (SIZE_TYPES.has(raw.toLowerCase())) return 'Size'
+  return raw
+}
+
 function cleanUrl(value) {
   return typeof value === 'string' ? value.trim() : ''
 }

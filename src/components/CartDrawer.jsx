@@ -3,7 +3,7 @@ import Modal from './Modal.jsx'
 import QuantityStepper from './QuantityStepper.jsx'
 import ProductImage from './ProductImage.jsx'
 import { Close, Trash, Sparkle, Bag, AlertCircle } from './icons.jsx'
-import { resolveProductImage } from '../utils/variantImage.js'
+import { resolveProductImage, specTypeLabel } from '../utils/variantImage.js'
 import { isSoldOut } from '../utils/soldOut.js'
 import { listingKnownFor } from '../store/linkStore.js'
 import { sizedImage } from '../utils/image.js'
@@ -205,7 +205,7 @@ export default function CartDrawer({
                             onClick={() => onEdit(product)}
                             className="text-[10px] font-medium text-accent underline decoration-accent/30 underline-offset-2"
                           >
-                            Choose {specTypes.filter((t) => !specs?.[t]).join(' & ').toLowerCase()}
+                            Choose {specTypes.filter((t) => !specs?.[t]).map(specTypeLabel).join(' & ').toLowerCase()}
                           </button>
                         )}
                         {gone && (
