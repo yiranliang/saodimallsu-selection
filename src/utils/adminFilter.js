@@ -23,6 +23,7 @@
 import { matchesQuery } from './sku.js'
 import { soldOutSummary } from './soldOut.js'
 import { dealWindow } from './deal.js'
+import { matchesTagView, tagTokens } from './navViews.js'
 
 /* Splitting a pasted list. Beyond the four separators we document (newline,
  * space, comma, semicolon) this also takes tab and the full-width Chinese
@@ -85,6 +86,30 @@ export function isDealItem(product, now = Date.now()) {
   return window.endsAt > Number(now)
 }
 
+/** 后台标签筛选的哨兵值：不加限制 / 只看「没有标签」的商品。 */
+export const ALL_TAGS = 'all'
+export const NO_TAG = 'none'
+
+/**
+ * 标签筛选：视图（New / Bestseller / Holiday）+ 自由文本。
+ *
+ * 视图用 `matchesTagView`（和前台共用一份规则）；文本是「标签里包含这段字」，
+ * 大小写无关 —— 运营想找 `best` 就能把 `Bestseller`、`Best-seller` 一起捞出来。
+ * 两个条件是 AND。
+ */
+function matchesTagFilter(product, tagView, tagQuery) {
+  if (tagView === NO_TAG) {
+    if (tagTokens(product).length) return false
+  } else if (tagView && tagView !== ALL_TAGS && !matchesTagView(product, tagView)) {
+    return false
+  }
+
+  const needle = String(tagQuery ?? '').trim().toLowerCase()
+  if (!needle) return true
+  const raw = String(product?.tag ?? '').toLowerCase()
+  return raw.includes(needle) || tagTokens(product).some((token) => token.includes(needle))
+}
+
 /** One product against one category name. A blank filter matches everything. */
 export function matchesCategory(product, category) {
   if (!category || category === ALL_CATEGORIES) return true
@@ -98,7 +123,15 @@ export function matchesCategory(product, category) {
  */
 export function filterProducts(
   products,
-  { query = '', category = ALL_CATEGORIES, soldOutOnly = false, asinMap = {}, now = Date.now() } = {},
+  {
+    query = '',
+    category = ALL_CATEGORIES,
+    soldOutOnly = false,
+    asinMap = {},
+    now = Date.now(),
+    tagView = ALL_TAGS,
+    tagQuery = '',
+  } = {},
 ) {
   if (!Array.isArray(products)) return []
 
@@ -131,6 +164,9 @@ export function filterProducts(
        still orderable stays in this view on purpose: one dead size is one dead
        size, and it is the thing purchasing has to act on. */
     if (soldOutOnly && !(soldOutSummary(product).soldOut > 0)) return false
+
+    /* 标签筛选：和分类/搜索是 AND 关系（先缩小再搜，和前台一致）。 */
+    if (!matchesTagFilter(product, tagView, tagQuery)) return false
 
     if (!bulk) return matchesQuery(product, query, asinMap)
 

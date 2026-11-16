@@ -26,8 +26,10 @@
 
 import {
   ALL_CATEGORIES,
+  ALL_TAGS,
   BULK_MIN_TOKENS,
   DEAL_ITEMS,
+  NO_TAG,
   categoryOptionsOf,
   dealItemsCountOf,
   filterProducts,
@@ -35,6 +37,7 @@ import {
   matchesCategory,
   parseBulkQuery,
 } from '../src/utils/adminFilter.js'
+import { TAG_VIEW, matchesTagView } from '../src/utils/navViews.js'
 
 let passed = 0
 let failed = 0
@@ -284,5 +287,36 @@ console.log('\n[10] ⚡ Deal Items — a view, not a category')
 }
 
 console.log(`\n${'─'.repeat(44)}`)
+/* ── 标签筛选 ──
+ *
+ * 视图判定和前台共用 `matchesTagView`，所以这里锁两件事：视图算得对、
+ * 自由文本是"标签里包含这段字"（大小写无关），以及它和分类/搜索是 AND。 */
+console.log('\n[9] Tag filter')
+
+const tagged = [
+  { id: 'a', sku: 'A1', name: 'Alpha', category: 'Tops', tag: 'New' },
+  { id: 'b', sku: 'B1', name: 'Bravo', category: 'Tops', tag: 'Best-seller' },
+  { id: 'c', sku: 'C1', name: 'Charlie', category: 'Bottoms', tag: 'Bestseller, New' },
+  { id: 'd', sku: 'D1', name: 'Delta', category: 'Bottoms', tag: 'Holiday Picks' },
+  { id: 'e', sku: 'E1', name: 'Echo', category: 'Tops', tag: '' },
+]
+
+const idsOf = (list) => list.map((item) => item.id)
+
+check('new view', idsOf(filterProducts(tagged, { tagView: TAG_VIEW.NEW })), ['a', 'c'])
+check('bestseller view', idsOf(filterProducts(tagged, { tagView: TAG_VIEW.BESTSELLER })), ['b', 'c'])
+check('holiday view', idsOf(filterProducts(tagged, { tagView: TAG_VIEW.HOLIDAY })), ['d'])
+check('no tag', idsOf(filterProducts(tagged, { tagView: NO_TAG })), ['e'])
+check('all tags is not a filter', filterProducts(tagged, { tagView: ALL_TAGS }).length, 5)
+check('tag text is case-insensitive', idsOf(filterProducts(tagged, { tagQuery: 'BEST' })), ['b', 'c'])
+check('tag text matches inside a word', idsOf(filterProducts(tagged, { tagQuery: 'oliday' })), ['d'])
+check('tag text with no hit', filterProducts(tagged, { tagQuery: 'zzz' }), [])
+check('view AND text', idsOf(filterProducts(tagged, { tagView: TAG_VIEW.NEW, tagQuery: 'best' })), ['c'])
+check('tag filter AND category', idsOf(filterProducts(tagged, { category: 'Tops', tagView: TAG_VIEW.NEW })), ['a'])
+check('tag filter keeps catalogue order', idsOf(filterProducts(tagged, { tagQuery: 'e' })), ['a', 'b', 'c'])
+check('empty tag query is not a filter', filterProducts(tagged, { tagQuery: '   ' }).length, 5)
+check('missing tag field is safe', filterProducts([{ id: 'x' }], { tagView: NO_TAG }).length, 1)
+check('matchesTagView ignores an unknown view', matchesTagView(tagged[0], 'nope'), false)
+
 console.log(`Passed ${passed}${failed ? `, failed ${failed}` : ''}`)
 if (failed) process.exit(1)

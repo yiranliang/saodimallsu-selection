@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback, useDeferredValue } from 'react'
 import Header from '../components/Header.jsx'
 import { brandConfig } from '../data/products.js'
-import CategoryNav from '../components/CategoryNav.jsx'
+import SiteNav from '../components/SiteNav.jsx'
 import ProductGrid from '../components/ProductGrid.jsx'
 import ProductDetail from '../components/ProductDetail.jsx'
 import FeaturedSection from '../components/FeaturedSection.jsx'
@@ -42,6 +42,13 @@ import {
 import { hasSeenGuide, markGuideSeen, shouldAutoOpen } from '../utils/guide.js'
 import { mulberry32, nextSeed, pickFeatured } from '../utils/featured.js'
 import { PAGE_SIZE, storefrontOrder, filterCatalogue, slicePage, nextLimit, hasMore } from '../utils/catalogue.js'
+import {
+  TAG_VIEW,
+  buildTagIndex,
+  isTagView,
+  tagViewCount,
+  tagViewProducts,
+} from '../utils/navViews.js'
 
 /**
  * Sold-out check that folds "no ASIN" in, for the storefront.
@@ -75,8 +82,10 @@ export default function SelectionPage() {
    * 这个名字和常规 Tab 的固定名（`Limited Deals`）撞车时退回 `Campaign Deals`
    * —— 见 `campaignTabLabelOf`：设置里那个 key 是拆分前留下的，历史值可能
    * 就是旧的默认名。 */
-  const { dealsTabLabel } = useSettings()
+  const { dealsTabLabel, holidayLabel: holidayTabLabel } = useSettings()
   const campaignTabLabel = campaignTabLabelOf(dealsTabLabel)
+  /* 节日专区在导航上的名字来自 settings（`holiday_label`），换季时运营自己改。 */
+  const holidayLabel = holidayTabLabel || 'Holiday Picks'
   // Subscribed so the cards re-render when the ASIN map lands
   useAmazonLinks()
 
@@ -112,6 +121,11 @@ export default function SelectionPage() {
   /* Which discount band the ⚡ Limited Deals tab is narrowed to. `'all'` is the
    * tab's own default; the four real bands come from DEAL_BUCKETS. */
   const [dealBucket, setDealBucket] = useState('all')
+  /* ⚡ 常规秒杀的二级视图：全部 / 进行中 / 排期中。时间由导入时的 sale_* 决定，
+   * 不需要运营手动挪 —— 到了开始时间，`dealPhase` 自动把它算进 Active。 */
+  const [dealState, setDealState] = useState('all')
+  /* 这一屏的"现在"：一个 timer 服务整屏，只有常规秒杀才会跳（见下面的 effect）。 */
+  const [dealNow, setDealNow] = useState(() => Date.now())
   /* Onboarding guide. `open` is the only state: whether it *should* open first
    * is decided once, below, from localStorage + whether the grid has data. */
   const [guideOpen, setGuideOpen] = useState(false)
@@ -244,6 +258,21 @@ export default function SelectionPage() {
     reconcile(products)
   }, [products, reconcile])
 
+  /* ── 标签视图（New / Bestseller / Holiday Picks）──
+   *
+   * 一次遍历建索引，之后切视图只做 Set.has —— 搜索框每敲一个字都不会重新切词。
+   * `catalogue` 每次刷新都是新数组（realtime / 后台编辑 / 首载），所以后台改完
+   * 标签后索引自然失效重算，不需要手动 invalidate。 */
+  const tagIndex = useMemo(() => buildTagIndex(catalogue), [catalogue])
+  const tagCounts = useMemo(
+    () => ({
+      [TAG_VIEW.NEW]: tagViewCount(tagIndex, TAG_VIEW.NEW),
+      [TAG_VIEW.BESTSELLER]: tagViewCount(tagIndex, TAG_VIEW.BESTSELLER),
+      [TAG_VIEW.HOLIDAY]: tagViewCount(tagIndex, TAG_VIEW.HOLIDAY),
+    }),
+    [tagIndex],
+  )
+
   /* ── categories derived from the live catalogue ── */
   const categoryCounts = useMemo(() => {
     const counts = {}
@@ -263,7 +292,12 @@ export default function SelectionPage() {
       if (i !== -1) return i
       return name === UNCATEGORISED ? 999 : 500
     }
-    return Object.keys(categoryCounts).sort((a, b) => rank(a) - rank(b))
+    /* 只列出**真的有商品**的分类：某分类在后台存在、但商品全被删/全隐藏时，
+     * 前台不该留一个点进去是空的入口（`categoryCounts` 已经按可见目录算过，
+     * 这里再挡一道 0，防御将来有人改了上面那段）。 */
+    return Object.keys(categoryCounts)
+      .filter((name) => (categoryCounts[name] || 0) > 0)
+      .sort((a, b) => rank(a) - rank(b))
   }, [categoryCounts, categoryOrder])
 
   /* The search box stays fully responsive while the grid catches up.
@@ -290,6 +324,16 @@ export default function SelectionPage() {
    * 改数量都不会让推荐位重洗 —— 那些操作每变一次就重排一次卡片，等于让她
    * 找不到刚看到的那件。换种子是纯本地状态更新，不触发任何请求。 */
   const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Math.random() * 0x7fffffff))
+  /* 顶栏第二行那枚筛选胶囊：分类和标签视图才有意义（Sale 两个专区和
+   * "All products" 已经在菜单里高亮了）。 */
+  const activeFilterLabel = isTagView(activeCategory)
+    ? { [TAG_VIEW.NEW]: 'New', [TAG_VIEW.BESTSELLER]: 'Bestseller', [TAG_VIEW.HOLIDAY]: holidayLabel }[
+        activeCategory
+      ]
+    : activeCategory !== 'All' && !inDealsView
+      ? activeCategory
+      : ''
+
   const showFeatured = activeCategory === 'All' && !deferredQuery.trim() && !inDealsView
   const featured = useMemo(
     () => (showFeatured ? pickFeatured(catalogue, { random: mulberry32(featuredSeed) }) : []),
@@ -298,6 +342,34 @@ export default function SelectionPage() {
   const shuffleFeatured = useCallback(() => {
     setFeaturedSeed((prev) => nextSeed(prev))
   }, [])
+
+  /* 常规秒杀按时间分成两档：进行中 / 排期中。同一份 `sale_start` / `sale_end`，
+   * 只是读的时刻不同 —— 所以导入时不用选状态，时间到了自己会从 Upcoming 挪进
+   * Active（`dealPhase` 就是前台卡片判断 Live/Scheduled 用的那个函数）。 */
+  const regularLive = useMemo(
+    () => regularPool.filter((product) => dealPhase(product, dealNow) === 'live'),
+    [regularPool, dealNow],
+  )
+  const regularUpcoming = useMemo(
+    () => regularPool.filter((product) => dealPhase(product, dealNow) === 'scheduled'),
+    [regularPool, dealNow],
+  )
+  const dealStateCounts = useMemo(
+    () => ({
+      all: regularPool.length,
+      active: regularLive.length,
+      upcoming: regularUpcoming.length,
+    }),
+    [regularPool, regularLive, regularUpcoming],
+  )
+
+  /* 这一屏实际要筛的池子：大促看桶、常规秒杀看状态、其它就是原池。 */
+  const dealStatePool = useMemo(() => {
+    if (!isDeals) return activePool
+    if (dealState === 'active') return regularLive
+    if (dealState === 'upcoming') return regularUpcoming
+    return activePool
+  }, [activePool, isDeals, dealState, regularLive, regularUpcoming])
 
   /* Filter once, page after — the slice is always the last step, so "load more"
    * keeps counting inside the current category + search, never the whole
@@ -309,13 +381,13 @@ export default function SelectionPage() {
   const dealSearch = useMemo(
     () =>
       inDealsView
-        ? filterCatalogue(activePool, {
+        ? filterCatalogue(dealStatePool, {
             category: 'All',
             query: deferredQuery,
             uncategorised: UNCATEGORISED,
           })
         : [],
-    [activePool, inDealsView, deferredQuery],
+    [dealStatePool, inDealsView, deferredQuery],
   )
 
   /* `all` is the number of deals in this view, not the sum of the bands — the
@@ -336,12 +408,21 @@ export default function SelectionPage() {
     }
     if (isDeals) return dealSearch
 
+    /* New / Bestseller / Holiday Picks：纯前端标签过滤，不发请求。 */
+    if (isTagView(activeCategory)) {
+      return filterCatalogue(tagViewProducts(catalogue, activeCategory, tagIndex), {
+        category: 'All',
+        query: deferredQuery,
+        uncategorised: UNCATEGORISED,
+      })
+    }
+
     return filterCatalogue(catalogue, {
       category: activeCategory,
       query: deferredQuery,
       uncategorised: UNCATEGORISED,
     })
-  }, [catalogue, dealSearch, isDeals, isCampaign, dealBucket, activeCategory, deferredQuery])
+  }, [catalogue, tagIndex, dealSearch, isDeals, isCampaign, dealBucket, activeCategory, deferredQuery])
 
   /* Badge first, THEN page. The order of those two steps is the whole feature:
  * slicing first would only shuffle the 24 cards already on screen, so a badged
@@ -378,7 +459,6 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
   /* 常规秒杀卡片的倒计时：一个 timer 服务整屏，间隔由"最快结束/开始的那件"
    * 决定（一小时内每秒跳、之外半分钟一次）。只有这一屏才转 —— 别的面不传
    * `now`，卡片就不会因为时间流逝而重渲染。 */
-  const [dealNow, setDealNow] = useState(() => Date.now())
   useEffect(() => {
     if (!isDeals) return undefined
     let timer = 0
@@ -587,23 +667,31 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
 
   return (
     <div className="min-h-screen bg-cream">
-      <Header influencerName={influencerName} />
-
-      <CategoryNav
-        categories={categoryList}
-        active={activeCategory}
-        counts={categoryCounts}
-        total={catalogue.length}
-        onChange={setActiveCategory}
-        query={query}
-        onQueryChange={setQuery}
-        dealsCount={regularPool.length}
-        campaignCount={campaignPool.length}
-        campaignLabel={campaignTabLabel}
-        bucket={dealBucket}
-        bucketCounts={dealBucketCounts}
-        onBucketChange={setDealBucket}
-      />
+      {/* 顶栏：Logo + 菜单 + 搜索同一行，滚动时整条吸顶；Hero 在它下面滚走。 */}
+      <Header influencerName={influencerName}>
+        <SiteNav
+          categories={categoryList}
+          categoryCounts={categoryCounts}
+          active={activeCategory}
+          total={catalogue.length}
+          onChange={setActiveCategory}
+          query={query}
+          onQueryChange={setQuery}
+          dealsCount={regularPool.length}
+          campaignCount={campaignPool.length}
+          campaignLabel={campaignTabLabel}
+          tagCounts={tagCounts}
+          bucket={dealBucket}
+          bucketCounts={dealBucketCounts}
+          onBucketChange={setDealBucket}
+          dealState={dealState}
+          onDealStateChange={setDealState}
+          dealStateCounts={dealStateCounts}
+          filterLabel={activeFilterLabel}
+          holidayLabel={holidayLabel}
+          onClearFilter={() => setActiveCategory('All')}
+        />
+      </Header>
 
       {/* Bottom padding keeps the sticky bar off the last row */}
       <main className="pb-32 pt-5 sm:pb-36 sm:pt-7">

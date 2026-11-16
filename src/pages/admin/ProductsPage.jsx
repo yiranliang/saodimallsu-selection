@@ -81,16 +81,21 @@ import { copyToClipboard, downloadText } from '../../utils/clipboard.js'
 import { skuOf, variantKey } from '../../utils/sku.js'
 import {
   ALL_CATEGORIES as ALL,
+  ALL_TAGS,
   DEAL_ITEMS,
+  NO_TAG,
   dealItemsCountOf,
   filterProducts,
   categoryOptionsOf,
   parseBulkQuery,
 } from '../../utils/adminFilter.js'
+import { HOLIDAY_TAB_DEFAULT_LABEL, TAG_VIEW, matchesTagView, normaliseHolidayLabel } from '../../utils/navViews.js'
 import {
   getSettingsStatus,
   resetDealsTabLabel,
+  resetHolidayLabel,
   setDealsTabLabel,
+  setHolidayLabel,
 } from '../../utils/settingsStore.js'
 import { useSettings } from '../../hooks/useSettings.js'
 import { t } from '../../i18n/admin.js'
@@ -228,15 +233,26 @@ export default function ProductsPage() {
   const settings = useSettings()
   const [tabLabelDraft, setTabLabelDraft] = useState(settings.dealsTabLabel)
   const [tabLabelSaving, setTabLabelSaving] = useState(false)
+  /* 节日专区名（季节性的，换季就改） */
+  const [holidayDraft, setHolidayDraft] = useState(settings.holidayLabel)
+  const [holidaySaving, setHolidaySaving] = useState(false)
   /* 存库的值变了就同步输入框（保存成功后、或另一台设备改了）。
    * 输入过程中不会被覆盖，因为依赖只有这个值。 */
   useEffect(() => {
     setTabLabelDraft(settings.dealsTabLabel)
   }, [settings.dealsTabLabel])
+
+  useEffect(() => {
+    setHolidayDraft(settings.holidayLabel)
+  }, [settings.holidayLabel])
   const [selectedIds, setSelectedIds] = useState(() => new Set())
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState(ALL)
   const [soldOutOnly, setSoldOutOnly] = useState(false)
+  /* 标签筛选：视图（New / Bestseller / Holiday / 无标签）+ 自由文本。
+   * 纯前端，和分类、搜索是 AND 关系（见 utils/adminFilter.js）。 */
+  const [tagView, setTagView] = useState(ALL_TAGS)
+  const [tagQuery, setTagQuery] = useState('')
   const [categoryPanel, setCategoryPanel] = useState(false)
   const [newCategory, setNewCategory] = useState('')
   const [pendingCategoryDelete, setPendingCategoryDelete] = useState(null)
@@ -273,6 +289,19 @@ export default function ProductsPage() {
   const asinStatus = useAsinsStatus()
 
   /** Categories actually present in the catalogue, for the filter dropdown */
+  /* 标签筛选下拉里的数字：按整本目录算（和分类下拉一致），回答「点下去能看到多少」。 */
+  const tagCounts = useMemo(
+    () => ({
+      [TAG_VIEW.NEW]: products.filter((item) => matchesTagView(item, TAG_VIEW.NEW)).length,
+      [TAG_VIEW.BESTSELLER]: products.filter((item) => matchesTagView(item, TAG_VIEW.BESTSELLER)).length,
+      [TAG_VIEW.HOLIDAY]: products.filter((item) => matchesTagView(item, TAG_VIEW.HOLIDAY)).length,
+      [NO_TAG]: products.filter((item) => !String(item.tag || '').trim()).length,
+    }),
+    [products],
+  )
+
+  const tagFiltering = tagView !== ALL_TAGS || Boolean(tagQuery.trim())
+
   const categoryOptions = useMemo(() => categoryOptionsOf(products), [products])
   /* 批量改分类的下拉要连"还没有商品用、但已经在分类表里"的也得列出来 ——
    * 提前建好的分类（比如黑五专区）恰恰是最常被批量指派的目标。 */
@@ -321,8 +350,9 @@ export default function ProductsPage() {
    *  the only definition of "visible" — Select all, the bulk actions and the
    *  drag guard all read it. */
   const visible = useMemo(
-    () => filterProducts(products, { query, category, soldOutOnly, asinMap }),
-    [products, category, query, asinMap, soldOutOnly],
+    () =>
+      filterProducts(products, { query, category, soldOutOnly, asinMap, tagView, tagQuery }),
+    [products, category, query, asinMap, soldOutOnly, tagView, tagQuery],
   )
 
   /* The pasted 货号, parsed once per keystroke. `filterProducts` parses the same
@@ -387,7 +417,12 @@ export default function ProductsPage() {
   /* 下拉里那枚伪选项的数字，按整本目录算 —— 它回答"点下去能看到多少件"。 */
   const dealItemsCount = useMemo(() => dealItemsCountOf(products), [products])
 
-  const filtering = Boolean(query.trim()) || category !== ALL || soldOutOnly
+  const filtering =
+    Boolean(query.trim()) ||
+    category !== ALL ||
+    soldOutOnly ||
+    tagView !== ALL_TAGS ||
+    Boolean(tagQuery.trim())
   /* Dragging rewrites the entire sort_order column from one id array, so it is
    * only safe on the complete catalogue. The ⤒ ⤓ buttons keep working while
    * filtering. */
@@ -722,6 +757,32 @@ export default function ProductsPage() {
       showToast?.(err.message, 'error', 6000)
     } finally {
       setTabLabelSaving(false)
+    }
+  }
+
+  const handleSaveHolidayLabel = async () => {
+    if (holidaySaving) return
+    setHolidaySaving(true)
+    try {
+      const saved = await setHolidayLabel(holidayDraft)
+      showToast?.(`节日专区名已改为「${saved}」`, 'success')
+    } catch (err) {
+      showToast?.(err.message, 'error', 6000)
+    } finally {
+      setHolidaySaving(false)
+    }
+  }
+
+  const handleResetHolidayLabel = async () => {
+    if (holidaySaving) return
+    setHolidaySaving(true)
+    try {
+      const saved = await resetHolidayLabel()
+      showToast?.(`节日专区名已恢复为「${saved}」`, 'default')
+    } catch (err) {
+      showToast?.(err.message, 'error', 6000)
+    } finally {
+      setHolidaySaving(false)
     }
   }
 
@@ -1267,6 +1328,43 @@ export default function ProductsPage() {
           className="shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-charcoal-light transition hover:bg-cream-dark hover:text-charcoal disabled:cursor-not-allowed disabled:opacity-40"
         >{t('Reset')}</button>
         <span className="text-[10px] text-charcoal-light/70">{t('the chip at the top of the storefront')}</span>
+
+        {/* 节日专区名：和上面的秒杀 Tab 名同一张设置表。换季（圣诞 → 春季）
+            运营自己改，不用发版。 */}
+        <span className="w-full border-t border-charcoal/[0.06] pt-2.5"></span>
+        <span className="text-[10px] font-medium uppercase tracking-wider text-charcoal-light">
+          节日专区
+        </span>
+        <input
+          type="text"
+          value={holidayDraft}
+          onChange={(event) => setHolidayDraft(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') handleSaveHolidayLabel()
+            if (event.key === 'Escape') setHolidayDraft(settings.holidayLabel)
+          }}
+          maxLength={24}
+          placeholder={HOLIDAY_TAB_DEFAULT_LABEL}
+          aria-label="Holiday tab label"
+          className="min-w-0 flex-1 rounded-lg bg-cream px-2.5 py-1.5 text-[12px] text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-1 focus:ring-charcoal/25"
+        />
+        <button
+          type="button"
+          onClick={handleSaveHolidayLabel}
+          disabled={holidaySaving || normaliseHolidayLabel(holidayDraft) === settings.holidayLabel}
+          className="shrink-0 rounded-full bg-charcoal px-3 py-1.5 text-[11px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          {holidaySaving ? '保存中…' : '改名'}
+        </button>
+        <button
+          type="button"
+          onClick={handleResetHolidayLabel}
+          disabled={holidaySaving || settings.holidayLabel === HOLIDAY_TAB_DEFAULT_LABEL}
+          className="shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-charcoal-light transition hover:bg-cream-dark hover:text-charcoal disabled:cursor-not-allowed disabled:opacity-40"
+        >{t('Reset')}</button>
+        <span className="text-[10px] text-charcoal-light/70">
+          前台导航里 New / Bestseller 后面那一项；换季就改这里。
+        </span>
         {getSettingsStatus() === 'missing' && (
           <span className="w-full text-[10px] leading-relaxed text-amber-700">
             settings 表不存在，改名存不进去。先在 Supabase 跑一次 supabase/12-settings.sql。
@@ -1289,16 +1387,7 @@ export default function ProductsPage() {
         </div>
       )}
 
-      {/* Reorder / delete safety notice */}
-      <div className="mb-4 flex items-start gap-2 rounded-2xl bg-white px-3.5 py-3 ring-1 ring-charcoal/[0.07]">
-        <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-charcoal-light" />
-        <p className="text-[11.5px] leading-relaxed text-charcoal-light">
-          选品码存的是内部 id，不是位置。所以重排、删除都是安全的 ——
-          早就发出去的码依然能对到正确的商品。
-        </p>
-      </div>
-
-      {/* Category manager — add, rename, remove.
+        {/* Category manager — add, rename, remove.
           Full-width like the search bar below it: the 4xl cap left a dead strip
           on the right of a wide screen and made the panel read as a different
           column. Rows are one line each, so stretching costs nothing. */}
@@ -1454,6 +1543,62 @@ export default function ProductsPage() {
             <ChevronDown className="pointer-events-none absolute right-0 h-3 w-3 text-charcoal-light" />
           </span>
         </label>
+
+        {/* Tag filter — 和前台 New / Bestseller / Holiday 完全同一套判定
+            （`matchesTagView`），所以「前台归到 New 的商品」在这里一定筛得出来。
+            右边那个输入框是自由文本：输入 best 会把 Bestseller / Best-seller 一起捞出来。 */}
+        <label className="flex shrink-0 items-center gap-1.5 rounded-full bg-white py-2.5 pl-3 pr-2 ring-1 ring-charcoal/[0.07] focus-within:ring-charcoal/25">
+          <span className="whitespace-nowrap text-[11px] text-charcoal-light">标签</span>
+          <span className="relative flex items-center">
+            <select
+              value={tagView}
+              onChange={(e) => setTagView(e.target.value)}
+              aria-label="Filter by tag"
+              className="max-w-[8rem] appearance-none bg-transparent pr-4 text-[12px] text-charcoal focus:outline-none"
+            >
+              <option value={ALL_TAGS}>全部 ({products.length})</option>
+              <option value={TAG_VIEW.NEW}>New ({tagCounts[TAG_VIEW.NEW]})</option>
+              <option value={TAG_VIEW.BESTSELLER}>Bestseller ({tagCounts[TAG_VIEW.BESTSELLER]})</option>
+              <option value={TAG_VIEW.HOLIDAY}>Holiday ({tagCounts[TAG_VIEW.HOLIDAY]})</option>
+              <option value={NO_TAG}>无标签 ({tagCounts[NO_TAG]})</option>
+            </select>
+            <ChevronDown className="pointer-events-none absolute right-0 h-3 w-3 text-charcoal-light" />
+          </span>
+        </label>
+
+        <label className="flex min-w-[9rem] shrink-0 items-center gap-1.5 rounded-full bg-white px-3 py-2.5 ring-1 ring-charcoal/[0.07] focus-within:ring-charcoal/25">
+          <input
+            type="text"
+            value={tagQuery}
+            onChange={(e) => setTagQuery(e.target.value)}
+            placeholder="搜标签，如 best"
+            aria-label="Search tags"
+            className="w-full min-w-0 bg-transparent text-[12px] text-charcoal placeholder:text-charcoal-light/60 focus:outline-none"
+          />
+          {tagQuery && (
+            <button
+              type="button"
+              onClick={() => setTagQuery('')}
+              aria-label="Clear tag search"
+              className="shrink-0 rounded-full p-0.5 text-charcoal-light transition hover:text-charcoal"
+            >
+              <Close className="h-3 w-3" />
+            </button>
+          )}
+        </label>
+
+        {tagFiltering && (
+          <button
+            type="button"
+            onClick={() => {
+              setTagView(ALL_TAGS)
+              setTagQuery('')
+            }}
+            className="shrink-0 rounded-full px-2.5 py-2 text-[11px] text-charcoal-light underline-offset-2 transition hover:text-charcoal hover:underline"
+          >
+            清除标签筛选
+          </button>
+        )}
 
         {/* Sold-out view. A toggle rather than another entry in the category
             dropdown: it cuts across categories, and it is the one filter used

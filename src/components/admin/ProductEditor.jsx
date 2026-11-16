@@ -2,13 +2,14 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import Modal from '../Modal.jsx'
 import ProductImage from '../ProductImage.jsx'
 import { Close, Plus, Trash, Check, ChevronDown, ChevronUp, Image as ImageIcon, AlertCircle, ExternalLink, ArrowToTop } from '../icons.jsx'
-import { UNCATEGORISED, getBadgeColumnStatus, getTeaserColumnStatus, getDealColumnStatus, getAccColumnStatus, getSubBadgeStatus, getPriorityColumnStatus } from '../../store/productStore.js'
+import { UNCATEGORISED, getBadgeColumnStatus, getTeaserColumnStatus, getDealColumnStatus, getAccColumnStatus, getPriorityColumnStatus } from '../../store/productStore.js'
 import { isProductPartial } from '../../store/productStore.js'
 import { useCategories } from '../../hooks/useCategories.js'
 import { useAsins } from '../../hooks/useAsins.js'
 import { getAsinsStatus, isValidAsin } from '../../utils/asinStore.js'
 import { firstListing } from '../../utils/amazon.js'
-import { isColourType } from '../../utils/variantImage.js'
+import { isColourType, specTypeLabel } from '../../utils/variantImage.js'
+import { HOLIDAY_TOKEN, hasHolidayTag, toggleHolidayTag } from '../../utils/navViews.js'
 import { isSizeType, sizeOrder } from '../../utils/sizes.js'
 import { variantKey } from '../../utils/sku.js'
 import {
@@ -27,7 +28,6 @@ import {
   normaliseTagList,
 } from '../../utils/badge.js'
 import { parsePriorityInput } from '../../utils/batchOps.js'
-import { CAMPAIGN_QUICK_PICKS, normaliseCampaignDraft } from '../../utils/batchBadge.js'
 import { t } from '../../i18n/admin.js'
 import {
   VARIANT_IMAGE_MIME,
@@ -102,6 +102,9 @@ export default function ProductEditor({
    * An empty string is meaningful: it means "drop this combination's ASIN",
    * applied as a delete at merge time. */
   const [asinEdits, setAsinEdits] = useState({})
+  /* 「标签」开关：关着就完全不显示标签编辑器，保存时写空串。
+   * 初值取决于这件商品有没有标签；换商品时跟着重播种（见下面的 seed）。 */
+  const [tagOn, setTagOn] = useState(() => Boolean(String(product?.tag || '').trim()))
   const [asinBlurred, setAsinBlurred] = useState({})
   const asinMap = useAsins()
 
@@ -150,6 +153,7 @@ export default function ProductEditor({
     setAsinBlurred({})
     setFrozenOrder(null)
     setOptionPrompt(null)
+    setTagOn(Boolean(String(product?.tag || '').trim()))
   }
 
   /* 队列里的"点了保存"只在同一次打开里有效：换商品、或者关掉弹层就作废 ——
@@ -608,12 +612,6 @@ export default function ProductEditor({
       discountLabel: dealOn ? draft.discountLabel.trim() : '',
     }
 
-    /* 大促标签单独规整：单枚、折叠空白。和上面的运营标签没有任何关系 ——
-     * 一个决定"卡片上写什么"，一个决定"进哪个大促 Tab"。 */
-    const campaign = normaliseCampaignDraft({
-      text: draft.subTag,
-      color: draft.subBadgeColor,
-    })
 
     // `id` is internal and never changes; `sku` is the 货号 and is free-form
     setSaving(true)
@@ -628,10 +626,9 @@ export default function ProductEditor({
        * 颜色仍然保留：文字空 = 没有标签，颜色跟着清（映射层也会兜底）。 */
       tag: normaliseTagList(draft.tag),
       badgeColor: normaliseBadgeColor(draft.badgeColor),
-      /* 大促标签：**和运营标签完全独立**。它不进卡片，只用来把这批商品归到
-       * 对应的大促专区 Tab（`isCampaignDeal`）。黑五换网一改的就是这一枚。 */
-      subTag: campaign.subTag,
-      subBadgeColor: campaign.subBadgeColor,
+      /* 大促标签（`sub_tag`）不在这里写：它由「导入秒杀 / 批量开秒杀」自动维护
+       * （见 `setProductsDeals`），编辑器只读不写 —— 不传这一列，`updateProduct`
+       * 会把缓存里已有的值原样带回去，所以保存商品不会清掉活动归属。 */
       /* 置顶权重：空输入 = 0 = 不置顶。只在秒杀专区内部生效，
        * 不碰 sort_order —— 拖拽序仍然由 reorder 写入独占。 */
       dealPriority: parsePriorityInput(draft.dealPriority) ?? 0,
@@ -685,13 +682,14 @@ export default function ProductEditor({
   /* `null` = no colour set, which means "keep the default charcoal pill" —
    * `badgeStyle` returns null rather than a default so the classes stay. */
   const previewBadge = badgeStyle(draft.badgeColor)
+  /* 节日开关的状态直接由标签串推出来：一枚 Holiday 词 = 开。 */
+  const holidayOn = hasHolidayTag(draft.tag)
   /* 预览按前台同一条规则切分：逗号/顿号/竖线都认，最多 3 枚。 */
   const previewTags = normaliseTagList(draft.tag).split(', ').filter(Boolean)
   /* Read during render, not in state: the flag flips once per session (when the
    * first catalogue read discovers the column), and the editor is only ever
    * opened after that read. */
   const badgeColumnMissing = getBadgeColumnStatus() === 'missing'
-  const subBadgeColumnMissing = getSubBadgeStatus() === 'missing'
   const teaserColumnMissing = getTeaserColumnStatus() === 'missing'
   const dealColumnMissing = getDealColumnStatus() === 'missing'
   const accColumnMissing = getAccColumnStatus() === 'missing'
@@ -1061,212 +1059,171 @@ export default function ProductEditor({
                 )}
               </Field>
               <div className="block">
-                <span className="mb-1.5 flex items-baseline gap-1.5 text-[11px] font-medium tracking-wider text-charcoal-light">{t('Badge')}<span className="font-normal tracking-normal text-charcoal-light/60">可选 · 多个用逗号分隔</span>
-                </span>
-
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="text"
-                    value={draft.tag}
-                    onChange={(e) => patch('tag', e.target.value)}
-                    placeholder="例如 Bestseller, New"
-                    aria-label="Badge tags, comma separated"
-                    className="input-field min-w-0 flex-1 text-[13px]"
-                  />
-
-                  {/* Native picker: zero dependencies, and it already knows the
-                      OS palette. The visible square is the current colour, the
-                      input itself is transparent on top of it. */}
-                  <span
-                    className="relative flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-lg ring-1 ring-charcoal/10"
-                    style={{ backgroundColor: normaliseBadgeColor(draft.badgeColor) || '#2B2B2B' }}
-                    title="Pick any color"
-                  >
-                    <input
-                      type="color"
-                      value={normaliseBadgeColor(draft.badgeColor) || '#2B2B2B'}
-                      onChange={(e) => patch('badgeColor', e.target.value.toUpperCase())}
-                      aria-label="Badge colour"
-                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                    />
-                  </span>
-                </div>
-
-                {/* Templates — the five words this catalogue actually sorts by
-                    ("is it new / does it sell / is it trending / must I have it /
-                    can I get it again"). One click fills the text AND the
-                    colour, because the word is a decision and the colour is
-                    part of that decision: picking "Trending" and then hunting
-                    for a violet hex is two jobs where there was one.
-
-                    Editing the text afterwards keeps the colour on purpose —
-                    "Trending" → "Trending Now" must not turn the badge grey.
-                    The faint ring marks "the colour you have came from this
-                    template" after the text drifts away from it, so the
-                    operator can still see which one it was.
-
-                    Each pill is drawn with `badgeStyle(value)` — the very
-                    inline style the storefront badge uses — so the button is
-                    a preview, not an approximation of one. */}
-                <div className="mt-2 flex flex-wrap items-center gap-1.5">
-                  <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-charcoal-light/60">{t('Quick fill')}</span>
-                  {BADGE_TEMPLATES.map((tpl) => {
-                    const hex = normaliseBadgeColor(draft.badgeColor)
-                    const exact =
-                      badgeTemplateMatch(draft.tag, draft.badgeColor)?.value === tpl.value
-                    const colourOnly = !exact && hex === tpl.value
-                    return (
-                      <button
-                        key={tpl.value}
-                        type="button"
-                        onClick={() => {
-                          patch('tag', tpl.text)
-                          patch('badgeColor', tpl.value)
-                        }}
-                        aria-label={`Badge template ${tpl.text} (${tpl.label})`}
-                        aria-pressed={exact}
-                        title={`${tpl.text} — ${tpl.label}. Fills the text and the colour; edit the text afterwards and the colour stays.`}
-                        style={badgeStyle(tpl.value) || undefined}
-                        className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
-                          exact
-                            ? 'ring-2 ring-charcoal/70 ring-offset-1'
-                            : colourOnly
-                              ? 'ring-1 ring-charcoal/25 ring-offset-1'
-                              : 'ring-1 ring-charcoal/10 hover:ring-charcoal/40'
-                        }`}
-                      >
-                        {tpl.text}
-                      </button>
-                    )
-                  })}
-                </div>
-
-                {/* Presets first — most badges are one of four meanings
-                    (new / restock / sale / warning), and typing a hex code for
-                    those is slower than one click. */}
-                <div className="mt-1.5 flex items-center gap-1">
-                  {BADGE_COLOR_PRESETS.map((preset) => {
-                    const active = normaliseBadgeColor(draft.badgeColor) === preset.value
-                    return (
-                      <button
-                        key={preset.value}
-                        type="button"
-                        onClick={() => patch('badgeColor', preset.value)}
-                        aria-label={`Badge colour ${preset.label}`}
-                        aria-pressed={active}
-                        title={preset.label}
-                        style={{ backgroundColor: preset.value }}
-                        className={`h-5 w-5 rounded-full transition ${
-                          active
-                            ? 'ring-2 ring-charcoal/70 ring-offset-1'
-                            : 'ring-1 ring-charcoal/15 hover:ring-charcoal/40'
-                        }`}
-                      />
-                    )
-                  })}
+                {/* 标签开关：关掉 = 这件商品没有标签（保存时写空串）。 */}
+                <div className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-charcoal/5">
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-medium tracking-wider text-charcoal-light">标签</div>
+                    <p className="mt-0.5 text-[10.5px] leading-relaxed text-charcoal-light">
+                      打开后才能写标签；多个用逗号分隔，最多 3 枚。关掉就等于这件商品没有标签。
+                    </p>
+                  </div>
                   <button
                     type="button"
-                    onClick={() => patch('badgeColor', '')}
-                    aria-label="No badge colour"
-                    title="Back to the default charcoal badge"
-                    className={`ml-1 rounded-full px-2 py-0.5 text-[10px] transition ${
-                      draft.badgeColor
-                        ? 'text-charcoal-light hover:bg-cream-dark hover:text-charcoal'
-                        : 'text-charcoal-light/40'
+                    role="switch"
+                    aria-checked={tagOn}
+                    aria-label="标签开关"
+                    onClick={() => {
+                      const next = !tagOn
+                      setTagOn(next)
+                      if (!next) patch('tag', hasHolidayTag(draft.tag) ? HOLIDAY_TOKEN : '')
+                    }}
+                    className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
+                      tagOn ? 'bg-accent' : 'bg-charcoal/20'
                     }`}
-                  >{t('Default')}</button>
+                  >
+                    <span
+                      className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all duration-200 ${
+                        tagOn ? 'left-[22px]' : 'left-0.5'
+                      }`}
+                    />
+                  </button>
                 </div>
 
-                {/* The colour is a real column, and a database that has not run
-                    `07-badge-color.sql` silently drops it on save. Saying nothing
-                    is what produced "I set a colour and the storefront ignored
-                    it" — so the editor says it, next to the swatches, and the
-                    save toast says it again. */}
-                {badgeColumnMissing && (
-                  <p
-                    data-badge-column-missing
-                    className="mt-1.5 rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 ring-1 ring-amber-200"
-                  >
-                    颜色暂时<strong>存不进去</strong>：数据库里没有{' '}
-                    <code className="font-mono">badge_color</code> 列。先到 Supabase SQL Editor
-                    跑一次 <code className="font-mono">supabase/07-badge-color.sql</code>，
-                    再刷新这个页面。角标文字仍然照常保存。
-                  </p>
+                {tagOn && (
+                  <div className="mt-2.5">
+                    <div className="flex items-center gap-1.5">
+                      <input
+                        type="text"
+                        value={draft.tag}
+                        onChange={(e) => patch('tag', e.target.value)}
+                        placeholder="例如 Bestseller, New"
+                        aria-label="Badge tags, comma separated"
+                        className="input-field min-w-0 flex-1 text-[13px]"
+                      />
+                      <span
+                        className="relative flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-lg ring-1 ring-charcoal/10"
+                        style={{ backgroundColor: normaliseBadgeColor(draft.badgeColor) || '#2B2B2B' }}
+                        title="Pick any color"
+                      >
+                        <input
+                          type="color"
+                          value={normaliseBadgeColor(draft.badgeColor) || '#2B2B2B'}
+                          onChange={(e) => patch('badgeColor', e.target.value.toUpperCase())}
+                          aria-label="Badge colour"
+                          className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
+                        />
+                      </span>
+                    </div>
+
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
+                      <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-charcoal-light/60">{t('Quick fill')}</span>
+                      {BADGE_TEMPLATES.map((tpl) => {
+                        const hex = normaliseBadgeColor(draft.badgeColor)
+                        const exact =
+                          badgeTemplateMatch(draft.tag, draft.badgeColor)?.value === tpl.value
+                        const colourOnly = !exact && hex === tpl.value
+                        return (
+                          <button
+                            key={tpl.value}
+                            type="button"
+                            onClick={() => {
+                              patch('tag', tpl.text)
+                              patch('badgeColor', tpl.value)
+                            }}
+                            aria-label={`Badge template ${tpl.text} (${tpl.label})`}
+                            aria-pressed={exact}
+                            title={`${tpl.text} — ${tpl.label}. Fills the text and the colour; edit the text afterwards and the colour stays.`}
+                            style={badgeStyle(tpl.value) || undefined}
+                            className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
+                              exact
+                                ? 'ring-2 ring-charcoal/70 ring-offset-1'
+                                : colourOnly
+                                  ? 'ring-1 ring-charcoal/25 ring-offset-1'
+                                  : 'ring-1 ring-charcoal/10 hover:ring-charcoal/40'
+                            }`}
+                          >
+                            {tpl.text}
+                          </button>
+                        )
+                      })}
+                    </div>
+
+                    <div className="mt-1.5 flex items-center gap-1">
+                      {BADGE_COLOR_PRESETS.map((preset) => {
+                        const active = normaliseBadgeColor(draft.badgeColor) === preset.value
+                        return (
+                          <button
+                            key={preset.value}
+                            type="button"
+                            onClick={() => patch('badgeColor', preset.value)}
+                            aria-label={`Badge colour ${preset.label}`}
+                            aria-pressed={active}
+                            title={preset.label}
+                            style={{ backgroundColor: preset.value }}
+                            className={`h-5 w-5 rounded-full transition ${
+                              active
+                                ? 'ring-2 ring-charcoal/70 ring-offset-1'
+                                : 'ring-1 ring-charcoal/15 hover:ring-charcoal/40'
+                            }`}
+                          />
+                        )
+                      })}
+                      <button
+                        type="button"
+                        onClick={() => patch('badgeColor', '')}
+                        aria-label="No badge colour"
+                        title="Back to the default charcoal badge"
+                        className={`ml-1 rounded-full px-2 py-0.5 text-[10px] transition ${
+                          draft.badgeColor
+                            ? 'text-charcoal-light hover:bg-cream-dark hover:text-charcoal'
+                            : 'text-charcoal-light/40'
+                        }`}
+                      >{t('Default')}</button>
+                    </div>
+
+                    {badgeColumnMissing && (
+                      <p
+                        data-badge-column-missing
+                        className="mt-1.5 rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 ring-1 ring-amber-200"
+                      >
+                        颜色暂时<strong>存不进去</strong>：数据库里没有{' '}
+                        <code className="font-mono">badge_color</code> 列。先到 Supabase SQL Editor
+                        跑一次 <code className="font-mono">supabase/07-badge-color.sql</code>，
+                        再刷新这个页面。标签文字仍然照常保存。
+                      </p>
+                    )}
+                  </div>
                 )}
               </div>
 
-              {/* 大促标签 —— **不显示在卡片上**，只决定这批商品进哪个大促
-                  专区 Tab（见 isCampaignDeal）。和上面的运营标签完全独立：
-                  运营标签写 Bestseller，这里写 Black Friday。黑五换网一时改
-                  的就是这一枚。 */}
-              <div className="mt-3 block">
-                <span className="mb-1.5 flex items-baseline gap-1.5 text-[11px] font-medium tracking-wider text-charcoal-light">大促标签<span className="font-normal tracking-normal text-charcoal-light/60">可选 · 不进卡片</span>
-                </span>
-
-                <div className="flex items-center gap-1.5">
-                  <input
-                    type="text"
-                    value={draft.subTag}
-                    onChange={(e) => patch('subTag', e.target.value)}
-                    placeholder="例如 Black Friday"
-                    aria-label="Campaign tag text"
-                    className="input-field min-w-0 flex-1 text-[13px]"
-                  />
-                  <span
-                    className="relative flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-lg ring-1 ring-charcoal/10"
-                    style={{
-                      backgroundColor: normaliseBadgeColor(draft.subBadgeColor) || '#2B2B2B',
-                    }}
-                    title="Pick any color"
-                  >
-                    <input
-                      type="color"
-                      value={normaliseBadgeColor(draft.subBadgeColor) || '#2B2B2B'}
-                      onChange={(e) => patch('subBadgeColor', e.target.value.toUpperCase())}
-                      aria-label="Campaign tag colour"
-                      className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                    />
-                  </span>
-                </div>
-
-                <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                  {CAMPAIGN_QUICK_PICKS.map((word) => (
-                    <button
-                      key={word}
-                      type="button"
-                      onClick={() => patch('subTag', word)}
-                      aria-pressed={draft.subTag === word}
-                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition ${
-                        draft.subTag === word
-                          ? 'bg-charcoal text-cream'
-                          : 'bg-cream-dark text-charcoal/70 hover:text-charcoal'
-                      }`}
-                    >
-                      {word}
-                    </button>
-                  ))}
-                  {draft.subTag && (
-                    <button
-                      type="button"
-                      onClick={() => patch('subTag', '')}
-                      className="ml-1 text-[10px] text-charcoal-light transition hover:text-charcoal"
-                    >{t('Clear')}</button>
-                  )}
-                </div>
-
-                {subBadgeColumnMissing && (
-                  <p className="mt-1.5 rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 ring-1 ring-amber-200">
-                    这块暂时<strong>存不进去</strong>：数据库里没有{' '}
-                    <code className="font-mono">sub_tag</code> 列。先跑一次{' '}
-                    <code className="font-mono">supabase/11-sub-badge-deal-priority.sql</code>，
-                    再刷新页面。
+              {/* 节日特选：一个开关，等于在标签里加/去一枚 `Holiday`。 */}
+              <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-charcoal/5">
+                <div className="min-w-0">
+                  <div className="text-[12px] font-medium text-charcoal">节日特选</div>
+                  <p className="mt-0.5 text-[10.5px] leading-relaxed text-charcoal-light">
+                    开启后自动加一枚 Holiday 标签，前台就会出现在节日专区里。
                   </p>
-                )}
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={holidayOn}
+                  aria-label="节日特选开关"
+                  onClick={() => patch('tag', toggleHolidayTag(draft.tag, !holidayOn))}
+                  className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
+                    holidayOn ? 'bg-accent' : 'bg-charcoal/20'
+                  }`}
+                >
+                  <span
+                    className={`absolute top-0.5 h-5 w-5 rounded-full bg-white shadow-sm transition-all duration-200 ${
+                      holidayOn ? 'left-[22px]' : 'left-0.5'
+                    }`}
+                  />
+                </button>
               </div>
 
             </div>
-
-            {/* Visibility — off the storefront, still in the catalogue */}
+{/* Visibility — off the storefront, still in the catalogue */}
             <div className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-charcoal/5">
               <div className="min-w-0">
                 <div className="text-[12px] font-medium text-charcoal">
@@ -1302,7 +1259,6 @@ export default function ProductEditor({
             <div className="flex items-center justify-between">
               <div>
                 <div className="text-[11px] font-medium tracking-wider text-charcoal-light">{t('Options')}</div>
-                <p className="mt-1 text-[11px] text-charcoal-light/80">{t('Colour, size, anything. Creators pick one of each.')}</p>
               </div>
               <button
                 type="button"
@@ -1369,14 +1325,22 @@ export default function ProductEditor({
                     }}
                   >
                     <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={group.type}
-                        onChange={(e) => setSpecType(gi, e.target.value)}
-                        placeholder={t('Colour')}
-                        aria-label={`Option group ${gi + 1} name`}
-                        className="min-w-0 flex-1 rounded-lg bg-cream-dark px-2.5 py-1.5 text-[12px] font-medium text-charcoal placeholder:font-normal placeholder:text-charcoal-light/60 focus:outline-none focus:ring-1 focus:ring-accent"
-                      />
+                      /* 颜色和尺码是**固定轴**：名字只读，避免把 `Colour` 改成别的
+                       * 拼写、把 ASIN 的 `Colour|Size` 键对不上。自定义轴仍然是输入框。 */
+                      {colourGroup || sizeGroup ? (
+                        <span className="min-w-0 flex-1 rounded-lg bg-cream-dark px-2.5 py-1.5 text-[12px] font-medium text-charcoal">
+                          {specTypeLabel(group.type)}
+                        </span>
+                      ) : (
+                        <input
+                          type="text"
+                          value={group.type}
+                          onChange={(e) => setSpecType(gi, e.target.value)}
+                          placeholder={t('Group name')}
+                          aria-label={`Option group ${gi + 1} name`}
+                          className="min-w-0 flex-1 rounded-lg bg-cream-dark px-2.5 py-1.5 text-[12px] font-medium text-charcoal placeholder:font-normal placeholder:text-charcoal-light/60 focus:outline-none focus:ring-1 focus:ring-accent"
+                        />
+                      )}
                       <button
                         type="button"
                         onClick={() => removeSpecType(gi)}

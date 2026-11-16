@@ -17,15 +17,18 @@
 
 import { isConfigured, requireClient } from '../lib/supabase.js'
 import { DEALS_TAB_DEFAULT_LABEL, normaliseDealsTabLabel } from './deal.js'
+import { HOLIDAY_TAB_DEFAULT_LABEL, normaliseHolidayLabel } from './navViews.js'
 
 /** 数据库里的 key。集中在这里，避免字符串散落各处。 */
 export const SETTING_KEYS = {
   dealsTabLabel: 'deals_tab_label',
+  holidayLabel: 'holiday_label',
 }
 
 /** 一份完整的默认值。`cache` 始终是它的超集，组件可以直接读字段。 */
 const DEFAULTS = {
   dealsTabLabel: DEALS_TAB_DEFAULT_LABEL,
+  holidayLabel: HOLIDAY_TAB_DEFAULT_LABEL,
 }
 
 let cache = { ...DEFAULTS }
@@ -89,6 +92,9 @@ export async function loadSettings({ silent = false } = {}) {
         /* 库里存空字符串 = 默认名（`normaliseDealsTabLabel` 负责这件事）。 */
         next.dealsTabLabel = normaliseDealsTabLabel(row.value)
       }
+      if (row?.key === SETTING_KEYS.holidayLabel) {
+        next.holidayLabel = normaliseHolidayLabel(row.value)
+      }
     }
 
     cache = next
@@ -144,9 +150,52 @@ export async function setDealsTabLabel(value) {
   return label
 }
 
+/**
+ * 改节日专区的展示名（`Holiday Picks` → `Christmas Shop`）。
+ *
+ * 和秒杀那个名字同一张表、同一套读写；节日是季节性的，运营每换一季改一次，
+ * 不该为改个名字发一次版。
+ *
+ * @param {unknown} value
+ * @returns {Promise<string>}
+ */
+export async function setHolidayLabel(value) {
+  const label = normaliseHolidayLabel(value)
+
+  const { error } = await requireClient()
+    .from('settings')
+    .upsert(
+      {
+        key: SETTING_KEYS.holidayLabel,
+        value: label,
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'key' },
+    )
+
+  if (error) {
+    if (isMissingTable(error)) {
+      status = 'missing'
+      notify()
+      throw new Error('settings 表不存在。先在 Supabase 跑一次 supabase/12-settings.sql。')
+    }
+    throw new Error(error.message)
+  }
+
+  cache = { ...cache, holidayLabel: label }
+  status = 'ready'
+  notify()
+  return label
+}
+
 /** 恢复默认名。等价于用默认值调一次 `setDealsTabLabel`。 */
 export async function resetDealsTabLabel() {
   return setDealsTabLabel(DEALS_TAB_DEFAULT_LABEL)
+}
+
+/** 恢复节日专区的默认名。 */
+export async function resetHolidayLabel() {
+  return setHolidayLabel(HOLIDAY_TAB_DEFAULT_LABEL)
 }
 
 /* 测试用：把缓存塞回默认值（不触网）。 */
