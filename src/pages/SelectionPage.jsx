@@ -43,7 +43,14 @@ import { hasSeenGuide, markGuideSeen, shouldAutoOpen } from '../utils/guide.js'
 import { mulberry32, nextSeed, pickFeatured } from '../utils/featured.js'
 import { PAGE_SIZE, storefrontOrder, filterCatalogue, slicePage, nextLimit, hasMore } from '../utils/catalogue.js'
 import {
+  FEATURED_SIZE_DEFAULT,
+  FEATURED_SIZE_MAX,
+  FEATURED_SIZE_MIN,
+  FEATURED_SIZE_STEP,
+  FEATURED_VIEW,
+  MULTI_CATS,
   TAG_VIEW,
+  clampFeaturedSize,
   buildTagIndex,
   isTagView,
   tagViewCount,
@@ -124,6 +131,9 @@ export default function SelectionPage() {
   /* ⚡ 常规秒杀的二级视图：全部 / 进行中 / 排期中。时间由导入时的 sale_* 决定，
    * 不需要运营手动挪 —— 到了开始时间，`dealPhase` 自动把它算进 Active。 */
   const [dealState, setDealState] = useState('all')
+  /* PC 的 Shop 菜单可以多选分类：空数组 = All，多个 = 取并集。
+   * 点 Sale / 标签视图会清空它（那些是互斥的整屏视图）。 */
+  const [selectedCats, setSelectedCats] = useState([])
   /* 这一屏的"现在"：一个 timer 服务整屏，只有常规秒杀才会跳（见下面的 effect）。 */
   const [dealNow, setDealNow] = useState(() => Date.now())
   /* Onboarding guide. `open` is the only state: whether it *should* open first
@@ -300,6 +310,21 @@ export default function SelectionPage() {
       .sort((a, b) => rank(a) - rank(b))
   }, [categoryCounts, categoryOrder])
 
+  /** Sale / 标签视图 / All：它们和"多选分类"互斥，进来先清空。 */
+  const handleViewChange = (value) => {
+    setSelectedCats([])
+    setActiveCategory(value)
+  }
+
+  /** Shop 菜单里点一个分类：已选中就取消，否则加入；空了就回 All。 */
+  const toggleCategory = (name) => {
+    setSelectedCats((prev) => {
+      const next = prev.includes(name) ? prev.filter((item) => item !== name) : [...prev, name]
+      setActiveCategory(next.length === 0 ? 'All' : MULTI_CATS)
+      return next
+    })
+  }
+
   /* The search box stays fully responsive while the grid catches up.
    *
    * Typing used to re-filter 273 products and re-render 24 cards on every
@@ -324,9 +349,31 @@ export default function SelectionPage() {
    * 改数量都不会让推荐位重洗 —— 那些操作每变一次就重排一次卡片，等于让她
    * 找不到刚看到的那件。换种子是纯本地状态更新，不触发任何请求。 */
   const [featuredSeed, setFeaturedSeed] = useState(() => Math.floor(Math.random() * 0x7fffffff))
+  /* 滑块数量：记在 localStorage，下次打开还是她上次的偏好。 */
+  const [featuredSize, setFeaturedSize] = useState(() => {
+    try {
+      return clampFeaturedSize(localStorage.getItem('sdm-featured-size'))
+    } catch {
+      return FEATURED_SIZE_DEFAULT
+    }
+  })
+  const changeFeaturedSize = (value) => {
+    const next = clampFeaturedSize(value)
+    setFeaturedSize(next)
+    try {
+      localStorage.setItem('sdm-featured-size', String(next))
+    } catch {
+      /* 隐私模式：不记住，但本次仍然生效 */
+    }
+  }
   /* 顶栏第二行那枚筛选胶囊：分类和标签视图才有意义（Sale 两个专区和
    * "All products" 已经在菜单里高亮了）。 */
-  const activeFilterLabel = isTagView(activeCategory)
+  const activeFilterLabel =
+    activeCategory === MULTI_CATS
+      ? selectedCats.length > 1
+        ? `${selectedCats.length} categories`
+        : selectedCats[0] || ''
+      : isTagView(activeCategory)
     ? { [TAG_VIEW.NEW]: 'New', [TAG_VIEW.BESTSELLER]: 'Bestseller', [TAG_VIEW.HOLIDAY]: holidayLabel }[
         activeCategory
       ]
@@ -334,10 +381,12 @@ export default function SelectionPage() {
       ? activeCategory
       : ''
 
-  const showFeatured = activeCategory === 'All' && !deferredQuery.trim() && !inDealsView
+  const isFeaturedView = activeCategory === FEATURED_VIEW
+  const showFeatured =
+    (activeCategory === 'All' || isFeaturedView) && !deferredQuery.trim() && !inDealsView
   const featured = useMemo(
-    () => (showFeatured ? pickFeatured(catalogue, { random: mulberry32(featuredSeed) }) : []),
-    [showFeatured, catalogue, featuredSeed],
+    () => (showFeatured ? pickFeatured(catalogue, { size: featuredSize, random: mulberry32(featuredSeed) }) : []),
+    [showFeatured, catalogue, featuredSeed, featuredSize],
   )
   const shuffleFeatured = useCallback(() => {
     setFeaturedSeed((prev) => nextSeed(prev))
@@ -408,6 +457,15 @@ export default function SelectionPage() {
     }
     if (isDeals) return dealSearch
 
+    /* 多选分类：取并集，仍然走同一条搜索 + 分页管线。 */
+    if (activeCategory === MULTI_CATS) {
+      const picked = new Set(selectedCats)
+      return filterCatalogue(
+        catalogue.filter((product) => picked.has(product.category || UNCATEGORISED)),
+        { category: 'All', query: deferredQuery, uncategorised: UNCATEGORISED },
+      )
+    }
+
     /* New / Bestseller / Holiday Picks：纯前端标签过滤，不发请求。 */
     if (isTagView(activeCategory)) {
       return filterCatalogue(tagViewProducts(catalogue, activeCategory, tagIndex), {
@@ -422,7 +480,7 @@ export default function SelectionPage() {
       query: deferredQuery,
       uncategorised: UNCATEGORISED,
     })
-  }, [catalogue, tagIndex, dealSearch, isDeals, isCampaign, dealBucket, activeCategory, deferredQuery])
+  }, [catalogue, tagIndex, dealSearch, isDeals, isCampaign, dealBucket, activeCategory, deferredQuery, selectedCats])
 
   /* Badge first, THEN page. The order of those two steps is the whole feature:
  * slicing first would only shuffle the 24 cards already on screen, so a badged
@@ -674,7 +732,7 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
           categoryCounts={categoryCounts}
           active={activeCategory}
           total={catalogue.length}
-          onChange={setActiveCategory}
+          onChange={handleViewChange}
           query={query}
           onQueryChange={setQuery}
           dealsCount={regularPool.length}
@@ -689,7 +747,12 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
           dealStateCounts={dealStateCounts}
           filterLabel={activeFilterLabel}
           holidayLabel={holidayLabel}
-          onClearFilter={() => setActiveCategory('All')}
+          selectedCats={selectedCats}
+          onToggleCategory={toggleCategory}
+          onClearFilter={() => {
+            setSelectedCats([])
+            setActiveCategory('All')
+          }}
         />
       </Header>
 
@@ -700,6 +763,11 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
           <FeaturedSection
             products={featured}
             seed={featuredSeed}
+            size={featuredSize}
+            onSizeChange={changeFeaturedSize}
+            sizeMin={FEATURED_SIZE_MIN}
+            sizeMax={FEATURED_SIZE_MAX}
+            sizeStep={FEATURED_SIZE_STEP}
             onShuffle={shuffleFeatured}
             linesFor={linesFor}
             amazonUrlFor={amazonUrlFor}
@@ -711,6 +779,8 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
           />
         )}
 
+        {/* Featured 是独立视图：只显示推荐位，下面不再接常规目录。 */}
+        {!isFeaturedView && (
         <ProductGrid
           products={visibleProducts}
           loading={loading}
@@ -743,11 +813,12 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
           campaign={isCampaign ? campaignTabLabel : ''}
           atCap={atCap}
         />
+        )}
 
         {/* Paging lives here, not inside the grid, so the footer below it is
             always the last thing on the page — the staff link stays reachable
             no matter how many batches have been loaded. */}
-        {!loading && filtered.length > 0 && (more || deferredQuery || filtered.length > PAGE_SIZE) && (
+        {!isFeaturedView && !loading && filtered.length > 0 && (more || deferredQuery || filtered.length > PAGE_SIZE) && (
           <div className="mx-auto mt-8 max-w-7xl px-5 text-center sm:px-8">
             {more ? (
               <>

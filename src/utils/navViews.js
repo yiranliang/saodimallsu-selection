@@ -93,6 +93,27 @@ export function toggleHolidayTag(tag, on) {
   return tokens.slice(0, 3).join(', ')
 }
 
+/** 「Featured for You」整屏视图：不按分类/标签筛，只显示随机推荐。 */
+export const FEATURED_VIEW = '__featured__'
+
+/** 推荐位默认展示多少件，以及滑块的上下限/步长。 */
+export const FEATURED_SIZE_DEFAULT = 24
+export const FEATURED_SIZE_MIN = 4
+export const FEATURED_SIZE_MAX = 48
+export const FEATURED_SIZE_STEP = 4
+
+/** 把滑块的任意输入夹到合法值（4/8/…/48 的整数）。 */
+export function clampFeaturedSize(value) {
+  const n = Math.round(Number(value) || FEATURED_SIZE_DEFAULT)
+  const stepped =
+    Math.round((n - FEATURED_SIZE_MIN) / FEATURED_SIZE_STEP) * FEATURED_SIZE_STEP +
+    FEATURED_SIZE_MIN
+  return Math.min(FEATURED_SIZE_MAX, Math.max(FEATURED_SIZE_MIN, stepped))
+}
+
+/** 「选了多个分类」的视图 id（单个分类仍然直接用分类名）。 */
+export const MULTI_CATS = '__multi_cats__'
+
 /** `is this a tag view, or a real category?` */
 export function isTagView(value) {
   return TAG_VIEW_LIST.includes(value)

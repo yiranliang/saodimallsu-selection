@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import SearchBox from './SearchBox.jsx'
 import { Close, Search } from './icons.jsx'
 import { CAMPAIGN_TAB, DEALS_TAB, DEAL_BUCKETS, REGULAR_DEALS_LABEL } from '../utils/deal.js'
-import { HOLIDAY_TAB_DEFAULT_LABEL, TAG_VIEW } from '../utils/navViews.js'
+import { FEATURED_VIEW, HOLIDAY_TAB_DEFAULT_LABEL, TAG_VIEW } from '../utils/navViews.js'
 
 /**
  * Site navigation
@@ -63,12 +63,16 @@ export default function SiteNav({
   /* 当前生效的"窄化筛选"（某个分类 / 某个标签视图）。空串 = 没筛选，不占位。 */
   filterLabel = '',
   onClearFilter,
+  /* 已选中的分类（多选）。空数组 = All products。 */
+  selectedCats = [],
+  onToggleCategory,
   /* 节日专区在导航上的名字（settings.holidayLabel）。 */
   holidayLabel = HOLIDAY_TAB_DEFAULT_LABEL,
 }) {
   const TAG_ITEMS = tagItemsOf(holidayLabel)
   const [openMenu, setOpenMenu] = useState(null) // 'sale' | 'shop' | null
   const [openSub, setOpenSub] = useState(null) // 'deals' | 'campaign' | null
+  const menuRootRef = useRef(null)
   const [drawer, setDrawer] = useState(false)
   const [mobileSearch, setMobileSearch] = useState(false)
 
@@ -90,6 +94,19 @@ export default function SiteNav({
     setDrawer(false)
     setMobileSearch(false)
   }
+
+  /* 菜单只在**点击外部**时收起：悬停进菜单、移到二级面板、点选项都不会关；
+   * 这样 Shop 里可以连续勾多个分类。Esc 仍然关（见上面那个 effect）。 */
+  useEffect(() => {
+    if (!openMenu) return undefined
+    const onPointerDown = (event) => {
+      if (menuRootRef.current?.contains(event.target)) return
+      setOpenMenu(null)
+      setOpenSub(null)
+    }
+    document.addEventListener('pointerdown', onPointerDown)
+    return () => document.removeEventListener('pointerdown', onPointerDown)
+  }, [openMenu])
 
   const select = (value) => {
     onChange?.(value)
@@ -122,7 +139,7 @@ export default function SiteNav({
   ]
 
   const isActive = (value) => active === value
-  const shopActive = categories.includes(active)
+  const shopActive = categories.includes(active) || selectedCats.length > 0
   const saleActive = active === DEALS_TAB || active === CAMPAIGN_TAB
 
   const menuClass = (on) =>
@@ -167,14 +184,10 @@ export default function SiteNav({
   return (
     <>
       {/* ── 桌面：横排菜单 ── */}
-      <div className="hidden min-w-0 flex-1 items-center gap-5 lg:flex xl:gap-7">
+      <div ref={menuRootRef} className="hidden min-w-0 flex-1 items-center gap-5 lg:flex xl:gap-7">
         <div
           className="relative"
           onMouseEnter={() => setOpenMenu('sale')}
-          onMouseLeave={() => {
-            setOpenMenu(null)
-            setOpenSub(null)
-          }}
         >
           <button
             type="button"
@@ -276,11 +289,17 @@ export default function SiteNav({
         <div
           className="relative"
           onMouseEnter={() => setOpenMenu('shop')}
-          onMouseLeave={() => setOpenMenu(null)}
         >
           <button
             type="button"
-            onClick={() => setOpenMenu((open) => (open === 'shop' ? null : 'shop'))}
+            onClick={() => {
+              /* 点 Shop 本身 = 回到 All products（清掉多选），同时把菜单留着，
+               * 这样下一步还能直接挑分类；纯触摸设备没有 hover，这一步也是
+               * 它们唯一能把菜单打开的手势。 */
+              if (selectedCats.length > 0 || active !== 'All') select('All')
+              setOpenMenu('shop')
+            }}
+            onMouseEnter={() => setOpenMenu('shop')}
             aria-haspopup="true"
             aria-expanded={openMenu === 'shop'}
             className={menuClass(shopActive)}
@@ -291,22 +310,50 @@ export default function SiteNav({
             <div className="absolute left-0 top-full z-40 w-[min(44rem,86vw)] pt-1">
               <div className="rounded-xl bg-white p-3 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10">
                 <div className="grid grid-cols-3 gap-0.5 sm:grid-cols-4">
-                  {shopItems.map((item) => (
-                    <button
-                      key={item.value}
-                      type="button"
-                      onClick={() => select(item.value)}
-                      className={rowClass(isActive(item.value))}
-                    >
-                      <span className="truncate">{item.label}</span>
-                      {countOf(item.count)}
-                    </button>
-                  ))}
+                  {shopItems.map((item) => {
+                    const on = item.value === 'All'
+                      ? selectedCats.length === 0
+                      : selectedCats.includes(item.value)
+                    return (
+                      <button
+                        key={item.value}
+                        type="button"
+                        onClick={() =>
+                          item.value === 'All' ? select('All') : onToggleCategory?.(item.value)
+                        }
+                        aria-pressed={on}
+                        className={rowClass(on)}
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <span
+                            aria-hidden="true"
+                            className={`flex h-3 w-3 shrink-0 items-center justify-center rounded-[3px] text-[8px] ring-1 ${
+                              on ? 'bg-charcoal text-cream ring-charcoal' : 'ring-charcoal/25'
+                            }`}
+                          >
+                            {on ? '✓' : ''}
+                          </span>
+                          <span className="truncate">{item.label}</span>
+                        </span>
+                        {countOf(item.count)}
+                      </button>
+                    )
+                  })}
                 </div>
               </div>
             </div>
           )}
         </div>
+
+        {/* 推荐位自己一个入口：内容随机生成，后台不需要编辑。 */}
+        <button
+          type="button"
+          onClick={() => select(FEATURED_VIEW)}
+          aria-pressed={active === FEATURED_VIEW}
+          className={menuClass(active === FEATURED_VIEW)}
+        >
+          Featured
+        </button>
 
         {TAG_ITEMS.map((item) => (
           <button
@@ -341,7 +388,7 @@ export default function SiteNav({
           className="-ml-1 flex min-w-0 flex-1 items-center gap-1 truncate rounded-full px-1 py-1 text-left text-[11.5px] font-semibold uppercase tracking-[0.12em] text-charcoal transition hover:bg-cream-dark"
         >
           <span className="min-w-0 truncate">
-            {activeLabel(active, bucket, categories, campaignName, bucketCounts, holidayLabel, dealState)}
+            {activeLabel(active, bucket, categories, campaignName, bucketCounts, holidayLabel, dealState, selectedCats)}
           </span>
           <span aria-hidden="true" className="shrink-0 text-[9px] text-charcoal-light/50">
             ▾
@@ -496,7 +543,23 @@ export default function SiteNav({
             </DrawerGroup>
 
             <DrawerGroup title="Curated">
-              {TAG_ITEMS.map((item) => (
+              <DrawerItem
+                label="Featured"
+                count={total}
+                active={active === FEATURED_VIEW}
+                onClick={() => select(FEATURED_VIEW)}
+              />
+              {/* 推荐位自己一个入口：内容随机生成，后台不需要编辑。 */}
+        <button
+          type="button"
+          onClick={() => select(FEATURED_VIEW)}
+          aria-pressed={active === FEATURED_VIEW}
+          className={menuClass(active === FEATURED_VIEW)}
+        >
+          Featured
+        </button>
+
+        {TAG_ITEMS.map((item) => (
                 <DrawerItem
                   key={item.value}
                   label={item.label}
@@ -541,7 +604,7 @@ function DrawerItem({ label, count, active, onClick }) {
 }
 
 /** 手机上那行"我现在在哪一屏"（大促时带上档位）。 */
-function activeLabel(active, bucket, categories, campaignName, bucketCounts, holidayLabel, dealState) {
+function activeLabel(active, bucket, categories, campaignName, bucketCounts, holidayLabel, dealState, selectedCats = []) {
   if (active === DEALS_TAB) {
     const state = DEAL_STATES.find((option) => option.id === (dealState || 'all'))
     return state && state.id !== 'all'
@@ -555,6 +618,9 @@ function activeLabel(active, bucket, categories, campaignName, bucketCounts, hol
   if (active === TAG_VIEW.NEW) return 'New'
   if (active === TAG_VIEW.BESTSELLER) return 'Bestseller'
   if (active === TAG_VIEW.HOLIDAY) return holidayLabel || HOLIDAY_TAB_DEFAULT_LABEL
+  if (selectedCats.length > 1) return `${selectedCats.length} categories`
+  if (selectedCats.length === 1) return selectedCats[0]
+  if (active === FEATURED_VIEW) return 'Featured'
   if (active === 'All') return 'Shop'
   return categories.includes(active) ? active : 'Shop'
 }

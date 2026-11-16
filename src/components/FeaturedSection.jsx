@@ -37,6 +37,12 @@ export default function FeaturedSection({
   /* 换一批：父组件换一个种子，这里只负责动画与按钮。 */
   onShuffle,
   seed = 0,
+  /* 想随机多少件 —— 由顶栏那条滑块控制，默认 24。 */
+  size = 24,
+  onSizeChange,
+  sizeMin = 4,
+  sizeMax = 48,
+  sizeStep = 4,
   /* 整份选款已满（`MAX_CART_ITEMS`）：卡片步进器的 `+` 置灰。 */
   atCap = false,
 }) {
@@ -127,10 +133,38 @@ export default function FeaturedSection({
             A rotating pick from every category — shuffle for a different mix.
             {/* 数量跟正文同行：右上角现在是吸顶按钮的地盘，再放一个右对齐的数字
                 会在按钮落到原位时和它打架。 */}
-            <span className="ml-1 hidden tabular-nums text-charcoal-light/60 sm:inline">
-              · {products.length} styles
-            </span>
+              {!onSizeChange && (
+              <span className="ml-1 hidden tabular-nums text-charcoal-light/60 sm:inline">
+                · {products.length} styles
+              </span>
+            )}
           </p>
+
+          {/* 数量滑块：用户自己决定这次随机挑几件。纯本地重算，不发请求。 */}
+          {onSizeChange && (
+            <div className="ml-auto flex shrink-0 items-center gap-2">
+              <label
+                htmlFor="featured-size"
+                className="text-[10px] font-medium uppercase tracking-[0.12em] text-charcoal-light/70"
+              >
+                Items
+              </label>
+              <input
+                id="featured-size"
+                type="range"
+                min={sizeMin}
+                max={sizeMax}
+                step={sizeStep}
+                value={size}
+                onChange={(event) => onSizeChange(Number(event.target.value))}
+                aria-label="How many featured products to show"
+                className="h-1 w-24 cursor-pointer appearance-none rounded-full bg-charcoal/15 accent-charcoal sm:w-32"
+              />
+              <span className="w-6 text-right text-[11.5px] font-semibold tabular-nums text-charcoal">
+                {size}
+              </span>
+            </div>
+          )}
         </div>
       </div>
 
