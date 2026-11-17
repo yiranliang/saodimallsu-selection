@@ -343,5 +343,22 @@ check('a name with a digit is not a SKU paste', nameIds('2 Piece'), ['n4'])
 check('a real SKU still finds exactly one', nameIds('P9B013').length <= 1, true)
 check('SKU paste stays exact', nameIds('H2F741 P9B013'), ['n1', 'n2'])
 
+/* ── 只看已隐藏 ──
+ *
+ * 隐藏的商品在默认列表里和不隐藏的混在一起；这个开关是后台唯一能把它们
+ * 单独拎出来的视图。 */
+console.log('\n[10] Hidden only')
+
+const withHidden = [
+  { id: 'v1', sku: 'K1', name: 'Visible one', category: 'Tops', hidden: false },
+  { id: 'h1', sku: 'K2', name: 'Hidden one', category: 'Tops', hidden: true },
+  { id: 'h2', sku: 'K3', name: 'Hidden two', category: 'Bottoms', hidden: true },
+]
+
+check('default list keeps both', filterProducts(withHidden, {}).length, 3)
+check('hidden only', idsOf(filterProducts(withHidden, { hiddenOnly: true })), ['h1', 'h2'])
+check('hidden AND category', idsOf(filterProducts(withHidden, { hiddenOnly: true, category: 'Bottoms' })), ['h2'])
+check('hidden AND a non-matching query', filterProducts(withHidden, { hiddenOnly: true, query: 'visible' }), [])
+
 console.log(`Passed ${passed}${failed ? `, failed ${failed}` : ''}`)
 if (failed) process.exit(1)

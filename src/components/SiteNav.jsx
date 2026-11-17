@@ -22,10 +22,15 @@ import { FEATURED_VIEW, HOLIDAY_TAB_DEFAULT_LABEL, TAG_VIEW } from '../utils/nav
  * 而运营的描述一直是"我要看这一档"。
  */
 
-const TAG_ITEMS = [
-  { value: TAG_VIEW.NEW, label: 'New' },
-  { value: TAG_VIEW.BESTSELLER, label: 'Bestseller' },
-]
+/* 三个标签入口。节日那枚的名字来自 settings（`holiday_label`），换季时运营
+ * 在后台改一次就够 —— 所以这里不能写死 "Holiday Picks"。 */
+function tagItemsOf(holidayLabel) {
+  return [
+    { value: TAG_VIEW.NEW, label: 'New' },
+    { value: TAG_VIEW.BESTSELLER, label: 'Bestseller' },
+    { value: TAG_VIEW.HOLIDAY, label: holidayLabel || HOLIDAY_TAB_DEFAULT_LABEL },
+  ]
+}
 
 const BUCKET_OPTIONS = [{ id: 'all', label: 'All deals' }, ...DEAL_BUCKETS]
 const STATE_OPTIONS = [
@@ -118,7 +123,10 @@ export default function SiteNav({
   }
 
   const hasCampaign = campaignCount > 0
-  const visibleTags = TAG_ITEMS.filter((item) => (tagCounts[item.value] || 0) > 0)
+  /* 数量为 0 的标签入口不显示 —— 点进去是空页的入口看起来像筛选坏了。 */
+  const visibleTags = tagItemsOf(holidayLabel).filter(
+    (item) => (tagCounts[item.value] || 0) > 0,
+  )
   const campaignName = campaignLabel || 'Campaign'
   const shopItems = [
     { value: 'All', label: 'All products', count: total },
@@ -151,7 +159,7 @@ export default function SiteNav({
     }`
 
   const rowClass = (on) =>
-    `flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-[12.5px] transition ${
+    `flex w-full items-center justify-between gap-3 rounded-lg px-3.5 py-2.5 text-left text-[13px] transition ${
       on ? 'bg-cream-dark font-medium text-charcoal' : 'text-charcoal/75 hover:bg-cream-dark/60'
     }`
 
@@ -302,9 +310,9 @@ export default function SiteNav({
           </button>
 
           {openMenu === 'shop' && (
-            <div className="absolute left-0 top-full z-40 w-[min(74rem,96vw)] pt-1">
+            <div className="absolute left-0 top-full z-40 w-[min(82rem,96vw)] pt-1">
               <div className="rounded-xl bg-white p-3 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10">
-                <div className="grid grid-cols-4 gap-x-2 gap-y-1 p-1 xl:grid-cols-5 2xl:grid-cols-6">
+                <div className="grid grid-cols-3 gap-x-6 gap-y-2 p-2 xl:grid-cols-4 2xl:grid-cols-5">
                   {shopItems.map((item) => (
                     <button
                       key={item.value}

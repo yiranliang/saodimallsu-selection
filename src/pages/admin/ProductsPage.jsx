@@ -249,6 +249,9 @@ export default function ProductsPage() {
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState(ALL)
   const [soldOutOnly, setSoldOutOnly] = useState(false)
+  /* 「只看已隐藏」：隐藏的商品在默认列表里和普通商品混在一起，
+   * 这个视图是唯一能把它们单独拎出来的地方。 */
+  const [hiddenOnly, setHiddenOnly] = useState(false)
   /* 标签筛选：视图（New / Bestseller / Holiday / 无标签）+ 自由文本。
    * 纯前端，和分类、搜索是 AND 关系（见 utils/adminFilter.js）。 */
   const [tagView, setTagView] = useState(ALL_TAGS)
@@ -351,8 +354,16 @@ export default function ProductsPage() {
    *  drag guard all read it. */
   const visible = useMemo(
     () =>
-      filterProducts(products, { query, category, soldOutOnly, asinMap, tagView, tagQuery }),
-    [products, category, query, asinMap, soldOutOnly, tagView, tagQuery],
+      filterProducts(products, {
+        query,
+        category,
+        soldOutOnly,
+        asinMap,
+        tagView,
+        tagQuery,
+        hiddenOnly,
+      }),
+    [products, category, query, asinMap, soldOutOnly, tagView, tagQuery, hiddenOnly],
   )
 
   /* The pasted 货号, parsed once per keystroke. `filterProducts` parses the same
@@ -421,6 +432,7 @@ export default function ProductsPage() {
     Boolean(query.trim()) ||
     category !== ALL ||
     soldOutOnly ||
+    hiddenOnly ||
     tagView !== ALL_TAGS ||
     Boolean(tagQuery.trim())
   /* Dragging rewrites the entire sort_order column from one id array, so it is
@@ -1614,7 +1626,29 @@ export default function ProductsPage() {
           }`}
         >
           <AlertCircle className="h-3.5 w-3.5" />{t('View Sold Out')}</button>
+
+        {/* 只看已隐藏：一个独立的视图，而不是混在列表里靠角标辨认。 */}
+        <button
+          type="button"
+          onClick={() => setHiddenOnly((on) => !on)}
+          aria-pressed={hiddenOnly}
+          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2.5 text-[12px] font-medium transition active:scale-95 ${
+            hiddenOnly
+              ? 'bg-charcoal text-cream'
+              : 'bg-white text-charcoal ring-1 ring-charcoal/[0.07] hover:ring-charcoal/25'
+          }`}
+        >
+          {t('Hidden')} ({hiddenCount})
+        </button>
       </div>
+
+      {hiddenOnly && (
+        <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl bg-charcoal/[0.04] px-3 py-2.5 ring-1 ring-charcoal/[0.07]">
+          <p className="min-w-0 flex-1 text-[11px] leading-snug text-charcoal/80">
+            这里只显示<strong>已隐藏</strong>的商品（前台看不到）。勾选后点上方「显示」即可重新上架。
+          </p>
+        </div>
+      )}
 
       {soldOutOnly && (
         <div className="mb-3 flex flex-wrap items-center gap-2 rounded-2xl bg-red-50/70 px-3 py-2.5 ring-1 ring-red-100">

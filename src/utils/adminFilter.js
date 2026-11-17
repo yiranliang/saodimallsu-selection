@@ -143,6 +143,7 @@ export function filterProducts(
     now = Date.now(),
     tagView = ALL_TAGS,
     tagQuery = '',
+    hiddenOnly = false,
   } = {},
 ) {
   if (!Array.isArray(products)) return []
@@ -183,6 +184,9 @@ export function filterProducts(
        still orderable stays in this view on purpose: one dead size is one dead
        size, and it is the thing purchasing has to act on. */
     if (soldOutOnly && !(soldOutSummary(product).soldOut > 0)) return false
+
+    /* 「只看已隐藏」：后台唯一能看到被隐藏商品的视图。 */
+    if (hiddenOnly && product?.hidden !== true) return false
 
     /* 标签筛选：和分类/搜索是 AND 关系（先缩小再搜，和前台一致）。 */
     if (!matchesTagFilter(product, tagView, tagQuery)) return false

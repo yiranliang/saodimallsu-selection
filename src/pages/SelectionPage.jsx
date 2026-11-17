@@ -283,13 +283,18 @@ export default function SelectionPage() {
    * `catalogue` 每次刷新都是新数组（realtime / 后台编辑 / 首载），所以后台改完
    * 标签后索引自然失效重算，不需要手动 invalidate。 */
   const tagIndex = useMemo(() => buildTagIndex(catalogue), [catalogue])
+
+  /* 导航上的数字按**整本目录**算（含隐藏商品）：运营刚打完标签、还没点"显示"
+   * 的时候，入口也应该出现 —— 否则她会以为标签没存进去。筛选与网格仍然只看
+   * 已发布的商品（`tagIndex` 用的是 `catalogue`）。 */
+  const navTagIndex = useMemo(() => buildTagIndex(products), [products])
   const tagCounts = useMemo(
     () => ({
-      [TAG_VIEW.NEW]: tagViewCount(tagIndex, TAG_VIEW.NEW),
-      [TAG_VIEW.BESTSELLER]: tagViewCount(tagIndex, TAG_VIEW.BESTSELLER),
-      [TAG_VIEW.HOLIDAY]: tagViewCount(tagIndex, TAG_VIEW.HOLIDAY),
+      [TAG_VIEW.NEW]: tagViewCount(navTagIndex, TAG_VIEW.NEW),
+      [TAG_VIEW.BESTSELLER]: tagViewCount(navTagIndex, TAG_VIEW.BESTSELLER),
+      [TAG_VIEW.HOLIDAY]: tagViewCount(navTagIndex, TAG_VIEW.HOLIDAY),
     }),
-    [tagIndex],
+    [navTagIndex],
   )
 
   /* ── categories derived from the live catalogue ── */
