@@ -66,5 +66,53 @@ for (const file of files) {
   }
 }
 
+/* ── 事件处理器指向了不存在的东西 ──
+ *
+ * `onToggleCategory={toggleCategory}` 在函数被删掉之后仍然"长得像合法代码"：
+ * 打包器把它当全局变量，直到运行时才抛 ReferenceError，整页白屏。
+ * 只查一类窄而准的写法：prop 的值是一个裸标识符，而它既没声明也没导入。 */
+const JS_GLOBALS = new Set([
+  'undefined', 'null', 'true', 'false', 'NaN', 'Infinity', 'console', 'window',
+  'document', 'localStorage', 'setTimeout', 'clearTimeout', 'setInterval',
+  'clearInterval', 'requestAnimationFrame', 'cancelAnimationFrame', 'fetch',
+  'process', 'globalThis', 'parseInt', 'parseFloat', 'isNaN', 'alert',
+])
+
+function declaredNames(code) {
+  const names = new Set()
+  const add = (token) => {
+    for (const part of String(token).split(/[,\s]+/)) {
+      const name = part.replace(/[:=].*$/, '').trim()
+      if (/^[A-Za-z_$][\w$]*$/.test(name)) names.add(name)
+    }
+  }
+
+  for (const m of code.matchAll(/import\s*\{([^}]*)\}/g)) add(m[1])
+  for (const m of code.matchAll(/import\s+([A-Za-z_$][\w$]*)/g)) add(m[1])
+  for (const m of code.matchAll(/\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)/g)) add(m[1])
+  for (const m of code.matchAll(/\b(?:const|let|var)\s*\{([^}]*)\}/g)) add(m[1])
+  for (const m of code.matchAll(/\b(?:const|let|var)\s*\[([^\]]*)\]/g)) add(m[1])
+  for (const m of code.matchAll(/\bfunction\s+([A-Za-z_$][\w$]*)/g)) add(m[1])
+  for (const m of code.matchAll(/\(([^()]*)\)\s*=>/g)) add(m[1])
+  for (const m of code.matchAll(/function\s*[A-Za-z_$]*\s*\(([^)]*)\)/g)) add(m[1])
+  for (const m of code.matchAll(/\bcatch\s*\(([^)]*)\)/g)) add(m[1])
+
+  return names
+}
+
+for (const file of files) {
+  const code = readFileSync(file, 'utf8')
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/(^|[^:])\/\/.*$/gm, '$1')
+  const declared = declaredNames(code)
+
+  for (const m of code.matchAll(/\bon[A-Z][A-Za-z0-9]*=\{([A-Za-z_$][\w$]*)\}/g)) {
+    const name = m[1]
+    if (declared.has(name) || JS_GLOBALS.has(name)) continue
+    problems++
+    console.log(`  x handler not declared: on*={${name}} in ${file}`)
+  }
+}
+
 console.log(problems ? `\n${problems} file(s) with unresolved JSX tags` : '\n✓ every JSX tag resolves')
 if (problems) process.exit(1)
