@@ -43,6 +43,7 @@ import {
   discountOf,
   discountPercents,
   filterDeals,
+  matchesSaleFilter,
   formatCountdown,
   formatPrice,
   formatPriceText,
@@ -912,6 +913,59 @@ check('a custom name matches the tab name', isCampaignDeal({ tag: 'Spring Refres
 check('but not another tab', isCampaignDeal({ tag: 'Spring Refresh' }, 'Black Friday'), false)
 /* 标被清掉但运营当初选了"大促"：仍然归在大促区。 */
 check('the flag survives a cleared label', isCampaignDeal({ isCampaign: true, subTag: '' }), true)
+
+/* ── SALE 的多选：专区 / 档位 / 状态 ──
+ *
+ * 三个维度之间是 AND，每个维度内部是并集；空数组 = 不限。
+ * 这里用真实的时间窗口和价格造数据，避免"测试里能过、线上算不出折扣"那种事。 */
+console.log('\n[matchesSaleFilter]')
+
+const NOW = at(2026, 10, 28, 12, 0)
+const live = { saleStart: '2026-10-28T10:00', saleEnd: '2026-10-30T22:00' }
+const soon = { saleStart: '2026-10-29T10:00', saleEnd: '2026-10-30T22:00' }
+
+const salePool = [
+  dealProduct({ id: 'c30', subTag: 'Black Friday', discountLabel: '', ...live, originalPrice: '100', salePrice: '70' }),
+  dealProduct({ id: 'c45', subTag: 'Black Friday', discountLabel: '', ...live, originalPrice: '100', salePrice: '55' }),
+  dealProduct({ id: 'r12', discountLabel: '', ...live, originalPrice: '100', salePrice: '88' }),
+  dealProduct({ id: 'up12', discountLabel: '', ...soon, originalPrice: '100', salePrice: '88' }),
+]
+
+const saleIds = (options) =>
+  salePool
+    .filter((product) =>
+      matchesSaleFilter(product, { campaign: 'Black Friday', now: NOW, ...options }),
+    )
+    .map((product) => product.id)
+
+check('no filters keeps everything', saleIds({}), ['c30', 'c45', 'r12', 'up12'])
+check('campaign zone only', saleIds({ zones: ['campaign'] }), ['c30', 'c45'])
+check('regular zone only', saleIds({ zones: ['deals'] }), ['r12', 'up12'])
+check('both zones = no filter', saleIds({ zones: ['campaign', 'deals'] }), ['c30', 'c45', 'r12', 'up12'])
+check('one bucket', saleIds({ buckets: ['40+'] }), ['c45'])
+check('two buckets is a union', saleIds({ buckets: ['30-40', '40+'] }), ['c30', 'c45'])
+check('a bucket never leaks into regular deals', saleIds({ zones: ['deals'], buckets: ['40+'] }), [])
+check('active only', saleIds({ states: ['active'] }), ['c30', 'c45', 'r12'])
+check('upcoming only', saleIds({ states: ['upcoming'] }), ['up12'])
+check('active + upcoming = all', saleIds({ states: ['active', 'upcoming'] }), [
+  'c30',
+  'c45',
+  'r12',
+  'up12',
+])
+check('zone AND state', saleIds({ zones: ['deals'], states: ['upcoming'] }), ['up12'])
+check('zone AND bucket', saleIds({ zones: ['campaign'], buckets: ['30-40'] }), ['c30'])
+check('states apply to campaign items too', saleIds({ states: ['upcoming'] }), ['up12'])
+check('a scheduled campaign item lands in upcoming',
+  (() => {
+    const pool2 = [dealProduct({ id: 'cs', subTag: 'Black Friday', discountLabel: '', ...soon,
+      originalPrice: '100', salePrice: '70' })]
+    return pool2
+      .filter((p) => matchesSaleFilter(p, { campaign: 'Black Friday', states: ['upcoming'], now: NOW }))
+      .map((p) => p.id)
+  })(),
+  ['cs'],
+)
 
 console.log(
   `\n${failed === 0 ? '✓ ALL PASSED' : '✗ FAILURES'}: ${passed} passed, ${failed} failed\n`,

@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import ProductCard from './ProductCard.jsx'
+import { GRID_CLASS } from '../utils/grid.js'
 import { BADGE_ZONE } from '../utils/deal.js'
 
 /**
@@ -43,6 +44,8 @@ export default function FeaturedSection({
   sizeMin = 4,
   sizeMax = 48,
   sizeStep = 4,
+  /* 下面还接不接常规目录？Featured 独立视图下面不接，那条分割线就该消失。 */
+  showDivider = true,
   /* 整份选款已满（`MAX_CART_ITEMS`）：卡片步进器的 `+` 置灰。 */
   atCap = false,
 }) {
@@ -81,7 +84,7 @@ export default function FeaturedSection({
     <section
       aria-label="Featured for You"
       data-featured
-      className="mx-auto mb-10 max-w-7xl px-5 sm:mb-14 sm:px-8"
+      className="mb-10 w-full px-5 sm:mb-14 sm:px-8"
     >
       {onShuffle && (
         /* 吸附轨道：高度 0、不占位，作为 `<section>` 的直接子元素 —— 这就是
@@ -158,7 +161,9 @@ export default function FeaturedSection({
                 value={size}
                 onChange={(event) => onSizeChange(Number(event.target.value))}
                 aria-label="How many featured products to show"
-                className="h-1 w-24 cursor-pointer appearance-none rounded-full bg-charcoal/15 accent-charcoal sm:w-32"
+                /* 已选段的比例交给 CSS 画（原生 range 拿不到这个值）。 */
+                style={{ '--range-pct': `${((size - sizeMin) / (sizeMax - sizeMin)) * 100}%` }}
+                className="range-slider w-24 sm:w-32"
               />
               <span className="w-6 text-right text-[11.5px] font-semibold tabular-nums text-charcoal">
                 {size}
@@ -174,7 +179,7 @@ export default function FeaturedSection({
           `prefers-reduced-motion` 下 `.fade-up` 本来就被关掉，等于直接替换。 */}
       <div
         key={seed}
-        className="fade-up grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-5 sm:gap-y-10 md:grid-cols-3 xl:grid-cols-4"
+        className={`fade-up ${GRID_CLASS}`}
       >
         {products.map((product) => (
           <ProductCard
@@ -193,12 +198,15 @@ export default function FeaturedSection({
       </div>
 
       {/* 推荐区与常规目录之间的分界：2px 虚线 + 大留白 + 一行小标题。
-          没有它，最后一行推荐和货架第一行长得一模一样，整块"特别推荐"就消失了。 */}
-      <div className="mt-10 border-t-2 border-dashed border-charcoal/15 pt-5 sm:mt-12">
-        <div className="text-center text-[10px] font-medium uppercase tracking-[0.22em] text-charcoal-light/60">
-          All products
+          没有它，最后一行推荐和货架第一行长得一模一样，整块"特别推荐"就消失了。
+          但在 Featured 独立视图里下面没有常规目录，这条线就不该出现。 */}
+      {showDivider && (
+        <div className="mt-10 border-t-2 border-dashed border-charcoal/15 pt-5 sm:mt-12">
+          <div className="text-center text-[10px] font-medium uppercase tracking-[0.22em] text-charcoal-light/60">
+            All products
+          </div>
         </div>
-      </div>
+      )}
     </section>
   )
 }

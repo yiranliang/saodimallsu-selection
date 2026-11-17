@@ -109,6 +109,56 @@ export function variantImageUrls(product) {
 }
 
 /**
+ * 卡片上那张主图是哪个颜色？
+ *
+ * 卡片永远显示 `product.image`（网格不换图，见 ProductCard 的说明）。如果运营
+ * 把这张主图设成了某个颜色的实拍图，那么点进详情时就应该**默认选中那个颜色** ——
+ * 否则她得在十几个色卡里一个个点，才能找到自己刚看到的那件。
+ *
+ * 比较时只留路径（去协议、去域名、去查询串、小写）：同一张图在亚马逊的不同
+ * 站点上会出现 `m.media-amazon.com` / `images-na.ssl-images-amazon.com` 两种
+ * 写法，按整串比会漏。不做更模糊的匹配 —— 颜色对错了比不默认更糟。
+ *
+ * @param {object} product
+ * @returns {{ type: string, value: string } | null}
+ */
+export function colourForMainImage(product) {
+  const map = product?.variantImages
+  if (!map || typeof map !== 'object' || Array.isArray(map)) return null
+
+  const key = (value) => {
+    const url = cleanUrl(value)
+    if (!url) return ''
+    return url
+      .split('#')[0]
+      .split('?')[0]
+      .replace(/^[a-z]+:\/\//i, '')
+      .replace(/^[^/]+/i, '')
+      .toLowerCase()
+  }
+
+  const main = key(product?.image)
+  if (!main) return null
+
+  /* 颜色轴优先（`variantImageFor` 用的是同一套优先级）。 */
+  const types = Object.keys(map)
+  types.sort((a, b) => Number(isColourType(b)) - Number(isColourType(a)))
+
+  for (const type of types) {
+    const byOption = map[type]
+    if (!byOption || typeof byOption !== 'object' || Array.isArray(byOption)) continue
+
+    for (const [option, url] of Object.entries(byOption)) {
+      if (key(url) && key(url) === main) {
+        return { type, value: String(option) }
+      }
+    }
+  }
+
+  return null
+}
+
+/**
  * Sanitise a variantImages object coming from localStorage or an editor draft.
  * Drops empty URLs and empty option names; returns null when nothing is left so
  * the field can be omitted from the stored product entirely.

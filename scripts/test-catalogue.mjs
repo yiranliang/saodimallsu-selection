@@ -312,10 +312,18 @@ const withHidden = [
   product('p07', 'Golf', 'A07', 'Shoes'),
 ]
 
+/* 标签不再置顶：live 商品原样保留目录顺序（运营拖出来的顺序），
+ * 只有 Coming Soon 和 hidden 沉底。 */
 check(
-  'badged, then plain, then hidden',
+  'live keeps catalogue order, then hidden',
   skus(storefrontOrder(withHidden)),
-  ['A03', 'A01', 'A05', 'A07', 'A02', 'A04', 'A06'],
+  ['A01', 'A03', 'A05', 'A07', 'A02', 'A04', 'A06'],
+)
+check(
+  'a badged live product is NOT lifted',
+  skus(storefrontOrder(withHidden)).indexOf('A03') >
+    skus(storefrontOrder(withHidden)).indexOf('A01'),
+  true,
 )
 check(
   'a badged hidden product still goes last (unpublished beats the badge)',
@@ -327,23 +335,23 @@ check('the input is untouched', skus(withHidden), ['A01', 'A02', 'A03', 'A04', '
 
 /* Stability: each tier keeps the order it arrived in (= the admin's drag order). */
 const tiers = storefrontOrder(withHidden)
-check('tier 1 keeps its internal order', skus(tiers).slice(0, 1), ['A03'])
-check('tier 2 keeps its internal order', skus(tiers).slice(1, 4), ['A01', 'A05', 'A07'])
-check('tier 3 keeps its internal order', skus(tiers).slice(4), ['A02', 'A04', 'A06'])
+check('live keeps its internal order', skus(tiers).slice(0, 4), ['A01', 'A03', 'A05', 'A07'])
+check('hidden keeps its internal order', skus(tiers).slice(4), ['A02', 'A04', 'A06'])
 
 check('a fresh array every time', storefrontOrder(withHidden) === withHidden, false)
 check('running it twice changes nothing', skus(storefrontOrder(tiers)), skus(tiers))
 check('empty in, empty out', storefrontOrder([]), [])
 check('non-array in, empty out', storefrontOrder(null), [])
 check('one item is its own answer', skus(storefrontOrder([withHidden[0]])), ['A01'])
-check('a list with no hidden rows is exactly badgeFirst', skus(storefrontOrder(shelf)), skus(badgeFirst(shelf)))
+/* 没有 hidden/teaser 时，storefrontOrder 是**恒等**（标签不再参与排序）。 */
+check('no hidden rows → catalogue order untouched', skus(storefrontOrder(shelf)), skus(shelf))
 
 /* Unhide: the row goes back to its own tier, not to the end. */
 const unhidden = withHidden.map((item) => (item.id === 'p02' ? { ...item, hidden: false } : item))
 check(
-  'unhiding puts it back among the plain styles, in catalogue position',
+  'unhiding puts it back in catalogue position',
   skus(storefrontOrder(unhidden)),
-  ['A03', 'A01', 'A02', 'A05', 'A07', 'A04', 'A06'],
+  ['A01', 'A02', 'A03', 'A05', 'A07', 'A04', 'A06'],
 )
 
 /* The whole pipeline: filter → order → page. */
@@ -413,9 +421,9 @@ const mixed = [
 ]
 
 check(
-  'badged, plain, teasers, hidden — and each tier keeps its own order',
+  'live keeps catalogue order, teasers and hidden sink',
   skus(storefrontOrder(mixed)),
-  ['A03', 'A07', 'A01', 'A05', 'A02', 'A04', 'A06', 'A08'],
+  ['A01', 'A03', 'A05', 'A07', 'A02', 'A04', 'A06', 'A08'],
 )
 check('a badged teaser sinks with the other teasers', skus(storefrontOrder(mixed)).indexOf('A04'), 5)
 check('nothing gained or lost', storefrontOrder(mixed).length, mixed.length)

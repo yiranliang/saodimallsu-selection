@@ -65,7 +65,7 @@ const GARLAND = Array.from({ length: 12 }, (_, index) => {
  * 圣诞装饰（雪、灯带、积雪边缘）全在这里：纯 CSS + 内联样式，零图片、零请求；
  * 所有装饰层 `aria-hidden` + `pointer-events-none`，不挡点击、不进无障碍树。
  */
-function Header({ influencerName, children }) {
+function Header({ influencerName, children, onHome }) {
   const barRef = useRef(null)
 
   useEffect(() => {
@@ -90,9 +90,14 @@ function Header({ influencerName, children }) {
         ref={barRef}
         className="sticky top-0 z-40 border-b border-charcoal/[0.07] bg-cream/95 backdrop-blur-md"
       >
-        <div className="mx-auto flex h-14 max-w-7xl items-center gap-4 px-5 sm:h-16 sm:px-8">
-          {/* Brand */}
-          <div className="flex shrink-0 items-center gap-3">
+        <div className="flex h-14 w-full items-center gap-4 px-5 sm:h-16 sm:px-8">
+          {/* Brand —— 点它回到 All products（和"点 logo 回首页"的通行习惯一致）。 */}
+          <button
+            type="button"
+            onClick={() => onHome?.()}
+            aria-label="Back to all products"
+            className="flex shrink-0 items-center gap-3 rounded-xl text-left transition active:scale-[0.98]"
+          >
             <div className="relative">
               {/* 字母 S：就是一句**普通文本**，衬线体 + 半粗，靠 flex 居中。
                   没有 SVG 路径、没有 transform、没有旋转 —— 任何"手画"的曲线在
@@ -123,7 +128,7 @@ function Header({ influencerName, children }) {
                 SELECTION
               </div>
             </div>
-          </div>
+          </button>
 
           {/* 导航菜单 + 搜索（由 SelectionPage 传进来） */}
           {children}
@@ -163,7 +168,7 @@ function Header({ influencerName, children }) {
           ))}
         </div>
 
-        <div className="relative z-10 mx-auto max-w-7xl px-5 pb-8 pt-0 sm:px-8 sm:pb-10">
+        <div className="relative z-10 w-full px-5 pb-8 pt-0 sm:px-8 sm:pb-10">
           {/* 彩灯串：一条两次下垂的灯线 + 12 颗错落的灯泡（纯 CSS/SVG） */}
           <div aria-hidden="true" className="relative mt-0 h-[88px] w-full select-none">
             <svg
@@ -202,16 +207,18 @@ function Header({ influencerName, children }) {
             ))}
           </div>
 
-          {/* Welcome */}
-          <h1 className="mt-5 text-[26px] font-semibold leading-snug tracking-tight text-charcoal sm:mt-6 sm:text-4xl">
-            <span aria-hidden="true" className="mr-1.5 align-baseline text-[0.62em] text-red-600">
-              ❄
-            </span>
-            {brandConfig.welcome}
-          </h1>
-          <p className="mt-2 max-w-xl text-sm leading-relaxed text-charcoal-light sm:text-[15px]">
-            {brandConfig.tagline}
-          </p>
+          {/* Welcome —— 桌面端副标题跟在标题**后面**同一行；手机上自动换到下一行。 */}
+          <div className="mt-5 flex flex-col gap-1 sm:mt-6 sm:flex-row sm:flex-wrap sm:items-baseline sm:gap-x-4 sm:gap-y-1">
+            <h1 className="text-[26px] font-semibold leading-snug tracking-tight text-charcoal sm:text-4xl">
+              <span aria-hidden="true" className="mr-1.5 align-baseline text-[0.62em] text-red-600">
+                ❄
+              </span>
+              {brandConfig.welcome}
+            </h1>
+            <p className="max-w-xl text-sm leading-relaxed text-charcoal-light sm:max-w-2xl sm:text-[15px]">
+              {brandConfig.tagline}
+            </p>
+          </div>
         </div>
 
         {/* 屋檐积雪：一排半圆遮罩，压在 Hero 的底边上。 */}

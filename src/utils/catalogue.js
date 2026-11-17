@@ -169,7 +169,7 @@ export function storefrontTier(product) {
 }
 
 /**
- * Storefront order — four tiers, stable inside each.
+ * Storefront order — three tiers, stable inside each.
  *
  * WHY HIDDEN IS A TIER AND NOT A FILTER
  * ─────────────────────────────────────
@@ -192,8 +192,17 @@ export function storefrontTier(product) {
  * would need a field that is not here, and any stable sort by a field we do have
  * would silently reorder the ranks the admin dragged into place.
  *
- * One pass into four buckets. Paging is applied afterwards (`slicePage`), so
- * the first batch can only contain tiers 1 and 2 as long as 24 of them exist.
+ * WHY A TAG NO LONGER PROMOTES
+ * ────────────────────────────
+ * Badged styles used to be lifted to the top of the shelf. That was a
+ * workaround from before the navigation had real entries for them: the only way
+ * to find New / Bestseller styles was to bump them at the top of "All". Now
+ * each of those has its own menu (and search), so the promotion only did harm:
+ * it overrode the admin's drag order on the one screen creators browse first.
+ * Live products therefore keep the catalogue order exactly; only Coming Soon
+ * and hidden rows sink.
+
+ * One pass into three buckets. Paging is applied afterwards (`slicePage`).
  *
  * Pure, non-mutating: always a new array.
  */
@@ -201,23 +210,21 @@ export function storefrontOrder(list) {
   const items = Array.isArray(list) ? list : []
   if (items.length < 2) return items.slice()
 
-  const badged = []
-  const plain = []
+  const live = []
   const teasers = []
   const hidden = []
 
   for (const product of items) {
     if (product?.hidden === true) hidden.push(product)
     else if (isTeaser(product)) teasers.push(product)
-    else if (hasBadge(product)) badged.push(product)
-    else plain.push(product)
+    else live.push(product)
   }
 
   /* Nothing to reorder — skip the concat so the common case (all live, already
    * in drag order) costs one allocation. */
-  if (!teasers.length && !hidden.length && !badged.length) return items.slice()
+  if (!teasers.length && !hidden.length) return items.slice()
 
-  return badged.concat(plain, teasers, hidden)
+  return live.concat(teasers, hidden)
 }
 
 /** The first `limit` items. `limit <= 0` means "nothing", not "everything". */

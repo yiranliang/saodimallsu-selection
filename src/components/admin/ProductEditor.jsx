@@ -11,6 +11,7 @@ import { firstListing } from '../../utils/amazon.js'
 import { isColourType, specTypeLabel } from '../../utils/variantImage.js'
 import { HOLIDAY_TOKEN, hasHolidayTag, toggleHolidayTag } from '../../utils/navViews.js'
 import { isSizeType, sizeOrder } from '../../utils/sizes.js'
+import { looksLikeUrl } from '../../utils/lines.js'
 import { variantKey } from '../../utils/sku.js'
 import {
   planVariantRenames,
@@ -561,6 +562,22 @@ export default function ProductEditor({
     })
     if (duplicated) {
       showToast?.(`「${duplicated.type || '选项'}」里有重复值，先合并或改名再保存`, 'error', 4000)
+      return
+    }
+
+    /* 选项名必须是**名字**，不能是链接。运营把图片地址粘进名称输入框时，
+     * 前台会出现一枚写着 `https://m.media-amazon.com/...` 的巨型标签，
+     * 把整行排版撑坏（详情页就长这样）。这里在保存前挡住，并指出是哪一个。 */
+    const urlOption = draft.specs
+      .flatMap((group) => group.options.map((option) => ({ type: group.type, option })))
+      .find(({ option }) => looksLikeUrl(option))
+
+    if (urlOption) {
+      showToast?.(
+        `「${urlOption.type || '选项'}」里有一个值是链接，不是名字。点了 × 删掉它，把链接填到下面的图片框里。`,
+        'error',
+        6000,
+      )
       return
     }
 
@@ -1325,8 +1342,8 @@ export default function ProductEditor({
                     }}
                   >
                     <div className="flex items-center gap-2">
-                      /* 颜色和尺码是**固定轴**：名字只读，避免把 `Colour` 改成别的
-                       * 拼写、把 ASIN 的 `Colour|Size` 键对不上。自定义轴仍然是输入框。 */
+                      {/* 颜色和尺码是**固定轴**：名字只读，避免把 `Colour` 改成别的
+                          拼写、把 ASIN 的 `Colour|Size` 键对不上。自定义轴仍然是输入框。 */}
                       {colourGroup || sizeGroup ? (
                         <span className="min-w-0 flex-1 rounded-lg bg-cream-dark px-2.5 py-1.5 text-[12px] font-medium text-charcoal">
                           {specTypeLabel(group.type)}

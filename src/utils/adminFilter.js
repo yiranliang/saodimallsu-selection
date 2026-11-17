@@ -62,6 +62,18 @@ export function parseBulkQuery(raw) {
 /** Two or more 货号 means "bulk mode"; one is ordinary fuzzy search. */
 export const BULK_MIN_TOKENS = 2
 
+/**
+ * 这个词像不像一个货号。
+ *
+ * 判据很窄：只允许字母/数字/`. _ -`，而且**必须含数字**。
+ * 于是 `P9B013`、`h2f741`、`AMZ-0042` 算货号；`cardigan`、`Stripped`、
+ * `Trousers` 算人话 —— 后者走模糊搜索，不会被当成「要精确匹配的 SKU」。
+ */
+function looksLikeSku(token) {
+  const value = String(token ?? '')
+  return /[0-9]/.test(value) && /^[A-Za-z0-9._-]+$/.test(value)
+}
+
 /** Sentinel for "no category filter". Deliberately not '' — that is a legal
  *  (if unusual) category name and must stay selectable. */
 export const ALL_CATEGORIES = 'All'
@@ -148,9 +160,16 @@ export function filterProducts(
    * The Set is built once per call, not per product: 100 pasted SKUs × 273 rows
    * with `includes` is ~27k substring scans on every keystroke; this is 273
    * hash lookups. */
-  const bulk = tokens.length >= BULK_MIN_TOKENS
-    ? new Set(tokens.map((token) => token.toLowerCase()))
-    : null
+  /* 什么才算「粘贴了一列货号」？**每个词都得像货号**（含数字、只有字母数字和
+   * 连字符）。以前只看词数：搜「Stripped Cardigan」这样的商品名会被当成两个
+   * 精确货号去查，结果永远是空的 —— 而记不住货号，正是搜索框存在的理由。 */
+  const skuish = tokens.filter(looksLikeSku).length
+  const bulk =
+    tokens.length >= BULK_MIN_TOKENS &&
+    tokens.every((token) => token.length >= 3) &&
+    skuish * 2 >= tokens.length
+      ? new Set(tokens.map((token) => token.toLowerCase()))
+      : null
 
   return products.filter((product) => {
     /* 伪选项先判：它不是分类名，交给 `matchesCategory` 只会永远返回 false。 */
@@ -168,7 +187,12 @@ export function filterProducts(
     /* 标签筛选：和分类/搜索是 AND 关系（先缩小再搜，和前台一致）。 */
     if (!matchesTagFilter(product, tagView, tagQuery)) return false
 
-    if (!bulk) return matchesQuery(product, query, asinMap)
+    /* 普通搜索：多个词要**同时**命中（顺序无关），"cardigan stripped" 和
+     * "stripped cardigan" 都能找到同一件。单字时就是原来的模糊子串。 */
+    if (!bulk) {
+      if (tokens.length === 0) return matchesQuery(product, query, asinMap)
+      return tokens.every((token) => matchesQuery(product, token, asinMap))
+    }
 
     /* Exact 货号 only, case-insensitive: pasting "p9b013" must find P9B013. */
     return bulk.has(String(product?.sku ?? '').trim().toLowerCase())

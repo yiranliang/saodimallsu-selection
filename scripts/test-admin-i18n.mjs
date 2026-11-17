@@ -89,7 +89,6 @@ const ADMIN_FILES = [
   'src/pages/admin/LookupPage.jsx',
   'src/pages/admin/DeveloperPage.jsx',
   'src/components/admin/ProductEditor.jsx',
-  'src/components/admin/AccessGate.jsx',
   'src/components/admin/AdminQuery.jsx',
   'src/components/admin/AdminResult.jsx',
 ]
@@ -158,6 +157,24 @@ for (const file of ADMIN_FILES) {
   }
 }
 check('no English placeholders left in the admin', attrLeftovers, [])
+
+/* ── 2b. 登录页是英文的 ──
+ *
+ * 这屏是给"还没有账号、甚至看不懂中文"的人看的（外部同事、临时帮忙的人）。
+ * 中文后台的其余部分继续用 t() 的字典，这一屏刻意不查字典 —— 所以它从上面的
+ * "漏翻"扫描里排除，改用一条反向断言钉住：**不能出现中文**，也不能再依赖字典。 */
+console.log('\n[2b] the access gate is English only')
+
+{
+  const src = stripComments(read('src/components/admin/AccessGate.jsx'))
+  const cjk = []
+  for (const match of src.matchAll(/>([^<>{}]{2,400}?)</gs)) {
+    const text = match[1].replace(/\s+/g, ' ').trim()
+    if (text && CJK.test(text)) cjk.push(text)
+  }
+  check('no Chinese on the gate', cjk, [])
+  check('the gate does not import the Chinese dictionary', /i18n\/admin/.test(src), false)
+}
 
 /* ── 3. 前台红线 ── */
 console.log('\n[3] the storefront stays English')

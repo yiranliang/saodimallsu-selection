@@ -14,6 +14,7 @@ import {
   normalizeVariantImages,
   variantImageUrls,
   isColourType,
+  colourForMainImage,
   PLACEHOLDER_IMAGE,
 } from '../src/utils/variantImage.js'
 import { productToRow, rowToProduct } from '../src/store/mapping.js'
@@ -122,5 +123,58 @@ check('unmapped colour falls back', resolveProductImage(stored, { Colour: 'Oatme
 
 /* ── summary ── */
 console.log(`\n${'─'.repeat(44)}`)
+/* ── 主图对应的颜色（详情页默认选中它） ──
+ *
+ * 用户是照卡片上那张图点进来的。默认选中同一颜色的色卡，能省掉"十几个色卡
+ * 里找一遍"的动作；但**找不到就必须留空** —— 默认错颜色比不默认更糟。 */
+console.log('\n[colourForMainImage]')
+
+const withColourImages = {
+  id: 'p1',
+  image: 'https://m.media-amazon.com/images/I/red-green.jpg',
+  variantImages: {
+    Colour: {
+      'Red&Green': 'https://m.media-amazon.com/images/I/red-green.jpg',
+      Navy: 'https://m.media-amazon.com/images/I/navy.jpg',
+    },
+  },
+}
+
+check('matches the main image', colourForMainImage(withColourImages), {
+  type: 'Colour',
+  value: 'Red&Green',
+})
+
+check(
+  'ignores the host and query string',
+  colourForMainImage({
+    ...withColourImages,
+    image: 'https://images-na.ssl-images-amazon.com/images/I/navy.jpg?w=500',
+  }),
+  { type: 'Colour', value: 'Navy' },
+)
+
+check('no variant images → null', colourForMainImage({ id: 'p2', image: 'x.jpg' }), null)
+check('main image not among them → null', colourForMainImage({
+  ...withColourImages,
+  image: 'https://m.media-amazon.com/images/I/other.jpg',
+}), null)
+check('no main image → null', colourForMainImage({ ...withColourImages, image: '' }), null)
+check('null product is safe', colourForMainImage(null), null)
+
+/* 颜色轴优先：同时存在颜色图和尺码图时，默认选颜色。 */
+check(
+  'colour axis wins over size axis',
+  colourForMainImage({
+    id: 'p3',
+    image: 'https://m.media-amazon.com/images/I/s.jpg',
+    variantImages: {
+      Size: { L: 'https://m.media-amazon.com/images/I/s.jpg' },
+      Colour: { Black: 'https://m.media-amazon.com/images/I/s.jpg' },
+    },
+  }),
+  { type: 'Colour', value: 'Black' },
+)
+
 console.log(`Passed ${passed}${failed ? `, failed ${failed}` : ''}`)
 if (failed) process.exit(1)

@@ -3,7 +3,7 @@ import Modal from './Modal.jsx'
 import QuantityStepper from './QuantityStepper.jsx'
 import CrossfadeImage from './CrossfadeImage.jsx'
 import { Close, Plus, Check, Trash, AlertCircle } from './icons.jsx'
-import { resolveProductImage, PLACEHOLDER_IMAGE } from '../utils/variantImage.js'
+import { resolveProductImage, PLACEHOLDER_IMAGE, colourForMainImage } from '../utils/variantImage.js'
 import { lineKey, isComplete, sanitizeSpecs, specTypesOf } from '../utils/lines.js'
 import { isSizeType, sortSizes } from '../utils/sizes.js'
 import { specTypeLabel } from '../utils/variantImage.js'
@@ -89,7 +89,16 @@ export default function ProductDetail({
   useEffect(() => {
     if (!open || !product) return
     const recent = lines[lines.length - 1]
-    setSpec(recent ? sanitizeSpecs(product, recent.specs) : {})
+
+    if (recent) {
+      setSpec(sanitizeSpecs(product, recent.specs))
+    } else {
+      /* 第一次看这件商品：默认选中**卡片上那张主图对应的颜色**。
+       * 她是照着那张图点进来的，却要在十几枚色卡里自己找一遍，能省就省。
+       * 尺码仍然要她自己选（没选 = 不能加购，这条规矩不变）。 */
+      const guess = colourForMainImage(product)
+      setSpec(guess ? { [guess.type]: guess.value } : {})
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, product?.id])
 
@@ -607,7 +616,14 @@ export default function ProductDetail({
                                     : 'bg-white text-charcoal/80 ring-1 ring-charcoal/10 hover:ring-charcoal/25'
                               }`}
                             >
-                              <span className={gone && !locked ? 'line-through' : ''}>{opt}</span>
+                              <span
+                                title={opt}
+                                className={`inline-block max-w-[15rem] truncate align-bottom ${
+                                  gone && !locked ? 'line-through' : ''
+                                }`}
+                              >
+                                {opt}
+                              </span>
                               {gone && !locked && (
                                 <span className="ml-1.5 text-[10px] tracking-wide text-charcoal/35">
                                   (Sold out)

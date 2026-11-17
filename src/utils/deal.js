@@ -1106,6 +1106,42 @@ export function formatPriceText(value) {
  * 专区里该出现谁：进行中 + 排期中。已结束的不出现（它已经是普通商品了），
  * 没有窗口的也不出现。
  */
+/**
+ * SALE 下拉里的三个多选维度。
+ *
+ *   专区  deals / campaign       （空数组 = 两个都要）
+ *   状态  active / upcoming      （对所有商品生效：大促也有进行中/排期）
+ *   档位  10-20 / 20-30 / …      （只对大促有意义；空数组 = 不限）
+ *
+ * 三个条件之间是 AND，每个维度内部是并集 —— 这就是"多选"在这里的含义。
+ *
+ * @param {object} product
+ * @param {{ zones?: string[], states?: string[], buckets?: string[], campaign?: string, now?: number }} options
+ * @returns {boolean}
+ */
+export function matchesSaleFilter(
+  product,
+  { zones = [], states = [], buckets = [], campaign = '', now = Date.now() } = {},
+) {
+  const isCampaign = isCampaignDeal(product, campaign)
+
+  if (zones.length) {
+    const zone = isCampaign ? 'campaign' : 'deals'
+    if (!zones.includes(zone)) return false
+  }
+
+  /* 时间状态：进行中 / 排期中。两个专区都适用。 */
+  if (states.length) {
+    const phase = dealPhase(product, now)
+    const key = phase === 'live' ? 'active' : phase === 'scheduled' ? 'upcoming' : ''
+    if (!key || !states.includes(key)) return false
+  }
+
+  /* 折扣档位：任何算得出折扣的商品都有档位，选了档位就只留这几档。 */
+  if (!buckets.length) return true
+  return buckets.includes(bucketOf(discountOf(product).max))
+}
+
 export function filterDeals(list, now = Date.now()) {
   const items = Array.isArray(list) ? list : []
   return items.filter((product) => {

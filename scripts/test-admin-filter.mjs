@@ -318,5 +318,30 @@ check('empty tag query is not a filter', filterProducts(tagged, { tagQuery: '   
 check('missing tag field is safe', filterProducts([{ id: 'x' }], { tagView: NO_TAG }).length, 1)
 check('matchesTagView ignores an unknown view', matchesTagView(tagged[0], 'nope'), false)
 
+/* ── 按商品名搜索 ──
+ *
+ * 运营记不住货号，也想直接搜「stripped cardigan」。这条以前是坏的：两个词会被
+ * 当成"粘贴了两枚货号"去精确匹配，结果永远是空。所以这里钉住三件事：
+ * 人名/商品名走模糊、多词是 AND、真正的货号粘贴仍然精确。 */
+console.log('\n[7b] Product-name search')
+
+const named = [
+  { id: 'n1', sku: 'H2F741', name: 'Striped Cardigan Long Sleeve', category: 'Tops' },
+  { id: 'n2', sku: 'P9B013', name: 'Striped Zip Up Mock Neck', category: 'Tops' },
+  { id: 'n3', sku: 'N9Z087', name: 'Vintage Floral Cardigan', category: 'Tops' },
+  { id: 'n4', sku: 'K1A001', name: '2 Piece Lounge Set', category: 'Bottoms' },
+]
+
+const nameIds = (query) => filterProducts(named, { query }).map((item) => item.id)
+
+check('two-word name is fuzzy, not bulk', nameIds('Striped Cardigan'), ['n1'])
+check('word order does not matter', nameIds('cardigan striped'), ['n1'])
+check('three words all must hit', nameIds('striped long sleeve'), ['n1'])
+check('a word that misses filters out', nameIds('cardigan trousers'), [])
+check('one word still finds several', nameIds('cardigan'), ['n1', 'n3'])
+check('a name with a digit is not a SKU paste', nameIds('2 Piece'), ['n4'])
+check('a real SKU still finds exactly one', nameIds('P9B013').length <= 1, true)
+check('SKU paste stays exact', nameIds('H2F741 P9B013'), ['n1', 'n2'])
+
 console.log(`Passed ${passed}${failed ? `, failed ${failed}` : ''}`)
 if (failed) process.exit(1)

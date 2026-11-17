@@ -125,6 +125,17 @@ export function lineKey(product, specs) {
  * rejects — that is the point: the creator is asked to pick again instead of
  * silently ordering something that is gone.
  */
+/**
+ * 这个值看起来像不像一个链接。
+ *
+ * 规格选项（颜色 / 尺码）只能是名字。运营把图片地址粘进名称框时，前台会长出
+ * 一枚写着 `https://m.media-amazon.com/...` 的巨型标签，把整行撑坏 —— 保存前
+ * 用这个函数把它指出来。
+ */
+export function looksLikeUrl(value) {
+  return /^\s*(https?:\/\/|www\.)/i.test(String(value ?? ''))
+}
+
 export function sanitizeSpecs(product, specs) {
   const clean = {}
   if (!specs || typeof specs !== 'object') return clean

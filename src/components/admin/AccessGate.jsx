@@ -2,7 +2,6 @@ import { useEffect, useRef, useState } from 'react'
 import { Lock } from '../icons.jsx'
 import { signIn, signOut } from '../../lib/auth.js'
 import { useAuth } from '../../hooks/useAuth.js'
-import { t } from '../../i18n/admin.js'
 
 /**
  * Admin access gate
@@ -20,13 +19,13 @@ import { t } from '../../i18n/admin.js'
 export function AdminGate({ children }) {
   const auth = useAuth()
 
-  if (auth.status === 'loading') return <GateShell title={t('Checking session')}>…</GateShell>
+  if (auth.status === 'loading') return <GateShell title="Checking session">…</GateShell>
 
   if (auth.status !== 'signed-in') return <AccessGate error={auth.error} />
 
   if (!auth.adminChecked) {
     return (
-      <GateShell title={t('Checking access')}>{t('Verifying your account…')}</GateShell>
+      <GateShell title="Checking access">Verifying your account…</GateShell>
     )
   }
 
@@ -68,14 +67,13 @@ function GateShell({ title, children }) {
 
 function NotAllowed({ email }) {
   return (
-    <GateShell title={t('Not authorised')}>
+    <GateShell title="Not authorised">
       <p>
-        <span className="font-medium text-charcoal">{email || t('This account')}</span>
-        {t('signed in, but')}
-        {t('it is not on the admin allowlist.')}
+        <span className="font-medium text-charcoal">{email || 'This account'}</span>{' '}
+        is signed in, but it is not on the admin allowlist.
       </p>
       <p className="mt-2">
-        {t('Ask an owner to add it to')}{' '}
+        Ask an owner to add it to{' '}
         <span className="font-mono text-[11px]">public.admin_users</span>
       </p>
 
@@ -84,7 +82,7 @@ function NotAllowed({ email }) {
         onClick={signOut}
         className="mt-6 w-full rounded-full bg-charcoal py-3 text-[13px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-[0.98]"
       >
-        {t('Sign out')}
+        Sign out
       </button>
     </GateShell>
   )
@@ -114,7 +112,7 @@ export function AccessGate({ error: initialError = '' }) {
     if (busy) return
 
     if (!email.trim() || !password) {
-      fail(t('Enter your email and password.'))
+      fail('Enter your email and password.')
       return
     }
 
@@ -145,12 +143,11 @@ export function AccessGate({ error: initialError = '' }) {
               id="access-gate-title"
               className="mt-5 text-[22px] font-semibold tracking-tight text-charcoal"
             >
-              {t('Access Required')}
+              Admin access
             </h1>
             <p className="mt-2 max-w-[300px] text-[12.5px] leading-relaxed text-charcoal-light">
-              {t(
-                'This area is for the Saodimallsu team. Sign in with your admin account to open the console.',
-              )}
+              This area is for the Saodimallsu team. Sign in with your admin account to open the
+              console.
             </p>
           </div>
 
@@ -159,7 +156,7 @@ export function AccessGate({ error: initialError = '' }) {
               htmlFor="access-email"
               className="block text-[11px] font-medium uppercase tracking-[0.12em] text-charcoal-light"
             >
-              {t('Email')}
+              Email
             </label>
             <input
               id="access-email"
@@ -183,7 +180,7 @@ export function AccessGate({ error: initialError = '' }) {
               htmlFor="access-password"
               className="mt-3.5 block text-[11px] font-medium uppercase tracking-[0.12em] text-charcoal-light"
             >
-              {t('Password')}
+              Password
             </label>
             <input
               id="access-password"
@@ -195,7 +192,7 @@ export function AccessGate({ error: initialError = '' }) {
               }}
               aria-label="Password"
               autoComplete="current-password"
-              placeholder={t('Your password')}
+              placeholder="Your password"
               className={`mt-2 w-full rounded-xl bg-white px-4 py-3 text-[14px] text-charcoal ring-1 transition placeholder:text-[13px] placeholder:text-charcoal-light/40 focus:outline-none ${
                 error ? 'ring-2 ring-red-400 focus:ring-red-400' : 'ring-charcoal/[0.12] focus:ring-charcoal/35'
               }`}
@@ -220,12 +217,12 @@ export function AccessGate({ error: initialError = '' }) {
               disabled={busy}
               className="mt-2 w-full rounded-full bg-charcoal py-3 text-[13px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-[0.98] disabled:opacity-60"
             >
-              {busy ? t('Signing in…') : t('Sign in')}
+              {busy ? 'Signing in…' : 'Sign in'}
             </button>
           </form>
 
           <p className="mt-5 text-center text-[10.5px] leading-relaxed text-charcoal-light/70">
-            {t('Access is remembered in this tab only.')}
+            Your sign-in is remembered in this tab only.
           </p>
 
           <div className="mt-6 text-center">
@@ -233,7 +230,7 @@ export function AccessGate({ error: initialError = '' }) {
               href="#/"
               className="text-[11px] text-charcoal-light underline-offset-4 transition hover:text-charcoal hover:underline"
             >
-              {t('← Back to storefront')}
+              ← Back to storefront
             </a>
           </div>
         </div>

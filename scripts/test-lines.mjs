@@ -29,6 +29,7 @@ import {
   reconcileLines,
   isLine,
   specTypesOf,
+  looksLikeUrl,
 } from '../src/utils/lines.js'
 
 let passed = 0
@@ -254,5 +255,21 @@ check('an empty cart stays empty', clampLinesToCap([]), [])
 check('a custom cap is honoured', clampLinesToCap([cartLine('a', 5), cartLine('b', 6)], 7).map((l) => l.qty), [5, 2])
 
 console.log(`\n${'─'.repeat(44)}`)
+/* ── 规格选项不能是链接 ──
+ *
+ * 运营把图片地址粘进"颜色"名称框，前台就会长出一枚写着 URL 的巨型标签。
+ * 这条判定是保存前的闸门，所以边界要钉住：真链接拦住，像名字的东西放行。 */
+console.log('\n[looksLikeUrl]')
+
+check('http url', looksLikeUrl('http://example.com/a.jpg'), true)
+check('https url', looksLikeUrl('https://m.media-amazon.com/images/I/x.jpg'), true)
+check('www host', looksLikeUrl('www.amazon.com/dp/B0'), true)
+check('leading spaces still caught', looksLikeUrl('  https://x.y/z'), true)
+check('normal colour is fine', looksLikeUrl('Watermelon Red'), false)
+check('colour with a slash is fine', looksLikeUrl('Blue/green'), false)
+check('empty is fine', looksLikeUrl(''), false)
+check('null is fine', looksLikeUrl(null), false)
+check('word http inside is fine', looksLikeUrl('http knit'), false)
+
 console.log(`Passed ${passed}${failed ? `, failed ${failed}` : ''}`)
 if (failed) process.exit(1)

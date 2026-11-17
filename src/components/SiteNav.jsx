@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import SearchBox from './SearchBox.jsx'
 import { Close, Search } from './icons.jsx'
 import { CAMPAIGN_TAB, DEALS_TAB, DEAL_BUCKETS, REGULAR_DEALS_LABEL } from '../utils/deal.js'
-import { FEATURED_VIEW, HOLIDAY_TAB_DEFAULT_LABEL, TAG_VIEW } from '../utils/navViews.js'
+import { FEATURED_VIEW, HOLIDAY_TAB_DEFAULT_LABEL, MULTI_CATS, TAG_VIEW } from '../utils/navViews.js'
 
 /**
  * Site navigation
@@ -53,16 +53,19 @@ export default function SiteNav({
   campaignCount = 0,
   campaignLabel = '',
   tagCounts = {},
-  bucket = 'all',
   bucketCounts = null,
-  onBucketChange,
-  /* ⚡ 常规秒杀的两级视图：全部 / 进行中 / 排期中。 */
-  dealState = 'all',
-  onDealStateChange,
   dealStateCounts = null,
+  /* SALE 的三个多选维度（空数组 = 不限）：专区、档位、状态。 */
+  saleZones = [],
+  dealStates = [],
+  dealBuckets = [],
+  onToggleZone,
+  onToggleDealState,
+  onToggleDealBucket,
+  /* 手机：单个专区 / 单个分类（不做多选），选完抽屉直接收起。 */
+  onPickZone,
+  onPickCategory,
   /* 当前生效的"窄化筛选"（某个分类 / 某个标签视图）。空串 = 没筛选，不占位。 */
-  filterLabel = '',
-  onClearFilter,
   /* 已选中的分类（多选）。空数组 = All products。 */
   selectedCats = [],
   onToggleCategory,
@@ -115,19 +118,16 @@ export default function SiteNav({
 
   /* 选折扣档位 = 进大促视图 + 切档。两个动作一起做，运营不用先点 Black Friday
    * 再点档位。 */
-  const selectDealState = (id) => {
-    onDealStateChange?.(id)
-    onChange?.(DEALS_TAB)
-    closeAll()
-  }
-
-  const selectBucket = (id) => {
-    onBucketChange?.(id)
-    onChange?.(CAMPAIGN_TAB)
-    closeAll()
-  }
+  /* 三个多选维度都**不关菜单**：一次悬停就能连勾几个。 */
+  const zoneOn = (zone) => saleZones.length === 0 || saleZones.includes(zone)
+  const toggleZone = (zone) => onToggleZone?.(zone)
+  const toggleState = (id) => onToggleDealState?.(id)
+  const toggleBucket = (id) => onToggleDealBucket?.(id)
 
   const hasCampaign = campaignCount > 0
+  /* 没有商品的标签入口直接不显示：留一个点进去是 0 件的菜单项，
+   * 只会让人以为筛选坏了（和当年秒杀 chip 的处理一样）。 */
+  const visibleTags = TAG_ITEMS.filter((item) => (tagCounts[item.value] || 0) > 0)
   const campaignName = campaignLabel || 'Campaign'
   const shopItems = [
     { value: 'All', label: 'All products', count: total },
@@ -138,13 +138,34 @@ export default function SiteNav({
     })),
   ]
 
+  /* Sale 有多个子项（Limited Deals / 大促）。点 Sale 本身 = 进第一个**有商品**
+   * 的；LD 空着的时候就不会落到一个 0 件的空页上。全空才只是展开菜单。 */
+  const firstSaleWithItems = [
+    { value: DEALS_TAB, count: dealsCount },
+    { value: CAMPAIGN_TAB, count: campaignCount },
+  ].find((item) => item.count > 0)
+
   const isActive = (value) => active === value
-  const shopActive = categories.includes(active) || selectedCats.length > 0
+  /* SHOP 什么时候带下划线：多选、单选分类（`active` 是分类名）、或者正处于
+   * "多选视图"哨兵值上 —— 三种都算"我在 Shop 里"。 */
+  const shopActive =
+    selectedCats.length > 0 ||
+    active === MULTI_CATS ||
+    categories.includes(active)
   const saleActive = active === DEALS_TAB || active === CAMPAIGN_TAB
 
-  const menuClass = (on) =>
+  /* 悬停/选中时文字下面多一条 2px 横线（不是只有颜色变化）。
+   * 用 underline + offset 而不是 border-bottom：不会改变按钮高度，也就不会
+   * 在鼠标划过时让整排菜单上下跳 2px。 */
+  const menuClass = (on, accent = false) =>
     `inline-flex items-center gap-1 py-2 text-[12px] font-semibold uppercase tracking-[0.14em] transition-colors ${
-      on ? 'text-charcoal' : 'text-charcoal-light hover:text-charcoal'
+      accent
+        ? on
+          ? 'text-red-700 underline decoration-2 underline-offset-[10px]'
+          : 'text-red-600 hover:text-red-700 hover:underline hover:decoration-2 hover:underline-offset-[10px]'
+        : on
+          ? 'text-charcoal underline decoration-2 underline-offset-[10px]'
+          : 'text-charcoal-light hover:text-charcoal hover:underline hover:decoration-2 hover:underline-offset-[10px]'
     }`
 
   const rowClass = (on) =>
@@ -156,31 +177,17 @@ export default function SiteNav({
     <span className="shrink-0 text-[10px] tabular-nums text-charcoal-light/60">{n}</span>
   )
 
-  const bucketList = (
-    <>
-      {BUCKET_OPTIONS.map((option) => {
-        const on = active === CAMPAIGN_TAB && bucket === option.id
-        const count = bucketCounts?.[option.id]
-        return (
-          <button
-            key={option.id}
-            type="button"
-            onClick={() => selectBucket(option.id)}
-            aria-pressed={on}
-            className={rowClass(on)}
-          >
-            <span className="truncate">{option.label}</span>
-            {Number.isFinite(count) ? (
-              countOf(count)
-            ) : (
-              <span className="text-[9px] text-charcoal-light/30">–</span>
-            )}
-          </button>
-        )
-      })}
-    </>
-  )
 
+  const Check = ({ on }) => (
+    <span
+      aria-hidden="true"
+      className={`flex h-3 w-3 shrink-0 items-center justify-center rounded-[3px] text-[8px] ring-1 ${
+        on ? 'bg-charcoal text-cream ring-charcoal' : 'ring-charcoal/25'
+      }`}
+    >
+      {on ? '✓' : ''}
+    </span>
+  )
   return (
     <>
       {/* ── 桌面：横排菜单 ── */}
@@ -191,91 +198,123 @@ export default function SiteNav({
         >
           <button
             type="button"
-            onClick={() => setOpenMenu((open) => (open === 'sale' ? null : 'sale'))}
+            onClick={() => {
+              if (firstSaleWithItems) select(firstSaleWithItems.value)
+              else setOpenMenu('sale')
+            }}
+            onMouseEnter={() => setOpenMenu('sale')}
             aria-haspopup="true"
             aria-expanded={openMenu === 'sale'}
-            className={menuClass(saleActive)}
+            className={menuClass(saleActive, true)}
           >
             Sale
           </button>
           {openMenu === 'sale' && (
-            <div className="absolute left-0 top-full z-40 w-60 pt-1">
+            <div className="absolute left-0 top-full z-40 w-64 pt-1">
               <div className="rounded-xl bg-white p-1.5 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10">
-                <div className="relative">
-                  <button
-                    type="button"
-                    onClick={() => select(DEALS_TAB)}
-                    onMouseEnter={() => setOpenSub('deals')}
-                    onFocus={() => setOpenSub('deals')}
-                    aria-haspopup="true"
-                    aria-expanded={openSub === 'deals'}
-                    className={rowClass(isActive(DEALS_TAB))}
-                  >
-                    <span className="truncate">{REGULAR_DEALS_LABEL}</span>
-                    <span className="flex shrink-0 items-center gap-1">
-                      {countOf(dealsCount)}
-                      <span aria-hidden="true" className="text-[9px] text-charcoal-light/50">
-                        ›
+                {dealsCount > 0 && (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => toggleZone('deals')}
+                      onMouseEnter={() => setOpenSub('deals')}
+                      onFocus={() => setOpenSub('deals')}
+                      aria-pressed={zoneOn('deals')}
+                      className={rowClass(zoneOn('deals'))}
+                    >
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <Check on={zoneOn('deals')} />
+                        <span className="truncate">{REGULAR_DEALS_LABEL}</span>
                       </span>
-                    </span>
-                  </button>
+                      {countOf(dealsCount)}
+                    </button>
 
-                  {/* 第二级：进行中 / 排期中。时间由导入时的 sale_* 决定，
-                      到了开始时间会自动从 Upcoming 挪到 Active。 */}
-                  {openSub === 'deals' && (
-                    <div className="absolute left-full top-0 z-40 ml-1 w-44">
-                      <div className="rounded-xl bg-white p-1.5 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10">
-                        {DEAL_STATES.map((option) => {
-                          const on =
-                            active === DEALS_TAB && (dealState || 'all') === option.id
-                          const count = dealStateCounts?.[option.id]
-                          return (
-                            <button
-                              key={option.id}
-                              type="button"
-                              onClick={() => selectDealState(option.id)}
-                              aria-pressed={on}
-                              className={rowClass(on)}
-                            >
-                              <span className="truncate">{option.label}</span>
-                              {Number.isFinite(count) ? (
-                                countOf(count)
-                              ) : (
-                                <span className="text-[9px] text-charcoal-light/30">–</span>
-                              )}
-                            </button>
-                          )
-                        })}
+                    {openSub === 'deals' && (
+                      <div className="absolute left-full top-0 z-40 ml-1 w-44">
+                        <div className="rounded-xl bg-white p-1.5 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10">
+                          {DEAL_STATES.map((option) => {
+                            const on = dealStates.includes(option.id)
+                            const count =
+                              option.id === 'all' ? dealsCount : dealStateCounts?.[option.id]
+                            return (
+                              <button
+                                key={option.id}
+                                type="button"
+                                onClick={() => {
+                          toggleState(option.id)
+                          closeAll()
+                        }}
+                                aria-pressed={on}
+                                className={rowClass(on)}
+                              >
+                                <span className="flex min-w-0 items-center gap-1.5">
+                                  <Check on={on} />
+                                  <span className="truncate">{option.label}</span>
+                                </span>
+                                {Number.isFinite(count) ? (
+                                  countOf(count)
+                                ) : (
+                                  <span className="text-[9px] text-charcoal-light/30">–</span>
+                                )}
+                              </button>
+                            )
+                          })}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                </div>
+                    )}
+                  </div>
+                )}
 
                 {hasCampaign && (
                   <div className="relative">
                     <button
                       type="button"
+                      onClick={() => toggleZone('campaign')}
                       onMouseEnter={() => setOpenSub('campaign')}
                       onFocus={() => setOpenSub('campaign')}
-                      onClick={() => setOpenSub((open) => (open === 'campaign' ? null : 'campaign'))}
-                      aria-haspopup="true"
-                      aria-expanded={openSub === 'campaign'}
-                      className={rowClass(active === CAMPAIGN_TAB)}
+                      aria-pressed={zoneOn('campaign')}
+                      className={rowClass(zoneOn('campaign'))}
                     >
-                      <span className="truncate">{campaignName}</span>
-                      <span className="flex shrink-0 items-center gap-1">
-                        {countOf(campaignCount)}
-                        <span aria-hidden="true" className="text-[9px] text-charcoal-light/50">
-                          ›
-                        </span>
+                      <span className="flex min-w-0 items-center gap-1.5">
+                        <Check on={zoneOn('campaign')} />
+                        <span className="truncate">{campaignName}</span>
                       </span>
+                      {countOf(campaignCount)}
                     </button>
 
-                    {/* 第二级：折扣档位（大促的下一级目录） */}
                     {openSub === 'campaign' && (
                       <div className="absolute left-full top-0 z-40 ml-1 w-44">
                         <div className="rounded-xl bg-white p-1.5 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10">
-                          {bucketList}
+                          {BUCKET_OPTIONS.map((option) => {
+                            const on =
+                              option.id === 'all'
+                                ? dealBuckets.length === 0
+                                : dealBuckets.includes(option.id)
+                            const count =
+                              option.id === 'all' ? campaignCount : bucketCounts?.[option.id]
+                            return (
+                              <button
+                                key={option.id}
+                                type="button"
+                                onClick={() => {
+                          toggleBucket(option.id)
+                          closeAll()
+                        }}
+                                aria-pressed={on}
+                                className={rowClass(on)}
+                              >
+                                <span className="flex min-w-0 items-center gap-1.5">
+                                  <Check on={on} />
+                                  <span className="truncate">{option.label}</span>
+                                </span>
+                                {Number.isFinite(count) ? (
+                                  countOf(count)
+                                ) : (
+                                  <span className="text-[9px] text-charcoal-light/30">–</span>
+                                )}
+                              </button>
+                            )
+                          })}
                         </div>
                       </div>
                     )}
@@ -289,15 +328,20 @@ export default function SiteNav({
         <div
           className="relative"
           onMouseEnter={() => setOpenMenu('shop')}
+          /* 悬停在 SHOP 或菜单里 → 一直开着；移到别处 → 自动消失。
+           * 面板是这里的子节点，所以"从按钮移到面板"不会触发 mouseleave。 */
+          onMouseLeave={() => {
+            setOpenMenu(null)
+            setOpenSub(null)
+          }}
         >
           <button
             type="button"
             onClick={() => {
-              /* 点 Shop 本身 = 回到 All products（清掉多选），同时把菜单留着，
-               * 这样下一步还能直接挑分类；纯触摸设备没有 hover，这一步也是
-               * 它们唯一能把菜单打开的手势。 */
-              if (selectedCats.length > 0 || active !== 'All') select('All')
-              setOpenMenu('shop')
+              /* 点 Shop = 回到 All products（清掉多选），并**直接收起菜单** ——
+               * 用户已经点完了，没有理由让面板继续挂着。
+               * 想看分类就悬停（桌面），触摸设备走汉堡抽屉。 */
+              select('All')
             }}
             onMouseEnter={() => setOpenMenu('shop')}
             aria-haspopup="true"
@@ -307,9 +351,9 @@ export default function SiteNav({
             Shop
           </button>
           {openMenu === 'shop' && (
-            <div className="absolute left-0 top-full z-40 w-[min(44rem,86vw)] pt-1">
+            <div className="absolute left-0 top-full z-40 w-[min(74rem,96vw)] pt-1">
               <div className="rounded-xl bg-white p-3 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10">
-                <div className="grid grid-cols-3 gap-0.5 sm:grid-cols-4">
+                <div className="grid grid-cols-4 gap-x-2 gap-y-1 p-1 xl:grid-cols-5 2xl:grid-cols-6">
                   {shopItems.map((item) => {
                     const on = item.value === 'All'
                       ? selectedCats.length === 0
@@ -318,9 +362,16 @@ export default function SiteNav({
                       <button
                         key={item.value}
                         type="button"
-                        onClick={() =>
-                          item.value === 'All' ? select('All') : onToggleCategory?.(item.value)
-                        }
+                        onClick={() => {
+                          /* All products = "就看全部"，点完菜单收起；
+                           * 具体分类 = 可能还要再勾几个，菜单**保持打开**，
+                           * 一次悬停就能连续多选。 */
+                          if (item.value === 'All') {
+                            select('All')
+                          } else {
+                            onToggleCategory?.(item.value)
+                          }
+                        }}
                         aria-pressed={on}
                         className={rowClass(on)}
                       >
@@ -333,7 +384,7 @@ export default function SiteNav({
                           >
                             {on ? '✓' : ''}
                           </span>
-                          <span className="truncate">{item.label}</span>
+                          <span className="min-w-0 break-words leading-snug">{item.label}</span>
                         </span>
                         {countOf(item.count)}
                       </button>
@@ -352,10 +403,10 @@ export default function SiteNav({
           aria-pressed={active === FEATURED_VIEW}
           className={menuClass(active === FEATURED_VIEW)}
         >
-          Featured
+          INSPO
         </button>
 
-        {TAG_ITEMS.map((item) => (
+        {visibleTags.map((item) => (
           <button
             key={item.value}
             type="button"
@@ -364,9 +415,6 @@ export default function SiteNav({
             className={menuClass(isActive(item.value))}
           >
             {item.label}
-            <span className="text-[10px] tabular-nums text-charcoal-light/50">
-              {tagCounts[item.value] || 0}
-            </span>
           </button>
         ))}
       </div>
@@ -376,24 +424,8 @@ export default function SiteNav({
         <SearchBox value={query} onChange={onQueryChange} />
       </div>
 
-      {/* ── 手机：当前视图名 + 搜索 + 汉堡 ── */}
-      <div className="flex min-w-0 flex-1 items-center gap-1 lg:hidden">
-        <button
-          type="button"
-          onClick={() => {
-            setDrawer(true)
-            setMobileSearch(false)
-          }}
-          aria-expanded={drawer}
-          className="-ml-1 flex min-w-0 flex-1 items-center gap-1 truncate rounded-full px-1 py-1 text-left text-[11.5px] font-semibold uppercase tracking-[0.12em] text-charcoal transition hover:bg-cream-dark"
-        >
-          <span className="min-w-0 truncate">
-            {activeLabel(active, bucket, categories, campaignName, bucketCounts, holidayLabel, dealState, selectedCats)}
-          </span>
-          <span aria-hidden="true" className="shrink-0 text-[9px] text-charcoal-light/50">
-            ▾
-          </span>
-        </button>
+      {/* ── 手机：只要搜索 + 汉堡（当前视图不再用文字占位） ── */}
+      <div className="ml-auto flex items-center gap-1 lg:hidden">
         <button
           type="button"
           onClick={() => {
@@ -434,132 +466,129 @@ export default function SiteNav({
         </button>
       </div>
 
-      {/* ── 生效中的筛选：只在有分类/标签筛选时出现，一行就够 ── */}
-      {filterLabel && (
-        <div className="border-t border-charcoal/[0.05] px-5 py-1.5 sm:px-8">
-          <div className="mx-auto flex max-w-7xl items-center gap-2">
-            <span className="text-[9.5px] font-medium uppercase tracking-[0.16em] text-charcoal-light/60">
-              Filter
-            </span>
-            <span className="rounded-full bg-charcoal px-2.5 py-0.5 text-[11px] font-medium text-cream">
-              {filterLabel}
-            </span>
-            <button
-              type="button"
-              onClick={onClearFilter}
-              className="text-[11px] text-charcoal-light underline-offset-2 transition hover:text-charcoal hover:underline"
-            >
-              Clear ×
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── 手机搜索行 ── */}
-      {mobileSearch && (
-        <div className="absolute inset-x-0 top-full z-50 border-t border-charcoal/[0.07] bg-cream px-5 py-2.5 shadow-lg shadow-charcoal/5 lg:hidden">
-          <SearchBox value={query} onChange={onQueryChange} />
-        </div>
-      )}
-
       {/* ── 手机抽屉 ── */}
-      {drawer && (
-        <div className="absolute inset-x-0 top-full z-50 max-h-[75vh] overflow-y-auto border-t border-charcoal/[0.08] bg-cream shadow-xl shadow-charcoal/10 lg:hidden">
+      {/* 抽屉常驻挂载、用 max-height 做开合过渡 —— 条件渲染会让它"啪"地
+          消失，来不及看清自己点了哪一项。 */}
+      <div
+        aria-hidden={!drawer}
+        className={`absolute inset-x-0 top-full z-50 overflow-y-auto border-t border-charcoal/[0.08] bg-cream shadow-xl shadow-charcoal/10 transition-[max-height,opacity] duration-200 ease-out lg:hidden ${
+          drawer ? 'max-h-[75vh] opacity-100' : 'pointer-events-none max-h-0 opacity-0'
+        }`}
+      >
           <div className="px-5 pb-6 pt-3">
             <DrawerGroup title="Sale">
-              <DrawerItem
-                label={REGULAR_DEALS_LABEL}
-                count={dealsCount}
-                active={isActive(DEALS_TAB)}
-                onClick={() => select(DEALS_TAB)}
-              />
-              <div className="mb-1 ml-3 border-l border-charcoal/10 pl-3">
-                {DEAL_STATES.filter((option) => option.id !== 'all').map((option) => {
-                  const on = active === DEALS_TAB && (dealState || 'all') === option.id
-                  const count = dealStateCounts?.[option.id]
-                  return (
-                    <button
-                      key={option.id}
-                      type="button"
-                      onClick={() => selectDealState(option.id)}
-                      aria-pressed={on}
-                      className={`flex w-full items-center justify-between py-1.5 text-left text-[12px] transition ${
-                        on ? 'font-medium text-charcoal' : 'text-charcoal/60'
-                      }`}
-                    >
-                      {option.label}
-                      <span className="text-[10px] tabular-nums text-charcoal-light/50">
-                        {Number.isFinite(count) ? count : '–'}
-                      </span>
-                    </button>
-                  )
-                })}
-              </div>
+              {dealsCount > 0 && (
+                <DrawerItem
+                  label={REGULAR_DEALS_LABEL}
+                  count={dealsCount}
+                  active={saleZones.includes('deals') || saleZones.length === 0}
+                  onClick={() => {
+                    onPickZone?.('deals')
+                    closeAll()
+                  }}
+                />
+              )}
+              {dealsCount > 0 && (
+                <div className="mb-1 ml-3 border-l border-charcoal/10 pl-3">
+                  {DEAL_STATES.map((option) => {
+                    const on = dealStates.includes(option.id)
+                    const count = option.id === 'all' ? dealsCount : dealStateCounts?.[option.id]
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => {
+                          toggleState(option.id)
+                          closeAll()
+                        }}
+                        aria-pressed={on}
+                        className={`flex w-full items-center justify-between gap-2 py-1.5 text-left text-[12px] transition ${
+                          on ? 'font-medium text-charcoal' : 'text-charcoal/60'
+                        }`}
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <Check on={on} />
+                          <span className="truncate">{option.label}</span>
+                        </span>
+                        <span className="text-[10px] tabular-nums text-charcoal-light/50">
+                          {Number.isFinite(count) ? count : '–'}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
               {hasCampaign && (
-                <>
-                  <DrawerItem
-                    label={campaignName}
-                    count={campaignCount}
-                    active={active === CAMPAIGN_TAB}
-                    onClick={() => select(CAMPAIGN_TAB)}
-                  />
-                  {/* 二级目录：折扣档位，缩进一级 */}
-                  <div className="mb-1 ml-3 border-l border-charcoal/10 pl-3">
-                    {BUCKET_OPTIONS.map((option) => {
-                      const on = active === CAMPAIGN_TAB && bucket === option.id
-                      const count = bucketCounts?.[option.id]
-                      return (
-                        <button
-                          key={option.id}
-                          type="button"
-                          onClick={() => selectBucket(option.id)}
-                          aria-pressed={on}
-                          className={`flex w-full items-center justify-between py-1.5 text-left text-[12px] transition ${
-                            on ? 'font-medium text-charcoal' : 'text-charcoal/60'
-                          }`}
-                        >
-                          {option.label}
-                          <span className="text-[10px] tabular-nums text-charcoal-light/50">
-                            {Number.isFinite(count) ? count : '–'}
-                          </span>
-                        </button>
-                      )
-                    })}
-                  </div>
-                </>
+                <DrawerItem
+                  label={campaignName}
+                  count={campaignCount}
+                  active={zoneOn('campaign')}
+                  onClick={() => toggleZone('campaign')}
+                />
+              )}
+              {hasCampaign && (
+                <div className="mb-1 ml-3 border-l border-charcoal/10 pl-3">
+                  {BUCKET_OPTIONS.map((option) => {
+                    const on =
+                      option.id === 'all'
+                        ? dealBuckets.length === 0
+                        : dealBuckets.includes(option.id)
+                    const count = option.id === 'all' ? campaignCount : bucketCounts?.[option.id]
+                    return (
+                      <button
+                        key={option.id}
+                        type="button"
+                        onClick={() => {
+                          toggleBucket(option.id)
+                          closeAll()
+                        }}
+                        aria-pressed={on}
+                        className={`flex w-full items-center justify-between gap-2 py-1.5 text-left text-[12px] transition ${
+                          on ? 'font-medium text-charcoal' : 'text-charcoal/60'
+                        }`}
+                      >
+                        <span className="flex min-w-0 items-center gap-1.5">
+                          <Check on={on} />
+                          <span className="truncate">{option.label}</span>
+                        </span>
+                        <span className="text-[10px] tabular-nums text-charcoal-light/50">
+                          {Number.isFinite(count) ? count : '–'}
+                        </span>
+                      </button>
+                    )
+                  })}
+                </div>
               )}
             </DrawerGroup>
 
             <DrawerGroup title="Shop">
-              {shopItems.map((item) => (
-                <DrawerItem
-                  key={item.value}
-                  label={item.label}
-                  count={item.count}
-                  active={isActive(item.value)}
-                  onClick={() => select(item.value)}
-                />
-              ))}
+              {shopItems.map((item) => {
+                const on =
+                  item.value === 'All'
+                    ? selectedCats.length === 0 && active === 'All'
+                    : selectedCats.includes(item.value) || active === item.value
+                return (
+                  <DrawerItem
+                    key={item.value}
+                    label={item.label}
+                    count={item.count}
+                    active={on}
+                    onClick={() => onPickCategory?.(item.value)}
+                  />
+                )
+              })}
             </DrawerGroup>
 
             <DrawerGroup title="Curated">
               <DrawerItem
-                label="Featured"
+                label="INSPO"
                 count={total}
                 active={active === FEATURED_VIEW}
                 onClick={() => select(FEATURED_VIEW)}
               />
-              {/* 推荐位自己一个入口：内容随机生成，后台不需要编辑。 */}
-        <button
-          type="button"
-          onClick={() => select(FEATURED_VIEW)}
-          aria-pressed={active === FEATURED_VIEW}
-          className={menuClass(active === FEATURED_VIEW)}
-        >
-          Featured
-        </button>
 
-        {TAG_ITEMS.map((item) => (
+              {visibleTags.map((item) => (
                 <DrawerItem
                   key={item.value}
                   label={item.label}
@@ -569,9 +598,20 @@ export default function SiteNav({
                 />
               ))}
             </DrawerGroup>
+
+            {(selectedCats.length > 0 || active !== 'All') && (
+              <button
+                type="button"
+                onClick={() => select('All')}
+                className="mt-4 w-full rounded-full bg-cream-dark py-3 text-[12.5px] font-medium text-charcoal transition hover:bg-cream-dark/70 active:scale-95"
+              >
+                {selectedCats.length > 1
+                  ? `Clear filters · ${selectedCats.length} selected`
+                  : 'Clear filters'}
+              </button>
+            )}
           </div>
-        </div>
-      )}
+      </div>
     </>
   )
 }
@@ -593,34 +633,23 @@ function DrawerItem({ label, count, active, onClick }) {
       type="button"
       onClick={onClick}
       aria-pressed={active}
-      className={`flex items-center justify-between border-b border-charcoal/[0.05] py-2.5 text-left text-[13px] transition last:border-b-0 ${
+      className={`flex items-center justify-between gap-2 border-b border-charcoal/[0.05] py-2.5 text-left text-[13px] transition last:border-b-0 ${
         active ? 'font-medium text-charcoal' : 'text-charcoal/75'
       }`}
     >
-      {label}
-      <span className="text-[10.5px] tabular-nums text-charcoal-light/60">{count}</span>
+      <span className="min-w-0 truncate">{label}</span>
+      <span className="flex shrink-0 items-center gap-2">
+        <span className="text-[10.5px] tabular-nums text-charcoal-light/60">{count}</span>
+        {/* 复选框：手机上唯一能看出"我选了哪些"的地方。 */}
+        <span
+          aria-hidden="true"
+          className={`flex h-4 w-4 items-center justify-center rounded-[3px] text-[9px] ring-1 ${
+            active ? 'bg-charcoal text-cream ring-charcoal' : 'ring-charcoal/25'
+          }`}
+        >
+          {active ? '✓' : ''}
+        </span>
+      </span>
     </button>
   )
-}
-
-/** 手机上那行"我现在在哪一屏"（大促时带上档位）。 */
-function activeLabel(active, bucket, categories, campaignName, bucketCounts, holidayLabel, dealState, selectedCats = []) {
-  if (active === DEALS_TAB) {
-    const state = DEAL_STATES.find((option) => option.id === (dealState || 'all'))
-    return state && state.id !== 'all'
-      ? `${REGULAR_DEALS_LABEL} · ${state.label}`
-      : REGULAR_DEALS_LABEL
-  }
-  if (active === CAMPAIGN_TAB) {
-    const band = BUCKET_OPTIONS.find((option) => option.id === bucket)
-    return bucket === 'all' || !band ? campaignName : `${campaignName} · ${band.label}`
-  }
-  if (active === TAG_VIEW.NEW) return 'New'
-  if (active === TAG_VIEW.BESTSELLER) return 'Bestseller'
-  if (active === TAG_VIEW.HOLIDAY) return holidayLabel || HOLIDAY_TAB_DEFAULT_LABEL
-  if (selectedCats.length > 1) return `${selectedCats.length} categories`
-  if (selectedCats.length === 1) return selectedCats[0]
-  if (active === FEATURED_VIEW) return 'Featured'
-  if (active === 'All') return 'Shop'
-  return categories.includes(active) ? active : 'Shop'
 }

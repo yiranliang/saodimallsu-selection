@@ -1,12 +1,12 @@
 import ProductCard from './ProductCard.jsx'
 import { Bag } from './icons.jsx'
 import { brandConfig } from '../data/products.js'
-import { PAGE_SIZE } from '../utils/catalogue.js'
+import { GRID_CLASS } from '../utils/grid.js'
 
 /** 骨架屏画多少块：和一次加载的页数一致（25）。宽屏 5 列正好 5 行整，
  *  手机 2 列是 12 行半 —— 骨架比真实内容多一点也不会有"跳一下"的错觉，
  *  少才会。 */
-const SKELETON_CARDS = PAGE_SIZE
+/* 骨架数量跟着当前页大小走（由列数算出来），否则换屏时会闪一下多/少的占位。 */
 
 /**
  * Product grid
@@ -20,6 +20,7 @@ const SKELETON_CARDS = PAGE_SIZE
  *   ready   → the cards, faded in
  */
 export default function ProductGrid({
+  pageSize = 24,
   products,
   loading,
   error = '',
@@ -43,12 +44,12 @@ export default function ProductGrid({
    * 见 `badgeStackFor`。普通目录传空串。 */
   campaign = '',
 }) {
-  if (loading) return <GridSkeleton />
+  if (loading) return <GridSkeleton pageSize={pageSize} />
 
   if (!products.length) {
     if (error) {
       return (
-        <div className="mx-auto max-w-7xl px-5 py-20 text-center sm:px-8">
+        <div className="w-full px-5 py-20 text-center sm:px-8">
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-cream-dark text-charcoal-light">
             <Bag className="h-7 w-7" />
           </div>
@@ -72,7 +73,7 @@ export default function ProductGrid({
     const searching = Boolean(query)
 
     return (
-      <div className="mx-auto max-w-7xl px-5 py-20 text-center sm:px-8">
+      <div className="w-full px-5 py-20 text-center sm:px-8">
         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-cream-dark text-charcoal-light">
           <Bag className="h-7 w-7" />
         </div>
@@ -98,10 +99,10 @@ export default function ProductGrid({
   }
 
   return (
-    <div className="mx-auto max-w-7xl px-5 sm:px-8">
+    <div className="w-full px-5 sm:px-8">
       {/* `fade-up` fires once, when this element replaces the skeleton. CSS only —
           no library, no image, no extra request. */}
-      <div className="fade-up grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-5 sm:gap-y-10 md:grid-cols-3 xl:grid-cols-4">
+      <div className={`fade-up ${GRID_CLASS}`}>
         {products.map((product) => (
           <ProductCard
             key={product.id}
@@ -133,9 +134,9 @@ export default function ProductGrid({
  * The ring is a sibling of the brand square, not its parent: a transform on the
  * parent would rotate the letter too, and the logo is not supposed to spin.
  */
-function GridSkeleton() {
+function GridSkeleton({ pageSize }) {
   return (
-    <div className="mx-auto max-w-7xl px-5 sm:px-8">
+    <div className="w-full px-5 sm:px-8">
       <div className="flex flex-col items-center gap-3 pb-7 pt-1">
         <div className="relative flex h-14 w-14 items-center justify-center">
           <span className="brand-spinner absolute inset-0" aria-hidden="true" />
@@ -151,8 +152,8 @@ function GridSkeleton() {
         </span>
       </div>
 
-      <div className="grid grid-cols-2 gap-x-3 gap-y-8 sm:gap-x-5 sm:gap-y-10 md:grid-cols-3 xl:grid-cols-4" aria-hidden="true">
-        {Array.from({ length: SKELETON_CARDS }).map((_, i) => (
+      <div className={GRID_CLASS} aria-hidden="true">
+        {Array.from({ length: pageSize }).map((_, i) => (
           /* 骨架和真实卡片同一个版式：没有白底卡片、白框只在图片里、文字区
              没有左右内边距 —— 否则加载完成的一瞬间会跳一下。 */
           <div key={i}>
