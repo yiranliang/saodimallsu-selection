@@ -120,7 +120,7 @@ export function buildDealFromDates(draft) {
       originalPrice: String(originalPrice),
       salePrice: String(salePrice),
       /* 折扣文案由前台从两个价格实时算（utils/deal.js）。预存一份会在改价后
-       * 变成陈旧的错误角标 —— 这正是 dealImport 留空同一字段的原因。 */
+       * 变成陈旧的错误标签 —— 这正是 dealImport 留空同一字段的原因。 */
       discountLabel: '',
     },
     error: '',
@@ -179,7 +179,7 @@ export function countFillTargets(products, uncategorised) {
 }
 
 /**
- * 副角标 → 要写入的两个值。规则与主角标完全一致（折叠空白、截断、非法颜色
+ * 副标签 → 要写入的两个值。规则与主标签完全一致（折叠空白、截断、非法颜色
  * 降级、文字为空则颜色一并清掉），所以直接复用 `normaliseBadgeDraft` —— 
  * 两套截断长度迟早会不一致，那不是两处可以各自演化的地方。
  *

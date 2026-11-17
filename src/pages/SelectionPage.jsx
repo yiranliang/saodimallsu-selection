@@ -43,6 +43,8 @@ import { mulberry32, nextSeed, pickFeatured } from '../utils/featured.js'
 import { storefrontOrder, filterCatalogue, slicePage, nextLimit, hasMore } from '../utils/catalogue.js'
 import { pageSizeFor } from '../utils/grid.js'
 import { useGridColumns } from '../hooks/useGridColumns.js'
+import { useDealSlots } from '../hooks/useDealSlots.js'
+import { applyDealSlots } from '../utils/dealSlots.js'
 import {
   FEATURED_SIZE_DEFAULT,
   FEATURED_SIZE_MAX,
@@ -84,7 +86,7 @@ export default function SelectionPage() {
 
   const categoryOrder = useCategories()
   /* 大促专区的名字（后台可改成 `Black Friday`）。卡片要用它去重：进了这个
-   * 专区，挂"同一场活动"的角标是零信息。
+   * 专区，挂"同一场活动"的标签是零信息。
    *
    * 这个名字和常规 Tab 的固定名（`Limited Deals`）撞车时退回 `Campaign Deals`
    * —— 见 `campaignTabLabelOf`：设置里那个 key 是拆分前留下的，历史值可能
@@ -241,9 +243,21 @@ export default function SelectionPage() {
    * publishes every draft on the next deploy.
    */
   const SHOW_HIDDEN_PRODUCTS = false
+
+  /* 秒杀档期：一个货号可以有多条时间窗，这里只把"此刻生效的那一档"铺到
+   * 商品的 sale* 字段上 —— 下游（筛选 / 折扣 / 倒计时 / 排序）完全不用改。 */
+  const dealSlots = useDealSlots()
+  const productsWithSlots = useMemo(
+    () => applyDealSlots(products, dealSlots, dealNow),
+    [products, dealSlots, dealNow],
+  )
+
   const catalogue = useMemo(
-    () => (SHOW_HIDDEN_PRODUCTS ? products.slice() : products.filter((p) => !p.hidden)),
-    [products],
+    () =>
+      SHOW_HIDDEN_PRODUCTS
+        ? productsWithSlots.slice()
+        : productsWithSlots.filter((p) => !p.hidden),
+    [productsWithSlots],
   )
 
   /* ⚡ / 🔥 两个秒杀专区 —— 同一批 `sale_*` 数据的两个切片，不是两张表。
@@ -817,7 +831,7 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
           onDecrement={decrement}
           onOpenDetail={setDetailProduct}
           /* 这张网格在哪个面上：决定价格行和倒计时。
-             卡片上的角标**不再看这个**：按 Lululemon 的做法，图片左上角只挂
+             卡片上的标签**不再看这个**：按 Lululemon 的做法，图片左上角只挂
              运营手填的属性标（Bestseller / New），大促和秒杀身份一律不上图
              （见 `trustBadgeFor`）。`zone` 仍然传给卡片，用于价格行。 */
           zone={

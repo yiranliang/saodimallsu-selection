@@ -207,5 +207,29 @@ console.log('\n[6] exportCsv — deal status states')
   check('invalid when end<=start', productToCsvRow({ ...base, saleStart: '2026-12-05T00:00', saleEnd: '2026-12-01T00:00' }, now)[7], 'invalid')
 }
 
+/* ── 一个货号多个档期 ──
+ *
+ * 运营的真实情况：同一件商品今天、后天、大后天各打折一次。判重键因此从
+ * "货号"改成"货号 + 开始 + 结束"：不同窗口放行，完全相同的窗口才算重复。 */
+console.log('\n[multi-window]')
+
+const headerRow = ['主卖货号', '秒杀价', '开始日期', '结束日期']
+const multi = planDealImport([
+  headerRow,
+  ['P1', '10', '2026-11-20', '2026-11-21'],
+  ['P1', '12', '2026-11-23', '2026-11-24'],
+  ['P1', '9', '2026-11-26', '2026-11-27'],
+])
+check('three windows for one sku are all kept', multi.plan.length, 3)
+check('and none is reported as a problem', multi.problems.length, 0)
+
+const sameTwice = planDealImport([
+  headerRow,
+  ['P1', '10', '2026-11-20', '2026-11-21'],
+  ['P1', '10', '2026-11-20', '2026-11-21'],
+])
+check('the exact same window twice is still rejected', sameTwice.plan.length, 1)
+check('with a readable reason', sameTwice.problems[0].reason.includes('同一时间窗'), true)
+
 console.log(`\n${passed} passed, ${failed} failed`)
 process.exit(failed ? 1 : 0)

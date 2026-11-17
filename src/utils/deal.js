@@ -37,13 +37,13 @@ export const DEAL_FIELDS = [
 ]
 
 /**
- * 角标：红底白字，与 Coming Soon（石墨）和运营自选色都区分得开。
+ * 标签：红底白字，与 Coming Soon（石墨）和运营自选色都区分得开。
  * `#C62828` 对白字对比度 5.9:1，过 WCAG AA —— 和 badge.js 里那五枚
  * 快捷模板同一条标准，`test-deal.mjs` 会算一遍。
  */
 export const DEAL_BADGE = {
   /* 身份文案，不含图标：`⚡`/`🔥` 这类符号在 10px 的药丸上既抢眼又占宽，
-   * 黑五期间一枚「Limited Deal」已经说明了一切。折扣**不进角标**（手机端
+   * 黑五期间一枚「Limited Deal」已经说明了一切。折扣**不进标签**（手机端
    * 第二行会压住商品图，见 `badgeStackFor`），这里更不需要暗示"这是个 deal"。 */
   text: 'Limited Deal',
   value: '#C62828',
@@ -309,7 +309,7 @@ export function isNamedCampaign(text) {
  * `Flash Sale` 也算活动 —— 运营给常规秒杀打一枚 `50% OFF` 是常事，那种标只说明
  * "在打折"，不该把商品整体搬进大促区。有名字的活动 + 当前 Tab 名才是归属信号。
  *
- * 为什么 `tag` 也算：批量角标弹窗有两个槽位（第一行活动标写 `sub_tag`、第二行
+ * 为什么 `tag` 也算：批量标签弹窗有两个槽位（第一行活动标写 `sub_tag`、第二行
  * 普通标写 `tag`），运营选哪个都可能。
  *
  * 反过来，`is_campaign === true` 而标被清掉的商品（比如清空秒杀时自动摘标）
@@ -367,7 +367,7 @@ export function dealChanged(prev, next) {
  *
  * 只有**活动类**的文字会被清（`Black Friday` / `Cyber Monday` / `50% OFF`…，
  * 见 `isCampaignLabel`）。`NEW` / `Highly Recommend` 是运营对商品本身的判断，
- * 和秒杀无关，必须留下。想再挂活动标，导入完用批量角标打一次就行 ——
+ * 和秒杀无关，必须留下。想再挂活动标，导入完用批量标签打一次就行 ——
  * 这也是推荐的流程（先导入，再打标）。
  *
  * 判定要求"窗口真的变了"：给一件**没有秒杀**的商品点批量"清空秒杀"，不会
@@ -507,7 +507,7 @@ export function dealWindow(product, now = Date.now()) {
 
 /**
  * 现在是否在秒杀中。**只认时间**，不看价格——没有折后价的商品照样
- * 出角标，只是不显示价格区（见 dealPriceInfo）。
+ * 出标签，只是不显示价格区（见 dealPriceInfo）。
  *
  * @param {object} product
  * @param {number} [now]
@@ -721,7 +721,7 @@ export function soonestDealMs(list, now = Date.now()) {
 }
 
 /**
- * 角标要贴在哪个面上。三个面各有各的规矩，写成常量而不是散落的字符串，
+ * 标签要贴在哪个面上。三个面各有各的规矩，写成常量而不是散落的字符串，
  * 免得某处把 `catalogue` 拼成 `catalog`（那会静默退回默认值）。
  */
 export const BADGE_ZONE = {
@@ -738,14 +738,14 @@ export const BADGE_ZONE = {
    * （`NEW` / `Highly Recommend` …），判定见 `isCampaignLabel`。
    */
   CAMPAIGN: 'campaign',
-  /** 详情弹层：身份 + ACC。**折扣同样不进角标**，价格在下方价格区。 */
+  /** 详情弹层：身份 + ACC。**折扣同样不进标签**，价格在下方价格区。 */
   DETAIL: 'detail',
 }
 
 /**
- * 角标栈 —— 卡片和详情共用这一处，避免两边各写一遍然后漂移。
+ * 标签栈 —— 卡片和详情共用这一处，避免两边各写一遍然后漂移。
  *
- * 最多两行，**第一行身份、第二行仍是身份**（标签），**折扣永远不进角标**：
+ * 最多两行，**第一行身份、第二行仍是身份**（标签），**折扣永远不进标签**：
  *
  *   第一行  campaign(`sub_tag`)  >  Limited Deal  >  Coming Soon  >  `tag`
  *          （Coming Soon 与秒杀同时存在时 Coming Soon 胜出，见下面的 `!teaser`）
@@ -760,10 +760,10 @@ export const BADGE_ZONE = {
  * | `campaign` 大促卡片 | **商品自己的活动标**（Black Friday…），**永不出现 Limited Deal**；没活动标的才落到 tag | tag | 不显示 |
  * | `detail` | 同 catalogue（+ ACC） | tag | 显示 |
  *
- * 为什么折扣不再是角标：它在手机上是**第二行**，正好压在商品图上 —— 卡片只有
+ * 为什么折扣不再是标签：它在手机上是**第二行**，正好压在商品图上 —— 卡片只有
  * 169px 宽、照片是主体，一枚 `50% OFF` 换来的信息量抵不上它遮住的东西。
  * 折扣本身没有消失：它仍在专区的价格区（`dealPriceInfo`）、详情页的价格区，
- * 以及大促专区顶部的折扣分桶里。这里只是**不再把它画成角标**。
+ * 以及大促专区顶部的折扣分桶里。这里只是**不再把它画成标签**。
  * 为什么卡片上不再有 ACC：佣金是红人**点进去**才需要判断的事，详情页有
  * 一整块 ACC 卡片（含 Campaign ID 和复制按钮），卡片上那枚只是噪音。
  *
@@ -834,7 +834,7 @@ export function badgeStackFor(
   /* Coming Soon 独占：第二行留空（需求原文"独占，不显示第二行"）。 */
   if (identity?.kind === 'teaser') return [identity]
 
-  /* ── 第二行：只剩运营的强推标。折扣不再进角标，所以这里没有折扣分支。 ── */
+  /* ── 第二行：只剩运营的强推标。折扣不再进标签，所以这里没有折扣分支。 ── */
   const secondary =
     tag && tag !== identity?.text
       ? { text: tag, value: product?.badgeColor || '', kind: 'tag' }
@@ -887,7 +887,7 @@ export function trustBadgeFor(product, options) {
 }
 
 /**
- * 单角标视图 —— **只返回第一行**。
+ * 单标签视图 —— **只返回第一行**。
  *
  * 保留这个名字是因为它已经被几处"只要知道是什么身份"的地方用了。
  * 渲染请用 `badgeStackFor`（并且带上 zone）。
@@ -901,7 +901,7 @@ export function badgeFor(product, now = Date.now(), options) {
 /**
  * 运营新填一段文字之后，它会落在第几行？
  *
- * 批量改角标弹窗拿这个数字回答"这次操作到底看得见几件"。**两个模式写的是
+ * 批量改标签弹窗拿这个数字回答"这次操作到底看得见几件"。**两个模式写的是
  * 两个不同的槽位**，所以答案完全不同：
  *
  *   覆盖（第一行）写 `sub_tag`：
@@ -947,7 +947,7 @@ export function tagPlacementOf(product, now = Date.now(), { overwrite = false } 
  * 2. **低对低、高对高。** `30-50 → 15-25` 是"这条价格档位整体打了五折"，
  *    不是"30 打 15、50 打 25 之外的所有组合"。交叉配对会算出 17%–70%，
  *    那是数学包络，不是顾客看到的价格。
- * 3. **算不出来就不算。** 返回空字符串，让角标退回 `⚡ Deal`；绝不编一个
+ * 3. **算不出来就不算。** 返回空字符串，让标签退回 `⚡ Deal`；绝不编一个
  *    "100% OFF" 或者负数出来。
  */
 
@@ -1021,12 +1021,12 @@ export function parsePercentLabel(text) {
 }
 
 /**
- * 这个商品"实际生效"的折扣 —— 卡片角标、专区分桶、详情标签**共用这一份**。
+ * 这个商品"实际生效"的折扣 —— 卡片标签、专区分桶、详情标签**共用这一份**。
  *
  * 优先级：运营手填的标签（含 %）> 从价格算出来的 > 没有。
  *
  * 为什么手填的优先：运营在后台覆盖标签就是为了纠正显示；如果分桶仍按价格
- * 走，就会出现"角标写着 50% OFF、商品却在 10%–20% 桶里"的自相矛盾。
+ * 走，就会出现"标签写着 50% OFF、商品却在 10%–20% 桶里"的自相矛盾。
  *
  * @returns {{min:number, max:number, label:string, source:'manual'|'computed'|'none'}}
  */

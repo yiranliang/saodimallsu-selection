@@ -44,7 +44,7 @@ function ProductCard({
   onIncrement,
   onDecrement,
   onOpenDetail,
-  /* 这张卡在哪个面上：`catalogue` / `regular` / `campaign`。价格行和角标栈
+  /* 这张卡在哪个面上：`catalogue` / `regular` / `campaign`。价格行和标签栈
    * 都跟着它走 —— 三个值比"两个布尔"更难对错（见 badgeStackFor 的注释）。 */
   zone = BADGE_ZONE.CATALOGUE,
   /* 常规秒杀那屏的"现在"。父组件一个 timer 服务整屏，只有那一屏才传；
@@ -92,7 +92,7 @@ function ProductCard({
   const { all: allSoldOut } = soldOutSummary(product, asinLookup)
   const orderable = specTypes.length === 0 || !allSoldOut
 
-  /* 运营徽章 —— 图片上**不再有任何角标**（0 遮挡），徽章挪进信息区，用极细
+  /* 运营徽章 —— 图片上**不再有任何标签**（0 遮挡），徽章挪进信息区，用极细
    * 线框渲染。
    *
    * 只认运营手填的属性标（Bestseller / New）。大促/秒杀身份（Black Friday /

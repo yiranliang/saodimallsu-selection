@@ -163,7 +163,7 @@ const MISSING_IMAGE = './placeholders/placeholder.svg'
  *   1. 删掉所有零宽字符（`\u200b` `\u200c` `\u200d` `\ufeff`）；
  *   2. 删掉**所有**空白（半角、全角、换行）—— 码里本来就没有空格，邮件客户端
  *      的自动换行不该让它变成非法输入；
- *   3. 全角标点 → 半角标点。码的字母表是 base62 + `.` + `,` + `:` + `_` + `-`，
+ *   3. 全标签点 → 半标签点。码的字母表是 base62 + `.` + `,` + `:` + `_` + `-`，
  *      所以这里只映射这几个有歧义的字符，不做通用全角转半角（那会把别的东西
  *      悄悄改成合法字符）。
  *
@@ -659,7 +659,7 @@ export function decodeCode(code) {
   const fail = (error) => ({ ok: false, error })
 
   if (!code || typeof code !== 'string') return fail('Empty code')
-  /* 清洗：全角标点 → 半角，去掉零宽字符与所有空白（邮件客户端会把长码折行）。
+  /* 清洗：全标签点 → 半角，去掉零宽字符与所有空白（邮件客户端会把长码折行）。
    * 只清洗、不修复 —— 长度与校验和照常把关。 */
   const trimmed = normaliseCodeText(code)
   if (!trimmed) return fail('Empty code')

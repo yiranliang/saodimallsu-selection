@@ -34,13 +34,13 @@ export default function ProductGrid({
   onDecrement,
   onOpenDetail,
   /* 这张网格在哪个面上：`catalogue` / `regular`（常规秒杀）/ `campaign`（大促）。
-   * 卡片的价格行、角标栈和倒计时都跟着它走。 */
+   * 卡片的价格行、标签栈和倒计时都跟着它走。 */
   zone,
   /* 常规秒杀那屏的"现在"（父组件一个 timer 服务整屏）；其他面不传。 */
   now,
   /* 整份选款已满（`MAX_CART_ITEMS`）：卡片步进器的 `+` 置灰。 */
   atCap = false,
-  /* 这个专区的活动名（后台改的 Tab 名）。专区内部不重复挂同名角标，
+  /* 这个专区的活动名（后台改的 Tab 名）。专区内部不重复挂同名标签，
    * 见 `badgeStackFor`。普通目录传空串。 */
   campaign = '',
 }) {

@@ -41,6 +41,7 @@ import {
   getPriorityColumnStatus,
   UNCATEGORISED,
 } from '../../store/productStore.js'
+import { appendDealSlots } from '../../store/dealStore.js'
 import { useCategories } from '../../hooks/useCategories.js'
 import { addCategory, renameCategory, removeCategory, moveCategory } from '../../utils/categoryStore.js'
 import { useAsins, useAsinsStatus } from '../../hooks/useAsins.js'
@@ -174,7 +175,7 @@ export default function ProductsPage() {
   const [detailState, setDetailState] = useState({ id: '', loading: false, error: '' })
   const [deleteTarget, setDeleteTarget] = useState(null) // product awaiting single-delete confirmation
   const [confirmBulkDelete, setConfirmBulkDelete] = useState(false)
-  /* 批量改角标的小窗。选择集在打开时快照，见 BatchBadgeDialog 的说明。 */
+  /* 批量改标签的小窗。选择集在打开时快照，见 BatchBadgeDialog 的说明。 */
   const [batchBadgeOpen, setBatchBadgeOpen] = useState(false)
   /* 批量秒杀 / 批量分类。三个弹窗互斥打开（同一个按钮条，一次只想改一件事）。 */
   const [batchDealOpen, setBatchDealOpen] = useState(false)
@@ -493,7 +494,7 @@ export default function ProductsPage() {
      * instead: this is the only place the admin can learn it. */
     const badgeDropped = Boolean(draft.badgeColor) && getBadgeColumnStatus() === 'missing'
     const badgeWarning =
-      '已保存，但角标颜色没写进去 —— 数据库没有 badge_color 列。' +
+      '已保存，但标签颜色没写进去 —— 数据库没有 badge_color 列。' +
       '先在 Supabase 跑一次 supabase/07-badge-color.sql，再保存一次。'
 
     try {
@@ -503,7 +504,7 @@ export default function ProductsPage() {
          * to ride along with the success message or it would replace it. */
         showToast?.(
           badgeDropped
-            ? `已新增商品 ${id} —— 角标颜色没存进去（没有 badge_color 列）`
+            ? `已新增商品 ${id} —— 标签颜色没存进去（没有 badge_color 列）`
             : `已新增商品 ${id}`,
           badgeDropped ? 'error' : 'success',
           badgeDropped ? 6000 : 2000,
@@ -1207,9 +1208,39 @@ export default function ProductsPage() {
       dropsCampaignTag(byId.get(String(id)), deal),
     ).length
     try {
-      const count = await setProductsDeals(dealTargets.matched, {
+      /* 商品行上只能存一个档期：同一货号有多档时，只把**最早开始的那一档**
+       * 写进 products（其余档期完整保存在 deals 里，前台按时间自动切换）。
+       * 所以下面先按 id 去重，再交给 setProductsDeals。 */
+      const firstSlotById = new Map()
+      for (const target of dealTargets.matched) {
+        const current = firstSlotById.get(target.id)
+        if (!current || String(target.deal.saleStart) < String(current.deal.saleStart)) {
+          firstSlotById.set(target.id, target)
+        }
+      }
+      const firstSlots = [...firstSlotById.values()]
+
+      const count = await setProductsDeals(firstSlots, {
         isCampaign: dealKind === 'campaign',
       })
+
+      /* 多档期：同一批数据再追加进 `deals`（一行一个时间窗）。同一 (sku, 起, 止)
+       * 重复导入不会产生重复行，旧档期也不会被覆盖 —— 这就是"今天/后天/大后天"
+       * 能同时存在的地方。deals 表还没建时只提醒一句，前台照旧读 products。 */
+      try {
+        await appendDealSlots(
+          dealTargets.matched.map(({ sku, deal }) => ({
+            sku,
+            saleStart: deal.saleStart,
+            saleEnd: deal.saleEnd,
+            salePrice: deal.salePrice,
+            originalPrice: deal.originalPrice,
+            isCampaign: dealKind === 'campaign',
+          })),
+        )
+      } catch (slotError) {
+        showToast?.(`档期表未写入：${slotError.message}`, 'error', 6000)
+      }
       await loadProducts({ silent: true })
       setDealSheet(null)
       setDealResult({
@@ -1304,7 +1335,7 @@ export default function ProductsPage() {
 
       {/* ── 前台大促专区的展示名 ──
           一个站点级设置，存在 `settings` 表（12-settings.sql）。放这里是因为
-          改名的人就是"正在整理这批秒杀商品"的人 —— 改完角标顺手就能把 Tab
+          改名的人就是"正在整理这批秒杀商品"的人 —— 改完标签顺手就能把 Tab
           一起改成 Black Friday。常规秒杀那个 Tab 的名字是固定的
           （`Limited Deals`），不跟这个设置走。 */}
       <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl bg-white px-3.5 py-2.5 ring-1 ring-charcoal/[0.07]">
@@ -1627,7 +1658,7 @@ export default function ProductsPage() {
         >
           <AlertCircle className="h-3.5 w-3.5" />{t('View Sold Out')}</button>
 
-        {/* 只看已隐藏：一个独立的视图，而不是混在列表里靠角标辨认。 */}
+        {/* 只看已隐藏：一个独立的视图，而不是混在列表里靠标签辨认。 */}
         <button
           type="button"
           onClick={() => setHiddenOnly((on) => !on)}
@@ -1785,7 +1816,7 @@ export default function ProductsPage() {
           const asinCount = Object.keys(asinMap[skuOf(product)] || {}).length
           /* 优先用 `photo_count`（触发器维护的整数）——轻列表里根本没有
            * `variant_images` 可数。数据库还没跑 15-photo-count.sql 时退回
-           * 数 JSON，这样"没迁移的库"只是多传流量，角标照常显示。 */
+           * 数 JSON，这样"没迁移的库"只是多传流量，标签照常显示。 */
           const photoCount =
             Number(product.photoCount) ||
             Object.values(product.variantImages || {}).reduce(
@@ -2363,7 +2394,7 @@ function SingleDeleteDialog({ open, product, onCancel, onConfirm }) {
 /* ───────────────── batch badge ───────────────── */
 
 /**
- * 批量改角标
+ * 批量改标签
  * ──────────
  * 黑五这种活动是"一夜之间给二十件商品挂同一个标"，一件件开编辑器不现实。
  *
@@ -2372,7 +2403,7 @@ function SingleDeleteDialog({ open, product, onCancel, onConfirm }) {
  *
  * 三条刻意的约束：
  * 1. 预览用的就是前台那枚药丸（`badgeStyle`），看到的颜色就是卡片上的颜色。
- * 2. 文字为空时「应用」是灰的 —— 要清空请走「清空角标」，那是明确的意思。
+ * 2. 文字为空时「应用」是灰的 —— 要清空请走「清空标签」，那是明确的意思。
  * 3. 这两种写法各会落到第几行、有几件会看不见，**逐个数字列出来**。
  *    不说的话，运营第二天会来问"我设的黑五怎么没显示"。
  */
@@ -2385,6 +2416,82 @@ function BatchBadgeDialog({ open, products, columnMissing, onClose, onApply, onC
   const [campaign, setCampaign] = useState('')
   const [campaignColor, setCampaignColor] = useState('')
   const [busy, setBusy] = useState(false)
+  /* 「清除某一枚标签」：这件商品可能同时挂着 Bestseller 和 New，只想摘一枚。 */
+  const [removeTag, setRemoveTag] = useState('')
+  const [removing, setRemoving] = useState(false)
+  const [clearing, setClearing] = useState(false)
+
+  /* 这一批商品身上出现过的所有标签（含出现次数），供下拉选择。 */
+  const tagCountsInSelection = useMemo(() => {
+    const counts = {}
+    for (const product of products) {
+      for (const tag of normaliseTagList(product.tag).split(', ').filter(Boolean)) {
+        counts[tag] = (counts[tag] || 0) + 1
+      }
+    }
+    return counts
+  }, [products])
+
+  const tagChoices = useMemo(
+    () => Object.keys(tagCountsInSelection).sort((a, b) => a.localeCompare(b)),
+    [tagCountsInSelection],
+  )
+
+  /** 从这一批商品里摘掉指定的那一枚标签，其余标签原样保留。 */
+  const handleRemoveTag = async () => {
+    if (!removeTag || removing) return
+    setRemoving(true)
+    try {
+      const needle = removeTag.toLowerCase()
+      let touched = 0
+      for (const product of products) {
+        const kept = normaliseTagList(product.tag)
+          .split(', ')
+          .filter(Boolean)
+          .filter((tag) => tag.toLowerCase() !== needle)
+        if (kept.length === normaliseTagList(product.tag).split(', ').filter(Boolean).length) continue
+        await setProductsBadge([product.id], { tag: kept.join(', ') })
+        touched += 1
+      }
+      showToast?.(`已从 ${touched} 件商品上清除「${removeTag}」`, 'success')
+      setRemoveTag('')
+      onClose?.()
+    } catch (err) {
+      showToast?.(err.message, 'error', 6000)
+    } finally {
+      setRemoving(false)
+    }
+  }
+
+  /** 全部标签清空（颜色一并清）。 */
+  const handleClearAllTags = async () => {
+    if (clearing) return
+    setClearing(true)
+    try {
+      await setProductsBadge(products.map((p) => p.id), { tag: '' })
+      showToast?.(`已清空 ${products.length} 件商品的标签`, 'success')
+      onClose?.()
+    } catch (err) {
+      showToast?.(err.message, 'error', 6000)
+    } finally {
+      setClearing(false)
+    }
+  }
+
+  /** 只清大促标签：不动运营标签。 */
+  const handleClearCampaign = async () => {
+    if (clearing) return
+    setClearing(true)
+    try {
+      await setProductsBadge(products.map((p) => p.id), undefined, { sub: { subTag: '' } })
+      showToast?.(`已清除 ${products.length} 件商品的大促标签`, 'success')
+      onClose?.()
+    } catch (err) {
+      showToast?.(err.message, 'error', 6000)
+    } finally {
+      setClearing(false)
+    }
+  }
 
   const count = products.length
   const draft = normaliseBadgeDraft({ text, color })
@@ -2537,85 +2644,63 @@ function BatchBadgeDialog({ open, products, columnMissing, onClose, onApply, onC
           </div>
         </div>
 
-        {/* ── 大促标签（sub_tag） ──
-            独立开关：不勾选就完全不碰那一列。它不上卡片，只决定这批商品进
-            哪个大促专区 Tab（黑五换网一改的就是它）。 */}
+        {/* ── 清除 ──
+            三种清除是**显式动作**，不是"改标签"的副作用：
+              1. 清掉某一枚标签 —— 一件商品常有好几枚，只想摘掉其中一枚；
+              2. 清掉全部标签；
+              3. 清掉大促标签（`sub_tag`）。它由导入秒杀时自动写，平时不用手动改，
+                 所以这里只提供"清除"这一个方向。 */}
         <div className="mt-4 rounded-xl bg-white p-3 ring-1 ring-charcoal/5">
-          <label className="flex cursor-pointer items-start gap-2">
-            <input
-              type="checkbox"
-              checked={campaignOn}
-              onChange={(event) => setCampaignOn(event.target.checked)}
-              aria-label="Also update campaign tag"
-              className="mt-0.5 h-3.5 w-3.5 accent-charcoal"
-            />
-            <span className="min-w-0">
-              <span className="block text-[12px] font-medium text-charcoal">
-                同时修改大促标签
-              </span>
-              <span className="mt-0.5 block text-[10.5px] leading-relaxed text-charcoal-light">
-                只决定商品进哪个大促专区 Tab，不显示在卡片上。不勾选就保持原样。
-              </span>
+          <span className="text-[10px] font-medium uppercase tracking-wider text-charcoal-light">
+            清除
+          </span>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <select
+              value={removeTag}
+              onChange={(event) => setRemoveTag(event.target.value)}
+              aria-label="Tag to remove"
+              className="min-w-0 flex-1 rounded-lg bg-cream px-2.5 py-1.5 text-[12px] text-charcoal focus:outline-none"
+            >
+              <option value="">选择要清除的标签…</option>
+              {tagChoices.map((tag) => (
+                <option key={tag} value={tag}>
+                  {tag}（{tagCountsInSelection[tag]} 件）
+                </option>
+              ))}
+            </select>
+            <button
+              type="button"
+              onClick={handleRemoveTag}
+              disabled={!removeTag || removing}
+              className="shrink-0 rounded-full bg-charcoal px-3 py-1.5 text-[11px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+            >
+              {removing ? '清除中…' : '清除这枚标签'}
+            </button>
+          </div>
+
+          <div className="mt-2 flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={handleClearAllTags}
+              disabled={clearing}
+              className="rounded-full bg-cream-dark px-3 py-1.5 text-[11px] font-medium text-charcoal transition hover:bg-cream-dark/70 active:scale-95 disabled:opacity-40"
+            >
+              清除全部标签
+            </button>
+            <button
+              type="button"
+              onClick={handleClearCampaign}
+              disabled={clearing}
+              className="rounded-full bg-cream-dark px-3 py-1.5 text-[11px] font-medium text-charcoal transition hover:bg-cream-dark/70 active:scale-95 disabled:opacity-40"
+            >
+              清除大促标签
+            </button>
+            <span className="text-[10px] leading-snug text-charcoal-light/70">
+              大促标签是导入秒杀时自动写的，这里只用来兜底清理。
             </span>
-          </label>
-
-          {campaignOn && (
-            <div className="mt-3">
-              <div className="flex items-center gap-1.5">
-                <input
-                  type="text"
-                  value={campaign}
-                  onChange={(event) => setCampaign(event.target.value)}
-                  maxLength={BATCH_BADGE_MAX}
-                  placeholder="例如 Black Friday"
-                  aria-label="Batch campaign tag text"
-                  className="input-field min-w-0 flex-1 text-[13px]"
-                />
-                <span
-                  className="relative flex h-[38px] w-[38px] shrink-0 items-center justify-center overflow-hidden rounded-lg ring-1 ring-charcoal/10"
-                  style={{ backgroundColor: pickedCampaignColor || '#2B2B2B' }}
-                  title="Pick any color"
-                >
-                  <input
-                    type="color"
-                    value={pickedCampaignColor || '#2B2B2B'}
-                    onChange={(event) => setCampaignColor(event.target.value)}
-                    aria-label="Batch campaign tag color"
-                    className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-                  />
-                </span>
-              </div>
-
-              <div className="mt-1.5 flex flex-wrap items-center gap-1">
-                {CAMPAIGN_QUICK_PICKS.map((word) => (
-                  <button
-                    key={word}
-                    type="button"
-                    onClick={() => setCampaign(word)}
-                    aria-pressed={campaign === word}
-                    className={`rounded-full px-2.5 py-1 text-[10.5px] font-medium transition ${
-                      campaign === word
-                        ? 'bg-charcoal text-cream'
-                        : 'bg-cream-dark text-charcoal/70 hover:text-charcoal'
-                    }`}
-                  >
-                    {word}
-                  </button>
-                ))}
-                {campaign && (
-                  <button
-                    type="button"
-                    onClick={() => setCampaign('')}
-                    className="ml-1 text-[10px] text-charcoal-light transition hover:text-charcoal"
-                  >
-                    清空（勾选状态下才会清）
-                  </button>
-                )}
-              </div>
-            </div>
-          )}
+          </div>
         </div>
-
         {/* 预览用的就是前台那枚线框徽章：所见即所得。 */}
         <div className="mt-4 flex flex-wrap items-center gap-1.5 rounded-xl bg-cream-dark/60 px-3 py-2.5">
           <span className="text-[10px] uppercase tracking-wider text-charcoal-light">预览</span>
@@ -3320,7 +3405,7 @@ function DealImportResultDialog({ open, result, onClose }) {
  *
  * 这个弹窗只做一件事：把**同一组**原价 / 折后价 / 日期写成那五列。它不碰
  * 价格以外的任何字段（见 store 的 setProductsDeals），所以"批量开秒杀"永远
- * 不会顺手改掉库存、角标或排序。
+ * 不会顺手改掉库存、标签或排序。
  *
  * 置顶是可选的一项：留空 = 不动 `deal_priority`。这条很重要 —— 早上刚钉好
  * 的二十件商品，下午只想延后一天结束时，不该被"留空"重置成不置顶。
@@ -3403,7 +3488,7 @@ function BatchDealDialog({
         <p className="text-[11.5px] leading-relaxed text-charcoal-light">
           给 <span className="font-medium text-charcoal">{count} 件商品</span>
           设置同一个时间窗。只写秒杀那五个字段、这批的归属（外加你填了的置顶
-          权重）—— 价格、库存、角标、排序都原样保留。
+          权重）—— 价格、库存、标签、排序都原样保留。
         </p>
 
         <div className="mt-4 grid grid-cols-2 gap-2">

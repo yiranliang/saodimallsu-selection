@@ -33,7 +33,7 @@ import { brandConfig } from './data/products.js'
 const AdminLayout = lazy(() => import('./pages/admin/AdminLayout.jsx'))
 const LookupPage = lazy(() => import('./pages/admin/LookupPage.jsx'))
 const ProductsPage = lazy(() => import('./pages/admin/ProductsPage.jsx'))
-const DeveloperPage = lazy(() => import('./pages/admin/DeveloperPage.jsx'))
+const PeriodsPage = lazy(() => import('./pages/admin/PeriodsPage.jsx'))
 const AdminNotFound = lazy(() => import('./pages/admin/AdminNotFound.jsx'))
 
 /** Chunk loading placeholder — same CSS ring as the storefront skeleton */
@@ -82,10 +82,10 @@ export default function App() {
           }
         />
         <Route
-          path="developer"
+          path="periods"
           element={
             <Suspense fallback={<RouteFallback />}>
-              <DeveloperPage />
+              <PeriodsPage />
             </Suspense>
           }
         />

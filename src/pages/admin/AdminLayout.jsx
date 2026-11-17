@@ -8,7 +8,7 @@ import { useAuth } from '../../hooks/useAuth.js'
 import { useSessionTimeout } from '../../hooks/useSessionTimeout.js'
 import { readIdleTimeoutMs } from '../../utils/adminSecurity.js'
 import { t } from '../../i18n/admin.js'
-import { Search, Bag, Code, LogOut } from '../../components/icons.jsx'
+import { Search, Bag, Calendar, LogOut } from '../../components/icons.jsx'
 
 /**
  * Admin shell
@@ -20,7 +20,7 @@ import { Search, Bag, Code, LogOut } from '../../components/icons.jsx'
 const TABS = [
   { to: '/admin', label: 'Lookup', icon: Search, end: true },
   { to: '/admin/products', label: 'Products', icon: Bag },
-  { to: '/admin/developer', label: 'Developer', icon: Code },
+  { to: '/admin/periods', label: 'Periods', icon: Calendar },
 ]
 
 export default function AdminLayout() {

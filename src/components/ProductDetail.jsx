@@ -302,7 +302,7 @@ export default function ProductDetail({
 
   // Re-renders on every pick, so choosing a colour swaps the photo in place
   const resolved = resolveProductImage(product, spec)
-  /* 详情图**不放任何角标**（和卡片一致：图片 0 遮挡）。运营的属性徽章
+  /* 详情图**不放任何标签**（和卡片一致：图片 0 遮挡）。运营的属性徽章
    * （Bestseller / New）改用极细线框渲染在标题下面，规则和卡片共用
    * `trustBadgesFor` —— 大促/秒杀身份照旧不显示。 */
   const trustBadges = trustBadgesFor(product, { campaign })
@@ -430,7 +430,7 @@ export default function ProductDetail({
             </h2>
 
             {/* 运营徽章：和卡片同一套（极细线框、无底色、10px、深灰字）。
-                图片上已经没有任何角标，徽章只出现在这里。 */}
+                图片上已经没有任何标签，徽章只出现在这里。 */}
             {trustBadges.length > 0 && (
               <div className="mt-2 flex flex-wrap items-center gap-1">
                 {trustBadges.map((badge) => {

@@ -253,11 +253,15 @@ export function planDealImport(rows) {
       problems.push({ row: r + 1, reason: `货号含空白或逗号（"${sku}"）` })
       continue
     }
-    if (seen.has(sku)) {
-      problems.push({ row: r + 1, reason: `货号重复（${sku}）` })
+    /* 判重按「货号 + 开始 + 结束」：一件商品可以有多个档期（今天 / 后天 /
+     * 大后天），所以同一货号出现多行是**正常**的；只有完全相同的窗口才算
+     * 重复（防止同一张表被粘两遍）。 */
+    const slotKey = `${sku}|${String(cell('saleStart') ?? '').trim()}|${String(cell('saleEnd') ?? '').trim()}`
+    if (seen.has(slotKey)) {
+      problems.push({ row: r + 1, reason: `同一货号的同一时间窗重复（${sku}）` })
       continue
     }
-    seen.add(sku)
+    seen.add(slotKey)
 
     const startTs = parseDateOnly(cell('saleStart'))
     const endTs = parseDateOnly(cell('saleEnd'))

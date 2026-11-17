@@ -100,8 +100,8 @@ const DEAL_COLUMNS = ['sale_start', 'sale_end', 'sale_price', 'original_price', 
 /* ACC is two columns that always arrive together (10-acc.sql adds both), so it
  * gets one status like the deal card: "is the switch storable" is one question. */
 const ACC_COLUMNS = ['acc_id', 'has_acc']
-/* 副角标两列总是成对出现（11-*.sql 一条语句加两列），所以和 ACC 一样用
- * 一个状态问一次"副角标能不能存"。置顶权重单独一列：它和副角标是同一个
+/* 副标签两列总是成对出现（11-*.sql 一条语句加两列），所以和 ACC 一样用
+ * 一个状态问一次"副标签能不能存"。置顶权重单独一列：它和副标签是同一个
  * 迁移，但语义无关 —— 一个数据库跑到一半（只加了 sub_*）也该让置顶降级
  * 而不是整块失效。 */
 const SUB_BADGE_COLUMNS = ['sub_tag', 'sub_badge_color']
@@ -129,7 +129,7 @@ const OPTIONAL_COLUMNS = [
  * honest warning. */
 const ABSENT_HINTS = {
   sold_out_variants: { meaning: '「全部有货」', sql: 'supabase/05-sold-out.sql' },
-  badge_color: { meaning: '「角标无自定义颜色」', sql: 'supabase/07-badge-color.sql' },
+  badge_color: { meaning: '「标签无自定义颜色」', sql: 'supabase/07-badge-color.sql' },
   is_teaser: { meaning: '「全部不是预告」', sql: 'supabase/08-teaser.sql' },
   is_campaign: { meaning: '「全部算常规秒杀」', sql: 'supabase/13-campaign.sql' },
   sale_start: { meaning: '「全部没有秒杀」', sql: 'supabase/09-deal.sql' },
@@ -139,8 +139,8 @@ const ABSENT_HINTS = {
   discount_label: { meaning: '「全部没有秒杀」', sql: 'supabase/09-deal.sql' },
   acc_id: { meaning: '「全部没有 ACC 佣金」', sql: 'supabase/10-acc.sql' },
   has_acc: { meaning: '「全部没有 ACC 佣金」', sql: 'supabase/10-acc.sql' },
-  sub_tag: { meaning: '「全部没有副角标」', sql: 'supabase/11-sub-badge-deal-priority.sql' },
-  sub_badge_color: { meaning: '「全部没有副角标」', sql: 'supabase/11-sub-badge-deal-priority.sql' },
+  sub_tag: { meaning: '「全部没有副标签」', sql: 'supabase/11-sub-badge-deal-priority.sql' },
+  sub_badge_color: { meaning: '「全部没有副标签」', sql: 'supabase/11-sub-badge-deal-priority.sql' },
   deal_priority: { meaning: '「秒杀专区全部不置顶」', sql: 'supabase/11-sub-badge-deal-priority.sql' },
   photo_count: { meaning: '「列表仍会带上变体图 JSON」', sql: 'supabase/15-photo-count.sql' },
 }
@@ -251,10 +251,10 @@ export function getAccColumnStatus() {
 }
 
 /**
- * 副角标（右上角）能不能存？
+ * 副标签（右上角）能不能存？
  *
  * `'missing'` 表示 11-sub-badge-deal-priority.sql 没跑：两列从每次写入里
- * 被剔掉，后台填的副角标会静静消失。和角标颜色同一条逻辑 —— 存不进去就
+ * 被剔掉，后台填的副标签会静静消失。和标签颜色同一条逻辑 —— 存不进去就
  * 要当面说，不能让运营以为是前台没渲染。
  *
  * @returns {'unknown' | 'ok' | 'missing'}
@@ -426,7 +426,7 @@ function rowFor(product, options) {
  *
  * 这是省 Egress 的关键一步：以前每次 `update`/`upsert` 都链一个 `.select()`，
  * 让 PostgREST 把修改后的**整行**（含 `specs` / `variant_images` 这些大 JSON）
- * 回传一遍。批量改 300 件的角标，等于把整个目录下载了一次 —— 而我们本来就知道
+ * 回传一遍。批量改 300 件的标签，等于把整个目录下载了一次 —— 而我们本来就知道
  * 自己写进去了什么。
  *
  * 走 `productToRow` → `rowToProduct` 这一圈，是为了让它和"真实回读"走**同一套
@@ -459,7 +459,7 @@ function patchCachedRow(id, columns) {
  * `light` 拉"列表形状"（不带 `variant_images`）：后台列表用，省掉最重的一列。
  * 拉完这些商品会被标记成 **partial**，编辑器在保存前必须先把整行取回来
  * （`loadProduct`），否则空 JSON 会被写回去把图删了。数据库没有 `photo_count`
- * 时自动退回全量 —— 宁可多传流量，也不能让界面少一个角标。
+ * 时自动退回全量 —— 宁可多传流量，也不能让界面少一个标签。
  *
  * @param {{ silent?: boolean, light?: boolean }} [options]
  */
@@ -715,7 +715,7 @@ export async function updateProduct(id, patch) {
   if (!badgeColumnAvailable && row.badge_color === undefined && patch?.badgeColor) {
     /* The UI let a colour be picked on a database that has no column for it. Say
      * so once, instead of quietly losing it on the next reload. */
-    console.warn('[products] badge_color 列不存在，角标颜色未保存。先跑 supabase/07-badge-color.sql。')
+    console.warn('[products] badge_color 列不存在，标签颜色未保存。先跑 supabase/07-badge-color.sql。')
   }
 
   if (!teaserColumnAvailable && row.is_teaser === undefined && patch?.isTeaser !== undefined) {
@@ -910,7 +910,7 @@ export async function setProductsBadge(ids, badge, { sub } = {}) {
  * `original_price` / `discount_label` 五列（以及可选的 `deal_priority`）。
  *
  * 与 `setProductsBadge` 同一个隔离原则：这里的输入只有时间窗和两个价格，
- * 不该有机会把商品名、库存、角标、排序一起写回去。`planDealImport` /
+ * 不该有机会把商品名、库存、标签、排序一起写回去。`planDealImport` /
  * `buildDealFromDates` 已经把时间补全成了整天的边界，这里只负责落库。
  *
  * **唯一的例外**：这次写入真的改动了窗口、而商品原来挂着**活动标**
@@ -987,7 +987,7 @@ export async function setProductsDeals(targets, { priority, isCampaign } = {}) {
     /* 秒杀一改（或一清），上一场活动的标就该让位 —— 否则货架上显示的是
      * `Black Friday` 而不是 `Limited Deal`，而导入表格里没有"活动标"这一列，
      * 运营根本无从发现（见 deal.js 的 `dropsCampaignTag`）。只清活动类的
-     * 文字，`NEW` / `Highly Recommend` 原样保留；副角标列不存在时整段跳过，
+     * 文字，`NEW` / `Highly Recommend` 原样保留；副标签列不存在时整段跳过，
      * 因为那个功能此刻本来就没生效。
      *
      * `sub_tag` 写**空字符串**，不是 null：这一列在 11-*.sql 里是
@@ -1028,7 +1028,7 @@ export async function setProductsDeals(targets, { priority, isCampaign } = {}) {
     return done
   }
 
-  /* 先写不动角标的那批，再写要清的 —— 两批互不依赖，顺序只是让"常规写入"
+  /* 先写不动标签的那批，再写要清的 —— 两批互不依赖，顺序只是让"常规写入"
    * 先落地，万一第二批失败，第一批的秒杀已经是新的了。 */
   return (await write(plainRows)) + (await write(clearRows))
 }

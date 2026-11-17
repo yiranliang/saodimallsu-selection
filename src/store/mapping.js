@@ -110,10 +110,10 @@ function shared(product) {
   const accId = String(product?.accId ?? '').trim()
   if (accId) out.accId = accId
 
-  /* 副角标 —— 右上角那枚。和 `tag` 完全独立：黑五期间一件商品同时需要
+  /* 副标签 —— 右上角那枚。和 `tag` 完全独立：黑五期间一件商品同时需要
    * 「⚡ 25% OFF」（由 sale_* 算出）和「Black Friday」（运营手填），
    * 挤在一个字段里就只能二选一。只有副文字存在时颜色才有意义，理由与
-   * 主角标相同（见 utils/batchBadge.js）。 */
+   * 主标签相同（见 utils/batchBadge.js）。 */
   const subTag = String(product?.subTag ?? '').trim()
   if (subTag) {
     out.subTag = subTag
@@ -128,7 +128,7 @@ function shared(product) {
 
   /* 图片数（`15-photo-count.sql` 的 `photo_count`，由触发器维护）。
    * 后台列表用这个整数画「N 张图」，从而不必拉 `variant_images` 本体。
-   * 0 = 没有专属图，和以前一样不显示角标，所以不写进形状。 */
+   * 0 = 没有专属图，和以前一样不显示标签，所以不写进形状。 */
   const photoCount = Number(product?.photoCount)
   if (Number.isFinite(photoCount) && photoCount > 0) out.photoCount = Math.trunc(photoCount)
 
@@ -181,7 +181,7 @@ export function rowToProduct(row) {
       subBadgeColor: row.sub_badge_color,
       dealPriority: row.deal_priority,
       /* 15-*.sql。后台列表靠它画「N 张图」，所以列表查询可以不带
-       * `variant_images`。缺列时是 `undefined`，角标不显示 —— 与"没有图"同义。 */
+       * `variant_images`。缺列时是 `undefined`，标签不显示 —— 与"没有图"同义。 */
       photoCount: row.photo_count,
     }),
   }
@@ -225,7 +225,7 @@ export function productToRow(product, { id, sortOrder } = {}) {
      * the switch is off — see utils/acc.js. */
     has_acc: product?.hasAcc === true,
     acc_id: textOrNull(product?.accId),
-    /* 副角标 / 置顶（11-*.sql）。和 tag 一样：文字是 `''`、颜色是 `null`，
+    /* 副标签 / 置顶（11-*.sql）。和 tag 一样：文字是 `''`、颜色是 `null`，
      * 两个字段只用一种「没设置」的表示。`deal_priority` 是 `not null`，
      * 所以永远写一个整数，不写 null。 */
     sub_tag: String(product?.subTag ?? '').trim(),

@@ -2200,7 +2200,7 @@ function DealSection({ value, onChange, open: initiallyOpen, teaser, legacy, col
 
           <p className="text-[10px] leading-relaxed text-charcoal-light">
             详情页价格区显示 <span className="font-medium text-charcoal/70">{auto || '折扣'}</span>，
-            角标上不再出现折扣（手机端第二行会压住商品图）。
+            标签上不再出现折扣（手机端第二行会压住商品图）。
             两个价格都可以写区间（`30-50`），数字按你填的原样展示 ——
             前台不会用自己的算法改写它。
           </p>
@@ -2241,7 +2241,7 @@ function DealSection({ value, onChange, open: initiallyOpen, teaser, legacy, col
             {!armed
               ? '已关闭 —— 前台什么都不显示。'
               : status === 'live'
-                ? `进行中 —— 角标 + ${price || '无价格'}${was ? `（原价 ${was}）` : ''}，倒计时到结束。`
+                ? `进行中 —— 标签 + ${price || '无价格'}${was ? `（原价 ${was}）` : ''}，倒计时到结束。`
                 : status === 'scheduled'
                   ? '排期中 —— 开始之前显示"Deal starts in"，到点自动变成进行中。'
                   : status === 'ended'
@@ -2339,7 +2339,7 @@ function AccSection({ hasAcc, accId, onChange, columnMissing }) {
       </div>
 
       {!open && !hasAcc && (
-        <p className="px-3 pb-2.5 text-[10px] leading-relaxed text-charcoal-light">开启后详情页会出现一张 ACC 卡片（带复制按钮）。商品卡片上不显示 ACC 角标。</p>
+        <p className="px-3 pb-2.5 text-[10px] leading-relaxed text-charcoal-light">开启后详情页会出现一张 ACC 卡片（带复制按钮）。商品卡片上不显示 ACC 标签。</p>
       )}
 
       {open && (
