@@ -39,6 +39,18 @@ comment on table public.deals is
 create index if not exists deals_sku_idx on public.deals (sku);
 create index if not exists deals_window_idx on public.deals (sale_start, sale_end);
 
+-- 幂等 upsert 需要这三列上有唯一索引，否则 PostgREST 会拒绝整个 upsert
+-- （"no unique or exclusion constraint matching the ON CONFLICT specification"）。
+delete from public.deals a
+using public.deals b
+where a.ctid < b.ctid
+  and a.sku = b.sku
+  and a.sale_start = b.sale_start
+  and a.sale_end = b.sale_end;
+
+create unique index if not exists deals_window_uniq
+  on public.deals (sku, sale_start, sale_end);
+
 alter table public.deals enable row level security;
 
 drop policy if exists deals_read on public.deals;

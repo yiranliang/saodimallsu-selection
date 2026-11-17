@@ -10,7 +10,9 @@ import { getAsinsStatus, isValidAsin } from '../../utils/asinStore.js'
 import { firstListing } from '../../utils/amazon.js'
 import { isColourType, specTypeLabel } from '../../utils/variantImage.js'
 import { HOLIDAY_TOKEN, hasHolidayTag, toggleHolidayTag } from '../../utils/navViews.js'
+import { deleteDealSlotsBySku } from '../../store/dealStore.js'
 import { isSizeType, sizeOrder } from '../../utils/sizes.js'
+import { useDealSlots } from '../../hooks/useDealSlots.js'
 import { looksLikeUrl } from '../../utils/lines.js'
 import { variantKey } from '../../utils/sku.js'
 import {
@@ -103,6 +105,11 @@ export default function ProductEditor({
    * An empty string is meaningful: it means "drop this combination's ASIN",
    * applied as a delete at merge time. */
   const [asinEdits, setAsinEdits] = useState({})
+  /* 档期数量：必须在所有 early return 之前调用，否则 product 从 null 变成
+   * 有值时 hook 数量会变化，React 直接抛 "Rendered more hooks than during the
+   * previous render"。 */
+  const dealSlots = useDealSlots()
+  const slotCount = (dealSlots[String(product?.sku || '').trim()] || []).length
   /* 「标签」开关：关着就完全不显示标签编辑器，保存时写空串。
    * 初值取决于这件商品有没有标签；换商品时跟着重播种（见下面的 seed）。 */
   const [tagOn, setTagOn] = useState(() => Boolean(String(product?.tag || '').trim()))
@@ -633,6 +640,13 @@ export default function ProductEditor({
     // `id` is internal and never changes; `sku` is the 货号 and is free-form
     setSaving(true)
     try {
+      /* 关掉秒杀开关 = 这场活动取消：把该货号在 deals 里的档期一并删掉。
+       * 放在保存之前，失败也不影响商品本身保存（catch 掉）。
+       * 注意读的是 `draft.dealArmed`（本函数里没有裸的 `dealArmed`）。 */
+      if (!draft.dealArmed && sku) {
+        deleteDealSlotsBySku([sku]).catch(() => {})
+      }
+
       await onSave({
       id: product.id,
       sku,
@@ -686,6 +700,8 @@ export default function ProductEditor({
        * this. Empty when no option was renamed. */
       asinRenames: sku && asinsReady && renameNotes.length ? renameNotes : undefined,
       })
+    } catch (err) {
+      showToast?.(err.message || String(err), 'error', 6000)
     } finally {
       setSaving(false)
     }
@@ -702,6 +718,7 @@ export default function ProductEditor({
   /* 节日开关的状态直接由标签串推出来：一枚 Holiday 词 = 开。 */
   const holidayOn = hasHolidayTag(draft.tag)
   /* 预览按前台同一条规则切分：逗号/顿号/竖线都认，最多 3 枚。 */
+
   const previewTags = normaliseTagList(draft.tag).split(', ').filter(Boolean)
   /* Read during render, not in state: the flag flips once per session (when the
    * first catalogue read discovers the column), and the editor is only ever
@@ -808,8 +825,6 @@ export default function ProductEditor({
           <h2 className="text-lg font-semibold tracking-tight text-charcoal">
             {isNew ? '新增商品' : '编辑商品'}
           </h2>
-          <p className="mt-1 text-[12px] text-charcoal-light">改动会立即保存到这个浏览器。</p>
-
           {/* ── Three columns from `lg` up ──
               Left: the photo, big enough to actually judge. Middle: what you
               type — 货号, name, badge, options. Right: the ASIN block and
@@ -928,7 +943,6 @@ export default function ProductEditor({
                   className="input-field text-[12px]"
                 />
 
-                <p className="text-[10px] leading-relaxed text-charcoal-light">粘贴图片链接，或者把下面某个颜色的图拖到这块预览上。上传功能是**故意关掉的** —— base64 会把浏览器存储塞满，之后保存就会失败。</p>
 
                 {/* The shortcut this whole block exists for: open the listing the
                     photo is coming from, in a new tab, without going through the
@@ -993,21 +1007,6 @@ export default function ProductEditor({
                 placeholder="AMZ-1003"
                 className="input-field font-mono text-[13px]"
               />
-              <p className="mt-1.5 text-[10px] leading-relaxed text-charcoal-light">
-                {product.id ? (
-                  <>
-                    {t('Internal id')}
-                    <span className="font-mono">{product.id}</span>
-                    {' —— '}选品码存的就是它，所以永远不会变。改这里的货号会同步更新 ASIN
-                    查询和之后所有导出。
-                  </>
-                ) : (
-                  <>
-                    内部 id 由数据库在保存时分配（<span className="font-mono">p140</span>、
-                    <span className="font-mono">p141</span>…），之后永远不会变。
-                  </>
-                )}
-              </p>
             </Field>
 
             <Field label="Name" hint="blank → uses the 货号">
@@ -1285,6 +1284,11 @@ export default function ProductEditor({
                 <Plus className="h-3 w-3" />{t('Group')}</button>
             </div>
 
+            {/* 颜色图可以直接拖成主图 —— 不说的话没人会去试。 */}
+            <p className="mt-2 text-[10px] leading-relaxed text-charcoal-light">
+              把颜色卡片里的图拖到左边主图框，就会设为主图。
+            </p>
+
             <div className="mt-3 space-y-3">
               {draft.specs.length === 0 && (
                 <p className="rounded-xl bg-cream-dark/60 px-3 py-3 text-[11px] text-charcoal-light">{t('No options — this product is one-size / single variant.')}</p>
@@ -1528,20 +1532,6 @@ export default function ProductEditor({
                       </div>
                     )}
 
-                    {/* 说清楚这一排胶囊能做什么 —— 删除和"改名即合并"都是不容易
-                        自己发现的操作，藏在一个 10px 的图标后面没人会去试。 */}
-                    {!colourGroup && (
-                      <p className="mt-1.5 text-[10px] leading-relaxed text-charcoal-light/80">
-                        点 × 删除这个尺码（有 ASIN 时会先确认）；把 2XL 改成已有的 XXL，会自动把两者的
-                        ASIN 合并成一个。
-                      </p>
-                    )}
-
-                    {/* Says out loud what the reshuffle is, so a list that
-                        tidies itself on blur does not read as a data change. */}
-                    {sizeGroup && reordered && (
-                      <p className="mt-1.5 text-[10px] leading-relaxed text-charcoal-light/70">{t('Shown smallest → largest. The order you typed is what gets saved.')}</p>
-                    )}
                   </div>
                 )
               })}
@@ -1602,7 +1592,11 @@ export default function ProductEditor({
             legacy={legacyDealTimes(product)}
             columnMissing={dealColumnMissing}
             priorityColumnMissing={priorityColumnMissing}
-          />
+          
+                  slotCount={slotCount}
+                
+                  campaign={Boolean(draft.isCampaign)}
+                />
 
           {/* ── ACC（Amazon Creator Connections）──
               A long-running status, not an event: it stays on for the whole
@@ -2006,7 +2000,19 @@ function toDateInput(value) {
 const startStamp = (date) => (date ? `${date}T00:00:00` : '')
 const endStamp = (date) => (date ? `${date}T23:59:59` : '')
 
-function DealSection({ value, onChange, open: initiallyOpen, teaser, legacy, columnMissing, priorityColumnMissing }) {
+function DealSection({
+  value,
+  onChange,
+  open: initiallyOpen,
+  teaser,
+  legacy,
+  columnMissing,
+  priorityColumnMissing,
+  /* 这件商品在 deals 表里有几条时间窗 —— 由父组件算好传进来。 */
+  slotCount = 0,
+  /* 这场活动归哪个专区：大促 / 常规秒杀。导入时选的，编辑器只读。 */
+  campaign = false,
+}) {
   /* Collapse state is local and only seeded once: arming the switch must reveal
    * the fields, but folding the card must not clear them — the values still go
    * to the database on save. */
@@ -2059,6 +2065,15 @@ function DealSection({ value, onChange, open: initiallyOpen, teaser, legacy, col
         >
           <span className="text-[11px] font-medium tracking-wider text-charcoal-light">{t('Limited Deal')}</span>
           <span className={`text-[10px] font-medium ${tone.tone}`}>{tone.label}</span>
+          {armed && (
+            <span
+              className={`rounded px-1.5 py-0.5 text-[9px] font-medium ${
+                campaign ? 'bg-accent/15 text-accent-dark' : 'bg-cream-dark text-charcoal/60'
+              }`}
+            >
+              {campaign ? '大促' : '常规秒杀'}
+            </span>
+          )}
           {armed && auto && (
             <span className="rounded bg-red-50 px-1.5 py-0.5 text-[9px] font-semibold text-red-600">
               {auto}
@@ -2091,6 +2106,20 @@ function DealSection({ value, onChange, open: initiallyOpen, teaser, legacy, col
         <p className="px-3 pb-2.5 text-[10px] leading-relaxed text-charcoal-light">到了你设的时间窗就自动生效。关掉等于不存这两列 —— 下面的日期会被清空。</p>
       )}
 
+      {/* 多档期提示：编辑器只显示"最早开始的那一档"，其余在档期页。 */}
+      {slotCount > 1 && (
+        <p className="px-3 pb-2.5 text-[10px] leading-relaxed text-charcoal-light">
+          这件商品共有 <strong className="text-charcoal">{slotCount}</strong> 个档期，
+          这里显示的是最早开始的那一档 ·
+          <a
+            href={`#/admin/periods?sku=${encodeURIComponent(String(product?.sku || ''))}`}
+            className="ml-0.5 underline underline-offset-2 hover:text-charcoal"
+          >
+            查看全部排期
+          </a>
+        </p>
+      )}
+
       {open && (
         <div className="space-y-2.5 border-t border-charcoal/[0.06] px-3 py-3">
           <div className="grid grid-cols-2 gap-2">
@@ -2116,22 +2145,7 @@ function DealSection({ value, onChange, open: initiallyOpen, teaser, legacy, col
             </label>
           </div>
 
-          <p className="text-[10px] leading-relaxed text-charcoal-light">
-            只选日期 —— 天就是单位。开始存成{' '}
-            <span className="font-medium text-charcoal/70">00:00:00</span>，结束存成{' '}
-            <span className="font-medium text-charcoal/70">23:59:59</span>，
-            不做时区换算：红人手机上的几点就是几点。之前手填的旧时间戳，
-            下次保存时会被改写成这两个值。
-          </p>
-
-          {armed && legacyText && (
-            <p className="rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 ring-1 ring-amber-200">
-              This product is stored with a specific time ({legacyText}). Saving
-              rewrites it to 00:00:00 / 23:59:59 — the dates above already show the
-              day it belongs to.
-            </p>
-          )}
-
+          {/* 原价 / 此刻 / 标签：折扣由两个价格算，标签是给运营覆盖的文案。 */}
           <div className="grid grid-cols-3 gap-2">
             <label className="block">
               <span className="text-[10px] font-medium text-charcoal-light">原价</span>
@@ -2139,118 +2153,37 @@ function DealSection({ value, onChange, open: initiallyOpen, teaser, legacy, col
                 type="text"
                 value={value.originalPrice}
                 onChange={set('originalPrice')}
-                onBlur={recalc}
                 placeholder="39.99 / 30-50"
                 aria-label="Original price"
                 className="input-field mt-1 text-[12px]"
               />
             </label>
             <label className="block">
-              <span className="text-[10px] font-medium text-charcoal-light">{t('Now')}</span>
+              <span className="text-[10px] font-medium text-charcoal-light">折后价</span>
               <input
                 type="text"
                 value={value.salePrice}
                 onChange={set('salePrice')}
-                onBlur={recalc}
-                placeholder="19.99 / 15-25"
+                placeholder="27.99"
                 aria-label="Sale price"
                 className="input-field mt-1 text-[12px]"
               />
             </label>
             <label className="block">
-              <span className="text-[10px] font-medium text-charcoal-light">{t('Label')}</span>
+              <span className="text-[10px] font-medium text-charcoal-light">折扣率</span>
               <input
                 type="text"
                 value={value.discountLabel}
-                onChange={(event) => {
-                  onChange('discountLabel', event.target.value)
-                  /* 手改过就不再自动覆盖；留空表示"回到自动"。 */
-                  onChange('labelTouched', event.target.value.trim() !== '')
-                }}
-                placeholder={auto || '50% OFF'}
+                onChange={set('discountLabel')}
+                placeholder="35% OFF"
                 aria-label="Discount label"
                 className="input-field mt-1 text-[12px]"
               />
             </label>
           </div>
 
-          <div className="flex items-center justify-between gap-2 text-[10px] leading-relaxed text-charcoal-light">
-            <span>
-              {auto ? (
-                <>
-                  Calculated from the prices:{' '}
-                  <span className="font-medium text-charcoal/70">{auto}</span>
-                  {value.labelTouched && ' · overridden below'}
-                </>
-              ) : (
-                'Fill both prices and the label is calculated for you.'
-              )}
-            </span>
-            {value.labelTouched && auto && (
-              <button
-                type="button"
-                onClick={() => {
-                  onChange('discountLabel', auto)
-                  onChange('labelTouched', false)
-                }}
-                className="shrink-0 rounded-full bg-cream-dark px-2 py-1 text-[10px] font-medium text-charcoal/70 transition hover:text-charcoal"
-              >{t('Use auto')}</button>
-            )}
-          </div>
-
-          <p className="text-[10px] leading-relaxed text-charcoal-light">
-            详情页价格区显示 <span className="font-medium text-charcoal/70">{auto || '折扣'}</span>，
-            标签上不再出现折扣（手机端第二行会压住商品图）。
-            两个价格都可以写区间（`30-50`），数字按你填的原样展示 ——
-            前台不会用自己的算法改写它。
-          </p>
-
-          {/* 专区置顶 —— 只在 ⚡ Limited Deal 里生效，不动常规货架。
-              放在价格下面是刻意的：它属于"这场活动怎么排"，不属于商品本身。 */}
-          <div className="flex items-start gap-2">
-            <label className="block w-24 shrink-0">
-              <span className="text-[10px] font-medium text-charcoal-light">{t('Pin')}</span>
-              <input
-                type="number"
-                min="0"
-                max="9999"
-                step="1"
-                value={value.dealPriority ?? ''}
-                onChange={set('dealPriority')}
-                placeholder="0"
-                aria-label="Deal priority"
-                className="input-field mt-1 text-[12px]"
-              />
-            </label>
-            <p className="mt-4 min-w-0 flex-1 text-[10px] leading-relaxed text-charcoal-light">
-              数值越大越靠前（只在秒杀专区内生效）。填 0 就按原来的"最快结束排最前"。
-            </p>
-          </div>
-
-          {priorityColumnMissing && (
-            <p className="rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 ring-1 ring-amber-200">
-              置顶暂时<strong>存不进去</strong>：数据库里没有{' '}
-              <code className="font-mono">deal_priority</code> 列。先跑一次{' '}
-              <code className="font-mono">supabase/11-sub-badge-deal-priority.sql</code>，
-              再刷新页面。
-            </p>
-          )}
 
           {/* Live preview of what the storefront will actually do right now. */}
-          <p className="rounded-lg bg-cream-dark/60 px-2 py-1.5 text-[10px] leading-relaxed text-charcoal/70">
-            {!armed
-              ? '已关闭 —— 前台什么都不显示。'
-              : status === 'live'
-                ? `进行中 —— 标签 + ${price || '无价格'}${was ? `（原价 ${was}）` : ''}，倒计时到结束。`
-                : status === 'scheduled'
-                  ? '排期中 —— 开始之前显示"Deal starts in"，到点自动变成进行中。'
-                  : status === 'ended'
-                    ? '已结束 —— 前台把它当普通商品。'
-                    : status === 'invalid'
-                      ? '结束日期必须晚于或等于开始日期。'
-                      : '两个日期都要填 —— 只有一半的时间窗永远不会生效。'}
-          </p>
-
           {teaser && armed && (
             <p className="rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 ring-1 ring-amber-200">Coming Soon 优先：预告期间前台显示锁，不出秒杀价。日期会保留下来，取消 Coming Soon 之后秒杀就回来了。</p>
           )}

@@ -41,7 +41,7 @@ import {
   getPriorityColumnStatus,
   UNCATEGORISED,
 } from '../../store/productStore.js'
-import { appendDealSlots } from '../../store/dealStore.js'
+import { deleteDealSlotsBySku } from '../../store/dealStore.js'
 import { useCategories } from '../../hooks/useCategories.js'
 import { addCategory, renameCategory, removeCategory, moveCategory } from '../../utils/categoryStore.js'
 import { useAsins, useAsinsStatus } from '../../hooks/useAsins.js'
@@ -50,7 +50,6 @@ import { removeAsins, loadAsins, saveVariantAsins, moveAsins } from '../../utils
 import { combinationsOf, soldOutListOf } from '../../utils/soldOut.js'
 import { readSheetGrid } from '../../utils/sheetFile.js'
 import { planImport, executeImport, planIsEmpty } from '../../utils/bulkImport.js'
-import { planDealImport, resolveDealTargets } from '../../utils/dealImport.js'
 import { dropsCampaignTag, DEALS_TAB_DEFAULT_LABEL } from '../../utils/deal.js'
 import {
   CATEGORY_MODES,
@@ -102,7 +101,12 @@ import { useSettings } from '../../hooks/useSettings.js'
 import { t } from '../../i18n/admin.js'
 import { normaliseDealsTabLabel } from '../../utils/deal.js'
 import { computeBulkDeleteGuard } from '../../utils/adminSecurity.js'
-import { BADGE_COLOR_PRESETS, badgeStyle, normaliseBadgeColor } from '../../utils/badge.js'
+import {
+  BADGE_COLOR_PRESETS,
+  badgeStyle,
+  normaliseBadgeColor,
+  normaliseTagList,
+} from '../../utils/badge.js'
 import {
   BATCH_BADGE_MAX,
   BATCH_BADGE_MAX_TAGS,
@@ -274,13 +278,8 @@ export default function ProductsPage() {
   /* ── deal import ── */
   /* 秒杀导入与商品导入是两条独立流程：一个写五列秒杀字段，一个写 specs。
    * 各自有自己的 grid、preview 和 confirm，互不串。 */
-  const [dealSheet, setDealSheet] = useState(null) // { grid, fileName }
-  const [dealBusy, setDealBusy] = useState(false)
   /* 这批表格的归属（'regular' | 'campaign'）。空 = 还没选，导入按钮禁用。
    * 换一份表格就清空：上一份的答案不该成为下一份的默认。 */
-  const [dealKind, setDealKind] = useState('')
-  const [dealResult, setDealResult] = useState(null)
-  const dealFileInputRef = useRef(null)
 
   const categoryList = useCategories()
   const catalogueStatus = useCatalogueStatus()
@@ -711,6 +710,13 @@ export default function ProductsPage() {
     const droppedTags = selectedProducts.filter((product) => dropsCampaignTag(product, {})).length
     try {
       const count = await clearProductsDeals(selectedProducts.map((product) => product.id))
+
+      /* 档期表也要清：前台读的是 deals，留着旧行就会继续显示上一场活动的价格。 */
+      try {
+        await deleteDealSlotsBySku(selectedProducts.map((product) => product.sku))
+      } catch (slotError) {
+        /* deals 表还没建时忽略，不影响主流程 */
+      }
       setBatchDealOpen(false)
       clearSelection()
       showToast?.(
@@ -1175,93 +1181,9 @@ export default function ProductsPage() {
   /* ── deal import ── */
 
   /* 按货号匹配的写入计划 + 未找到清单，随 sheet / 商品缓存实时重算。 */
-  const dealPlan = useMemo(() => {
-    if (!dealSheet) return null
-    return planDealImport(dealSheet.grid)
-  }, [dealSheet])
 
-  const dealTargets = useMemo(() => {
-    if (!dealPlan) return null
-    const bySku = new Map(products.map((p) => [p.sku, p.id]))
-    return resolveDealTargets(dealPlan.plan, bySku)
-  }, [dealPlan, products])
 
-  const handleDealFile = async (event) => {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    try {
-      const grid = await readSheetGrid(file)
-      setDealSheet({ grid, fileName: file.name })
-      setDealKind('')
-    } catch (err) {
-      showToast?.(`Could not read ${file.name}: ${err.message}`, 'error', 6000)
-    }
-  }
 
-  const runDealImport = async () => {
-    if (!dealTargets || !dealTargets.matched.length || dealBusy || !dealKind) return
-    setDealBusy(true)
-    /* 这份表会把多少件商品身上的旧活动标换掉（只清活动类，见 deal.js）。 */
-    const byId = new Map(products.map((product) => [String(product.id), product]))
-    const droppedTags = dealTargets.matched.filter(({ id, deal }) =>
-      dropsCampaignTag(byId.get(String(id)), deal),
-    ).length
-    try {
-      /* 商品行上只能存一个档期：同一货号有多档时，只把**最早开始的那一档**
-       * 写进 products（其余档期完整保存在 deals 里，前台按时间自动切换）。
-       * 所以下面先按 id 去重，再交给 setProductsDeals。 */
-      const firstSlotById = new Map()
-      for (const target of dealTargets.matched) {
-        const current = firstSlotById.get(target.id)
-        if (!current || String(target.deal.saleStart) < String(current.deal.saleStart)) {
-          firstSlotById.set(target.id, target)
-        }
-      }
-      const firstSlots = [...firstSlotById.values()]
-
-      const count = await setProductsDeals(firstSlots, {
-        isCampaign: dealKind === 'campaign',
-      })
-
-      /* 多档期：同一批数据再追加进 `deals`（一行一个时间窗）。同一 (sku, 起, 止)
-       * 重复导入不会产生重复行，旧档期也不会被覆盖 —— 这就是"今天/后天/大后天"
-       * 能同时存在的地方。deals 表还没建时只提醒一句，前台照旧读 products。 */
-      try {
-        await appendDealSlots(
-          dealTargets.matched.map(({ sku, deal }) => ({
-            sku,
-            saleStart: deal.saleStart,
-            saleEnd: deal.saleEnd,
-            salePrice: deal.salePrice,
-            originalPrice: deal.originalPrice,
-            isCampaign: dealKind === 'campaign',
-          })),
-        )
-      } catch (slotError) {
-        showToast?.(`档期表未写入：${slotError.message}`, 'error', 6000)
-      }
-      await loadProducts({ silent: true })
-      setDealSheet(null)
-      setDealResult({
-        written: count,
-        missing: dealTargets.missing,
-        problems: dealPlan.problems,
-      })
-      showToast?.(
-        `${dealKind === 'campaign' ? 'Campaign' : 'Regular'} deals set on ${count} product${
-          count === 1 ? '' : 's'
-        }` +
-          (droppedTags ? ` · ${droppedTags} old campaign label${droppedTags === 1 ? '' : 's'} cleared` : ''),
-        'success',
-        4000,
-      )
-    } catch (err) {
-      showToast?.(err.message, 'error', 6000)
-    } finally {
-      setDealBusy(false)
-    }
-  }
 
   return (
     <div className="mx-auto max-w-3xl lg:max-w-none">
@@ -1282,15 +1204,6 @@ export default function ProductsPage() {
             <Upload className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">{t('Import (CSV/XLSX)')}</span>
             <span className="sm:hidden">{t('Import')}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => dealFileInputRef.current?.click()}
-            className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-[12px] font-medium text-charcoal/75 ring-1 ring-charcoal/10 transition hover:text-charcoal hover:ring-charcoal/20 active:scale-95"
-          >
-            <Sparkle className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{t('Import Deals')}</span>
-            <span className="sm:hidden">秒杀</span>
           </button>
           <button
             type="button"
@@ -1320,16 +1233,6 @@ export default function ProductsPage() {
           tabIndex={-1}
           aria-hidden="true"
           data-file-role="products"
-        />
-        <input
-          ref={dealFileInputRef}
-          type="file"
-          accept=".csv,.xlsx,.xls"
-          onChange={handleDealFile}
-          className="sr-only"
-          tabIndex={-1}
-          aria-hidden="true"
-          data-file-role="deals"
         />
       </div>
 
@@ -2207,25 +2110,7 @@ export default function ProductsPage() {
       />
 
       {/* Deal import — matched by 货号, writes the five sale_* columns + 归属. */}
-      <DealImportPreviewDialog
-        open={!!dealSheet && !!dealPlan && !!dealTargets}
-        plan={dealPlan}
-        targets={dealTargets}
-        fileName={dealSheet?.fileName}
-        busy={dealBusy}
-        columnMissing={getDealColumnStatus() === 'missing'}
-        campaignColumnMissing={getCampaignColumnStatus() === 'missing'}
-        dealKind={dealKind}
-        onDealKindChange={setDealKind}
-        onCancel={() => setDealSheet(null)}
-        onConfirm={runDealImport}
-      />
 
-      <DealImportResultDialog
-        open={!!dealResult}
-        result={dealResult}
-        onClose={() => setDealResult(null)}
-      />
     </div>
   )
 }
@@ -3225,7 +3110,7 @@ function DealTypeChoice({ value, onChange, disabled = false, missing = false }) 
   )
 }
 
-function DealImportPreviewDialog({
+export function DealImportPreviewDialog({
   open,
   plan,
   targets,
@@ -3346,7 +3231,7 @@ function DealImportPreviewDialog({
   )
 }
 
-function DealImportResultDialog({ open, result, onClose }) {
+export function DealImportResultDialog({ open, result, onClose }) {
   if (!result) return null
 
   return (
@@ -3570,9 +3455,7 @@ function BatchDealDialog({
               className="input-field mt-1 text-[13px] disabled:opacity-50"
             />
           </label>
-          <p className="mt-4 min-w-0 flex-1 text-[10px] leading-relaxed text-charcoal-light">
-            数值越大越靠前（只在秒杀专区内生效）。留空 = 保持每件商品原有的置顶权重不变。
-          </p>
+          
         </div>
 
         {/* 预览：写进去的就是这几个字符串，不是"差不多的日期"。 */}

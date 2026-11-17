@@ -1045,7 +1045,9 @@ export async function clearProductsDeals(ids) {
   if (!list.length) return 0
   return setProductsDeals(
     list.map((id) => ({ id, deal: null })),
-    { priority: 0 },
+    /* `isCampaign: false` 一起清：活动取消了，归属也不该留着 —— 否则编辑器
+     * 里还会显示"大促"，而这场活动已经不存在了。 */
+    { priority: 0, isCampaign: false },
   )
 }
 

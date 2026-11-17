@@ -33,6 +33,7 @@ export function slotOf(row) {
     originalPrice: row.originalPrice ?? row.original_price ?? '',
     isCampaign: Boolean(row.isCampaign ?? row.is_campaign),
     subTag: String(row.subTag ?? row.sub_tag ?? ''),
+    discountLabel: String(row.discountLabel ?? row.discount_label ?? ''),
   }
 }
 
@@ -90,6 +91,8 @@ export function withEffectiveSlot(product, slot) {
     originalPrice: slot.originalPrice,
     isCampaign: slot.isCampaign,
     subTag: slot.subTag || product.subTag || '',
+    /* 档期自己的折扣文案优先：档期页 editable，商品上那份是导入时的快照。 */
+    discountLabel: slot.discountLabel || product.discountLabel || '',
     /* 一件商品有几个档期 —— 后台列表可以显示"3 档"，前台不用。 */
     slotCount: Array.isArray(product.slotCount) ? product.slotCount : undefined,
   }

@@ -20,7 +20,7 @@ import { Search, Bag, Calendar, LogOut } from '../../components/icons.jsx'
 const TABS = [
   { to: '/admin', label: 'Lookup', icon: Search, end: true },
   { to: '/admin/products', label: 'Products', icon: Bag },
-  { to: '/admin/periods', label: 'Periods', icon: Calendar },
+  { to: '/admin/periods', label: '秒杀档期', icon: Calendar },
 ]
 
 export default function AdminLayout() {

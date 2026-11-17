@@ -74,7 +74,8 @@ async function flush() {
     }
     if (tables.has('categories')) await loadCategories({ silent: true })
     /* 改名是给红人看的：已经打开着的页面要跟着换 Tab，不能等刷新。 */
-    if (tables.has('settings')) await loadSettings({ silent: true })
+    if (tables.has('deals')) await loadDealSlots({ silent: true })
+  if (tables.has('settings')) await loadSettings({ silent: true })
     if (tables.has('asins')) {
       await loadAsins({ silent: true })
       await loadLinks({ silent: true })
@@ -117,7 +118,9 @@ export async function startRealtime() {
     )
     .on(
       'postgres_changes',
-      { event: '*', schema: 'public', table: 'settings' },
+      { event: '*', schema: 'public', table: 'deals' },
+  () => schedule('deals'),
+  { event: '*', schema: 'public', table: 'settings' },
       () => schedule('settings'),
     )
 
