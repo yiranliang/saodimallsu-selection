@@ -1275,88 +1275,6 @@ export default function ProductsPage() {
         />
       </div>
 
-      <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="设置" maxWidth="max-w-2xl">
-      {/* ── 前台大促专区的展示名 ──
-          一个站点级设置，存在 `settings` 表（12-settings.sql）。放这里是因为
-          改名的人就是"正在整理这批秒杀商品"的人 —— 改完标签顺手就能把 Tab
-          一起改成 Black Friday。常规秒杀那个 Tab 的名字是固定的
-          （`Limited Deals`），不跟这个设置走。 */}
-      <div className="mb-4 flex flex-wrap items-center gap-2 rounded-2xl bg-white px-3.5 py-2.5 ring-1 ring-charcoal/[0.07]">
-        <span className="text-[10px] font-medium uppercase tracking-wider text-charcoal-light">{t('Deals tab')}</span>
-        <input
-          type="text"
-          value={tabLabelDraft}
-          onChange={(event) => setTabLabelDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') handleSaveTabLabel()
-            if (event.key === 'Escape') setTabLabelDraft(settings.dealsTabLabel)
-          }}
-          maxLength={32}
-          placeholder={DEALS_TAB_DEFAULT_LABEL}
-          aria-label="Deals tab label"
-          className="min-w-0 flex-1 rounded-lg bg-cream px-2.5 py-1.5 text-[12px] text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-1 focus:ring-charcoal/25"
-        />
-        <button
-          type="button"
-          onClick={handleSaveTabLabel}
-          disabled={
-            tabLabelSaving ||
-            normaliseDealsTabLabel(tabLabelDraft) === settings.dealsTabLabel
-          }
-          className="shrink-0 rounded-full bg-charcoal px-3 py-1.5 text-[11px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {tabLabelSaving ? '保存中…' : '改名'}
-        </button>
-        <button
-          type="button"
-          onClick={handleResetTabLabel}
-          disabled={tabLabelSaving || settings.dealsTabLabel === DEALS_TAB_DEFAULT_LABEL}
-          className="shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-charcoal-light transition hover:bg-cream-dark hover:text-charcoal disabled:cursor-not-allowed disabled:opacity-40"
-        >{t('Reset')}</button>
-        <span className="text-[10px] text-charcoal-light/70">{t('the chip at the top of the storefront')}</span>
-
-        {/* 节日专区名：和上面的秒杀 Tab 名同一张设置表。换季（圣诞 → 春季）
-            运营自己改，不用发版。 */}
-        <span className="text-[10px] font-medium uppercase tracking-wider text-charcoal-light">
-          节日专区
-        </span>
-        <input
-          type="text"
-          value={holidayDraft}
-          onChange={(event) => setHolidayDraft(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') handleSaveHolidayLabel()
-            if (event.key === 'Escape') setHolidayDraft(settings.holidayLabel)
-          }}
-          maxLength={24}
-          placeholder={HOLIDAY_TAB_DEFAULT_LABEL}
-          aria-label="Holiday tab label"
-          className="min-w-0 flex-1 rounded-lg bg-cream px-2.5 py-1.5 text-[12px] text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-1 focus:ring-charcoal/25"
-        />
-        <button
-          type="button"
-          onClick={handleSaveHolidayLabel}
-          disabled={holidaySaving || normaliseHolidayLabel(holidayDraft) === settings.holidayLabel}
-          className="shrink-0 rounded-full bg-charcoal px-3 py-1.5 text-[11px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
-        >
-          {holidaySaving ? '保存中…' : '改名'}
-        </button>
-        <button
-          type="button"
-          onClick={handleResetHolidayLabel}
-          disabled={holidaySaving || settings.holidayLabel === HOLIDAY_TAB_DEFAULT_LABEL}
-          className="shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-charcoal-light transition hover:bg-cream-dark hover:text-charcoal disabled:cursor-not-allowed disabled:opacity-40"
-        >{t('Reset')}</button>
-        <span className="text-[10px] text-charcoal-light/70">
-          换季改这里。
-        </span>
-        {getSettingsStatus() === 'missing' && (
-          <span className="w-full text-[10px] leading-relaxed text-amber-700">
-            settings 表不存在，改名存不进去。先在 Supabase 跑一次 supabase/12-settings.sql。
-          </span>
-        )}
-      </div>
-
       {/* Cloud status — the list is empty until the first fetch lands */}
       {catalogueStatus === 'loading' && products.length === 0 && (
         <div className="mb-4 animate-pulse rounded-2xl bg-white px-3.5 py-6 text-center text-[11.5px] text-charcoal-light ring-1 ring-charcoal/[0.07]">{t('Loading the catalogue…')}</div>
@@ -1372,85 +1290,184 @@ export default function ProductsPage() {
         </div>
       )}
 
-        {/* Category manager — add, rename, remove.
-          Full-width like the search bar below it: the 4xl cap left a dead strip
-          on the right of a wide screen and made the panel read as a different
-          column. Rows are one line each, so stretching costs nothing. */}
-      <div className="mb-4 overflow-hidden rounded-2xl bg-white ring-1 ring-charcoal/[0.07]">
-        <button
-          type="button"
-          onClick={() => setCategoryPanel((prev) => !prev)}
-          aria-expanded={categoryPanel}
-          className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left"
-        >
-          <span className="flex items-center gap-2">
-            <span className="text-[12px] font-medium text-charcoal">{t('Categories')}</span>
-            <span className="rounded-full bg-cream-dark px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-charcoal/60">
-              {managedCategories.length}
-            </span>
-          </span>
-          <ChevronDown
-            className={`h-3.5 w-3.5 shrink-0 text-charcoal-light transition-transform duration-200 ${
-              categoryPanel ? 'rotate-180' : ''
-            }`}
-          />
-        </button>
-
-        {categoryPanel && (
-          <div className="border-t border-charcoal/[0.07] px-3.5 py-3">
-            <p className="text-[10.5px] leading-relaxed text-charcoal-light">
-              改名 = 直接编辑名字；删除会把该分类下的商品移到{' '}
-              {UNCATEGORISED}。
-            </p>
-
-            {/* One column, full width. Multi-column would fit more but breaks
-                the thing this panel is for: moving a row down would teleport it
-                to another column, and "position 3" stops being visible. */}
-            <div className="mt-2.5 space-y-1.5">
-              {managedCategories.map(({ name, count }, position) => (
-                <CategoryRow
-                  key={name}
-                  name={name}
-                  count={count}
-                  first={position === 0}
-                  last={position === managedCategories.length - 1}
-                  confirming={pendingCategoryDelete === name}
-                  onRename={handleRenameCategory}
-                  onMove={handleMoveCategory}
-                  onAskDelete={() => setPendingCategoryDelete(name)}
-                  onCancelDelete={() => setPendingCategoryDelete(null)}
-                  onConfirmDelete={() => handleDeleteCategory(name)}
-                />
-              ))}
+      <Modal
+        open={settingsOpen}
+        onClose={() => setSettingsOpen(false)}
+        title="设置"
+        maxWidth="max-w-3xl"
+      >
+        <div className="space-y-5">
+          {/* 秒杀专区名 */}
+          <div>
+            <div className="text-[11px] font-medium tracking-wider text-charcoal-light">
+              秒杀专区名称
             </div>
-
-            {/* Same width as the rows above: the Add button then sits under the
-                count/trash column instead of floating in the middle. */}
-            <div className="mt-2.5 flex gap-1.5">
+            <p className="mt-0.5 text-[11px] leading-relaxed text-charcoal-light/80">
+              前台顶部 Sale 菜单里那场活动的名字。
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
               <input
                 type="text"
-                value={newCategory}
-                onChange={(e) => setNewCategory(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault()
-                    handleAddCategory()
-                  }
+                value={tabLabelDraft}
+                onChange={(event) => setTabLabelDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') handleSaveTabLabel()
+                  if (event.key === 'Escape') setTabLabelDraft(settings.dealsTabLabel)
                 }}
-                placeholder={t('New category')}
-                aria-label="New category name"
-                className="min-w-0 flex-1 rounded-full bg-cream-dark/70 px-3 py-1.5 text-[11.5px] text-charcoal placeholder:text-charcoal-light/55 focus:outline-none focus:ring-1 focus:ring-accent"
+                maxLength={32}
+                placeholder={DEALS_TAB_DEFAULT_LABEL}
+                aria-label="Deals tab label"
+                className="min-w-[14rem] flex-1 rounded-lg bg-cream px-3 py-2 text-[13px] text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-1 focus:ring-charcoal/25"
               />
               <button
                 type="button"
-                onClick={handleAddCategory}
-                className="flex shrink-0 items-center gap-1 rounded-full bg-charcoal px-3 py-1.5 text-[11px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-95"
+                onClick={handleSaveTabLabel}
+                disabled={
+                  tabLabelSaving ||
+                  normaliseDealsTabLabel(tabLabelDraft) === settings.dealsTabLabel
+                }
+                className="shrink-0 rounded-full bg-charcoal px-3.5 py-2 text-[11.5px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                <Plus className="h-3 w-3" />{t('Add')}</button>
+                {tabLabelSaving ? '保存中…' : '改名'}
+              </button>
+              <button
+                type="button"
+                onClick={handleResetTabLabel}
+                disabled={tabLabelSaving || settings.dealsTabLabel === DEALS_TAB_DEFAULT_LABEL}
+                className="shrink-0 rounded-full bg-cream-dark px-3 py-2 text-[11.5px] font-medium text-charcoal transition hover:bg-cream-dark/70 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                恢复默认
+              </button>
             </div>
           </div>
-        )}
-      </div>
+
+          {/* 节日专区名 */}
+          <div className="border-t border-charcoal/[0.06] pt-4">
+            <div className="text-[11px] font-medium tracking-wider text-charcoal-light">
+              节日专区名称
+            </div>
+            <p className="mt-0.5 text-[11px] leading-relaxed text-charcoal-light/80">
+              前台导航里 New / Bestseller 后面那一项；换季就改这里。
+            </p>
+            <div className="mt-2 flex flex-wrap items-center gap-2">
+              <input
+                type="text"
+                value={holidayDraft}
+                onChange={(event) => setHolidayDraft(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') handleSaveHolidayLabel()
+                  if (event.key === 'Escape') setHolidayDraft(settings.holidayLabel)
+                }}
+                maxLength={24}
+                placeholder={HOLIDAY_TAB_DEFAULT_LABEL}
+                aria-label="Holiday tab label"
+                className="min-w-[14rem] flex-1 rounded-lg bg-cream px-3 py-2 text-[13px] text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-1 focus:ring-charcoal/25"
+              />
+              <button
+                type="button"
+                onClick={handleSaveHolidayLabel}
+                disabled={holidaySaving || normaliseHolidayLabel(holidayDraft) === settings.holidayLabel}
+                className="shrink-0 rounded-full bg-charcoal px-3.5 py-2 text-[11.5px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                {holidaySaving ? '保存中…' : '改名'}
+              </button>
+              <button
+                type="button"
+                onClick={handleResetHolidayLabel}
+                disabled={holidaySaving || settings.holidayLabel === HOLIDAY_TAB_DEFAULT_LABEL}
+                className="shrink-0 rounded-full bg-cream-dark px-3 py-2 text-[11.5px] font-medium text-charcoal transition hover:bg-cream-dark/70 active:scale-95 disabled:cursor-not-allowed disabled:opacity-40"
+              >
+                恢复默认
+              </button>
+            </div>
+            {getSettingsStatus() === 'missing' && (
+              <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-amber-800 ring-1 ring-amber-200">
+                settings 表不存在，改名存不进去。先在 Supabase 跑一次 supabase/12-settings.sql。
+              </p>
+            )}
+          </div>
+
+          {/* 分类管理 */}
+          {/* Category manager — add, rename, remove.
+            Full-width like the search bar below it: the 4xl cap left a dead strip
+            on the right of a wide screen and made the panel read as a different
+            column. Rows are one line each, so stretching costs nothing. */}
+        <div className="mb-4 overflow-hidden rounded-2xl bg-white ring-1 ring-charcoal/[0.07]">
+          <button
+            type="button"
+            onClick={() => setCategoryPanel((prev) => !prev)}
+            aria-expanded={categoryPanel}
+            className="flex w-full items-center justify-between gap-3 px-3.5 py-3 text-left"
+          >
+            <span className="flex items-center gap-2">
+              <span className="text-[12px] font-medium text-charcoal">{t('Categories')}</span>
+              <span className="rounded-full bg-cream-dark px-1.5 py-0.5 text-[10px] font-medium tabular-nums text-charcoal/60">
+                {managedCategories.length}
+              </span>
+            </span>
+            <ChevronDown
+              className={`h-3.5 w-3.5 shrink-0 text-charcoal-light transition-transform duration-200 ${
+                categoryPanel ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+  
+          {categoryPanel && (
+            <div className="border-t border-charcoal/[0.07] px-3.5 py-3">
+              <p className="text-[10.5px] leading-relaxed text-charcoal-light">
+                改名 = 直接编辑名字；删除会把该分类下的商品移到{' '}
+                {UNCATEGORISED}。
+              </p>
+  
+              {/* One column, full width. Multi-column would fit more but breaks
+                  the thing this panel is for: moving a row down would teleport it
+                  to another column, and "position 3" stops being visible. */}
+              <div className="mt-2.5 space-y-1.5">
+                {managedCategories.map(({ name, count }, position) => (
+                  <CategoryRow
+                    key={name}
+                    name={name}
+                    count={count}
+                    first={position === 0}
+                    last={position === managedCategories.length - 1}
+                    confirming={pendingCategoryDelete === name}
+                    onRename={handleRenameCategory}
+                    onMove={handleMoveCategory}
+                    onAskDelete={() => setPendingCategoryDelete(name)}
+                    onCancelDelete={() => setPendingCategoryDelete(null)}
+                    onConfirmDelete={() => handleDeleteCategory(name)}
+                  />
+                ))}
+              </div>
+  
+              {/* Same width as the rows above: the Add button then sits under the
+                  count/trash column instead of floating in the middle. */}
+              <div className="mt-2.5 flex gap-1.5">
+                <input
+                  type="text"
+                  value={newCategory}
+                  onChange={(e) => setNewCategory(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault()
+                      handleAddCategory()
+                    }
+                  }}
+                  placeholder={t('New category')}
+                  aria-label="New category name"
+                  className="min-w-0 flex-1 rounded-full bg-cream-dark/70 px-3 py-1.5 text-[11.5px] text-charcoal placeholder:text-charcoal-light/55 focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+                <button
+                  type="button"
+                  onClick={handleAddCategory}
+                  className="flex shrink-0 items-center gap-1 rounded-full bg-charcoal px-3 py-1.5 text-[11px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-95"
+                >
+                  <Plus className="h-3 w-3" />{t('Add')}</button>
+              </div>
+            </div>
+          )}
+        </div>
+        </div>
       </Modal>
 
       {/* Search + category filter + sold-out view.
