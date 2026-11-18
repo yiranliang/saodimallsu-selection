@@ -1,24 +1,3 @@
-                {previewTags.length > 0 && (
-                  <div
-                    data-badge-preview
-                    className="mt-2 flex flex-wrap items-start gap-1"
-                  >
-                    {previewTags.map((tag) => (
-                      <span
-                        key={tag}
-                        style={
-                          previewBadge
-                            ? { borderColor: previewBadge.backgroundColor, color: previewBadge.backgroundColor }
-                            : undefined
-                        }
-                        className="max-w-full truncate rounded-[2px] border border-charcoal/50 bg-white px-1.5 py-px text-[10px] font-semibold leading-4"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
-
 import { useState, useMemo, useEffect, useRef } from 'react'
 import Modal from '../Modal.jsx'
 import ProductImage from '../ProductImage.jsx'
@@ -973,6 +952,7 @@ export default function ProductEditor({
                       </span>
                     )}
                   </a>
+
                 )}
 
                 {isDataUrl && (
