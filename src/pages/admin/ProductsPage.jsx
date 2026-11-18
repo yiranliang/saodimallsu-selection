@@ -260,29 +260,6 @@ export default function ProductsPage() {
   const [hiddenOnly, setHiddenOnly] = useState(false)
   /* 标签筛选：视图（New / Bestseller / Holiday / 无标签）+ 自由文本。
    * 纯前端，和分类、搜索是 AND 关系（见 utils/adminFilter.js）。 */
-  const [tagView, setTagView] = useState(ALL_TAGS)
-  const [tagMenuOpen, setTagMenuOpen] = useState(false)
-
-  /* 下拉里的选项：数量为 0 的标签不出现（“全部 / 无标签”除外，它们不是标签）。
-   * 正在选中的那一项即便变成 0 也保留，否则下拉会显示一个不存在的值。 */
-  const tagMenuOptions = useMemo(() => {
-    const options = [
-      { value: ALL_TAGS, label: '全部', count: products.length },
-      { value: TAG_VIEW.NEW, label: 'New', count: tagCounts[TAG_VIEW.NEW] || 0 },
-      { value: TAG_VIEW.BESTSELLER, label: 'Bestseller', count: tagCounts[TAG_VIEW.BESTSELLER] || 0 },
-      { value: TAG_VIEW.HOLIDAY, label: 'Holiday', count: tagCounts[TAG_VIEW.HOLIDAY] || 0 },
-      { value: NO_TAG, label: '无标签', count: tagCounts[NO_TAG] || 0 },
-    ]
-
-    return options.filter((option) => {
-      if (option.value === ALL_TAGS || option.value === NO_TAG) return true
-      if (option.value === tagView) return true
-      return option.count > 0
-    })
-  }, [products.length, tagCounts, tagView])
-
-  const tagViewLabel =
-    tagMenuOptions.find((option) => option.value === tagView)?.label || '全部'
   const [tagQuery, setTagQuery] = useState('')
   const [categoryPanel, setCategoryPanel] = useState(false)
   const [newCategory, setNewCategory] = useState('')
@@ -325,6 +302,29 @@ export default function ProductsPage() {
     }),
     [products],
   )
+  const [tagView, setTagView] = useState(ALL_TAGS)
+  const [tagMenuOpen, setTagMenuOpen] = useState(false)
+
+  /* 下拉里的选项：数量为 0 的标签不出现（“全部 / 无标签”除外，它们不是标签）。
+   * 正在选中的那一项即便变成 0 也保留，否则下拉会显示一个不存在的值。 */
+  const tagMenuOptions = useMemo(() => {
+    const options = [
+      { value: ALL_TAGS, label: '全部', count: products.length },
+      { value: TAG_VIEW.NEW, label: 'New', count: tagCounts[TAG_VIEW.NEW] || 0 },
+      { value: TAG_VIEW.BESTSELLER, label: 'Bestseller', count: tagCounts[TAG_VIEW.BESTSELLER] || 0 },
+      { value: TAG_VIEW.HOLIDAY, label: 'Holiday', count: tagCounts[TAG_VIEW.HOLIDAY] || 0 },
+      { value: NO_TAG, label: '无标签', count: tagCounts[NO_TAG] || 0 },
+    ]
+
+    return options.filter((option) => {
+      if (option.value === ALL_TAGS || option.value === NO_TAG) return true
+      if (option.value === tagView) return true
+      return option.count > 0
+    })
+  }, [products.length, tagCounts, tagView])
+
+  const tagViewLabel =
+    tagMenuOptions.find((option) => option.value === tagView)?.label || '全部'
 
   const tagFiltering = tagView !== ALL_TAGS || Boolean(tagQuery.trim())
 
