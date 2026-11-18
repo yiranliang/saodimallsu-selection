@@ -861,6 +861,15 @@ export function badgeStackFor(
  * @param {{ campaign?: string }} [options] 当前专区的活动名（用于识别自定义活动）
  * @returns {{ text: string, value: string, kind: 'tag' } | null}
  */
+/* 节日专区用的那几个词：它们是**运营手写的属性标**，不该被当成活动名过滤。
+ * 和 navViews.HOLIDAY_KEYWORDS 保持同一份词表（那边给导航用）。 */
+const HOLIDAY_WORDS = ['holiday', 'christmas', 'xmas', 'festive', '\u5723\u8bde', '\u8282\u65e5']
+
+function isHolidayWord(text) {
+  const value = String(text ?? '').toLowerCase()
+  return HOLIDAY_WORDS.some((word) => value.includes(word))
+}
+
 export function trustBadgesFor(product, { campaign = '', max = 3 } = {}) {
   const raw = String(product?.tag ?? '').trim()
   if (!raw) return []
@@ -870,7 +879,8 @@ export function trustBadgesFor(product, { campaign = '', max = 3 } = {}) {
     .split(/[,，、|]/)
     .map((part) => part.trim())
     .filter(Boolean)
-    .filter((text) => !isCampaignLabel(text) && !isSameCampaign(text, campaign))
+    /* 活动名不上卡片，但 Holiday 这类节日属性标要留下。 */
+    .filter((text) => isHolidayWord(text) || (!isCampaignLabel(text) && !isSameCampaign(text, campaign)))
     .slice(0, max)
     .map((text) => ({ text, value: product?.badgeColor || '', kind: 'tag' }))
 }

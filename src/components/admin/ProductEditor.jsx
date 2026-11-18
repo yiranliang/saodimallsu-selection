@@ -1,3 +1,24 @@
+                {previewTags.length > 0 && (
+                  <div
+                    data-badge-preview
+                    className="mt-2 flex flex-wrap items-start gap-1"
+                  >
+                    {previewTags.map((tag) => (
+                      <span
+                        key={tag}
+                        style={
+                          previewBadge
+                            ? { borderColor: previewBadge.backgroundColor, color: previewBadge.backgroundColor }
+                            : undefined
+                        }
+                        className="max-w-full truncate rounded-[2px] border border-charcoal/50 bg-white px-1.5 py-px text-[10px] font-semibold leading-4"
+                      >
+                        {tag}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
 import { useState, useMemo, useEffect, useRef } from 'react'
 import Modal from '../Modal.jsx'
 import ProductImage from '../ProductImage.jsx'
@@ -779,6 +800,7 @@ export default function ProductEditor({
   const asinMissing = asinRows.filter((row) => !row.asin).length
 
   /* ── "View on Amazon" ──
+
    * Sourcing a photo means looking at the listing, so the link sits directly
    * under the field where that photo gets pasted. Built from the rows above, in
    * their order — the first colour/size the panel shows — and from
@@ -909,26 +931,6 @@ export default function ProductEditor({
                 {/* Same pill, same place, same colours as the storefront card —
                     the point of the picker is to judge the badge against the
                     photo it sits on, not against a colour swatch. */}
-                {previewTags.length > 0 && (
-                  <div
-                    data-badge-preview
-                    className="absolute left-2 top-2 flex max-w-[calc(100%-1rem)] flex-wrap items-start gap-1"
-                  >
-                    {previewTags.map((tag) => (
-                      <span
-                        key={tag}
-                        style={
-                          previewBadge
-                            ? { borderColor: previewBadge.backgroundColor, color: previewBadge.backgroundColor }
-                            : undefined
-                        }
-                        className="max-w-full truncate rounded-[2px] border border-charcoal/50 bg-white px-1.5 py-px text-[10px] font-semibold leading-4"
-                      >
-                        {tag}
-                      </span>
-                    ))}
-                  </div>
-                )}
               </div>
 
               <div className="min-w-0 flex-1 space-y-2">
