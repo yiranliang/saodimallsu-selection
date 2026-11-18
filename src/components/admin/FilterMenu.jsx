@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { ChevronDown } from '../icons.jsx'
 
 /**
@@ -8,8 +8,10 @@ import { ChevronDown } from '../icons.jsx'
  * 原生 `<select>` 的弹层由操作系统绘制：方角、系统蓝高亮、中文排版也对不上这套
  * 界面。这里用「按钮 + 绝对定位面板」替代，外观和商品库那几个胶囊一致。
  *
- * 只做一件事：显示 label、渲染 options（`{ value, label, count }`）、选中回调。
- * 状态留在调用方，组件自己不记选中值。
+ * 行为约定：
+ *   - 点触发器 = 切换（打开 / 收起）；
+ *   - 点面板以外的地方、或按 Esc，收起；
+ *   - 开合状态可以由父组件控制（这样同一行只会有一个下拉是开的）。
  */
 export default function FilterMenu({
   label,
@@ -23,22 +25,46 @@ export default function FilterMenu({
   open: openProp,
   onOpenChange,
 }) {
-  /* 开合可以由父组件控制（这样同一行里只会有一个下拉是开的）；
-   * 不传就是自管。 */
   const [selfOpen, setSelfOpen] = useState(false)
   const open = openProp ?? selfOpen
-  const setOpen = (next) => {
+  const containerRef = useRef(null)
+
+  const applyOpen = (next) => {
     setSelfOpen(next)
     onOpenChange?.(next)
   }
 
+  /* 切换：之前把「函数」直接传给了父组件的 next，函数是 truthy，
+   * 于是永远只会打开、点第二次也关不掉。 */
+  const toggle = () => applyOpen(!open)
+
+  useEffect(() => {
+    if (!open) return undefined
+
+    const onPointerDown = (event) => {
+      if (!containerRef.current?.contains(event.target)) applyOpen(false)
+    }
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') applyOpen(false)
+    }
+
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('touchstart', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('touchstart', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [open])
+
   const current = options.find((option) => option.value === value)
 
   return (
-    <div className="relative shrink-0">
+    <div className="relative shrink-0" ref={containerRef}>
       <button
         type="button"
-        onClick={() => setOpen((prev) => !prev)}
+        onClick={toggle}
         aria-haspopup="true"
         aria-expanded={open}
         aria-label={ariaLabel || label}
@@ -65,7 +91,7 @@ export default function FilterMenu({
                 type="button"
                 onClick={() => {
                   onChange?.(option.value)
-                  setOpen(false)
+                  applyOpen(false)
                 }}
                 className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
                   active

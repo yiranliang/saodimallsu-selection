@@ -309,6 +309,26 @@ export default function ProductsPage() {
   const [tagView, setTagView] = useState(ALL_TAGS)
   /* 'category' | 'tag' | null —— 同时只允许一个筛选下拉是展开的。 */
   const [openFilter, setOpenFilter] = useState(null)
+  /* 点筛选器以外的地方收起菜单（标签那个是自绘的，不在 FilterMenu 里）。 */
+  const filterRowRef = useRef(null)
+
+  useEffect(() => {
+    if (!openFilter) return undefined
+    const onPointerDown = (event) => {
+      if (!filterRowRef.current?.contains(event.target)) setOpenFilter(null)
+    }
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setOpenFilter(null)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    document.addEventListener('touchstart', onPointerDown)
+    document.addEventListener('keydown', onKeyDown)
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown)
+      document.removeEventListener('touchstart', onPointerDown)
+      document.removeEventListener('keydown', onKeyDown)
+    }
+  }, [openFilter])
 
   /* 下拉里的选项：数量为 0 的标签不出现（“全部 / 无标签”除外，它们不是标签）。
    * 正在选中的那一项即便变成 0 也保留，否则下拉会显示一个不存在的值。 */
@@ -1302,7 +1322,7 @@ export default function ProductsPage() {
           `flex-wrap`, not a single row: three `shrink-0` controls plus a long
           category name are wider than a laptop, and without wrapping the last
           one gets pushed out of the card — off screen, not just clipped. */}
-      <div className="mb-3 flex flex-wrap items-center gap-2">
+      <div className="mb-3 flex flex-wrap items-center gap-2" ref={filterRowRef}>
         <div className="min-w-0 flex-1">
           {/* The icon and the clear button are positioned against THIS box, not
               the outer column: the bulk-mode line below it would otherwise drag
