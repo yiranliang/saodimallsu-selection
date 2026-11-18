@@ -1285,6 +1285,15 @@ export default function ProductsPage() {
           add: (name) => handleAddCategory(name),
           rename: handleRenameCategory,
           move: handleMoveCategory,
+          /* 拖拽排序：从 from 到 to 需要走几步，就连续调用几次 move（±1）。
+           * 名字不变，所以每步都还是同一个分类。 */
+          reorder: async (name, steps) => {
+            if (!steps) return
+            const direction = steps > 0 ? 1 : -1
+            for (let i = 0; i < Math.abs(steps); i += 1) {
+              await handleMoveCategory(name, direction)
+            }
+          },
           remove: handleDeleteCategory,
         }}
       />

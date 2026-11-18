@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { ChevronDown, Close, Plus, Trash } from '../icons.jsx'
 
 /**
@@ -27,6 +27,17 @@ export default function SettingsDialog({
 }) {
   const [panelOpen, setPanelOpen] = useState(false)
   const [newName, setNewName] = useState('')
+  const [dragName, setDragName] = useState('')
+
+  /* 弹窗打开时锁住 body 的滚动：滚轮只作用在弹窗内容上，背后的列表不动。 */
+  useEffect(() => {
+    if (!open) return undefined
+    const previous = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    return () => {
+      document.body.style.overflow = previous
+    }
+  }, [open])
 
   if (!open) return null
 
@@ -64,7 +75,7 @@ export default function SettingsDialog({
   ]
 
   return (
-    <div className="fixed inset-0 z-50 overflow-y-auto bg-charcoal/30 p-4 backdrop-blur-sm sm:p-8">
+    <div className="fixed inset-0 z-50 overscroll-contain overflow-y-auto bg-charcoal/30 p-4 backdrop-blur-sm sm:p-8">
       <div className="mx-auto my-4 w-full max-w-2xl rounded-2xl bg-white p-6 shadow-2xl">
         <div className="mb-6 flex items-start justify-between gap-3">
           <h2 className="text-lg font-semibold tracking-tight text-charcoal">设置</h2>
@@ -151,8 +162,32 @@ export default function SettingsDialog({
 
             {panelOpen && (
               <div className="mt-3 space-y-1.5">
-                {categories.list.map(({ name, count }) => (
-                  <div key={name} className="flex items-center gap-2 rounded-lg bg-cream/60 px-2 py-1.5">
+                {categories.list.map(({ name, count }, index) => (
+                  <div
+                    key={name}
+                    draggable
+                    onDragStart={() => setDragName(name)}
+                    onDragEnd={() => setDragName('')}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault()
+                      if (!dragName || dragName === name) return
+                      const from = categories.list.findIndex((item) => item.name === dragName)
+                      if (from < 0) return
+                      categories.reorder(dragName, index - from)
+                      setDragName('')
+                    }}
+                    className={`flex items-center gap-2 rounded-lg px-2 py-1.5 transition ${
+                      dragName === name ? 'bg-accent/10 ring-1 ring-accent/40' : 'bg-cream/60'
+                    }`}
+                  >
+                    <span
+                      aria-hidden="true"
+                      title="拖动排序"
+                      className="shrink-0 cursor-grab select-none px-0.5 text-[11px] text-charcoal-light/50"
+                    >
+                      ⠿
+                    </span>
                     <input
                       type="text"
                       defaultValue={name}
