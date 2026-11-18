@@ -720,17 +720,6 @@ export default function ProductEditor({
   const holidayOn = Boolean(draft.isHoliday)
   /* 预览按前台同一条规则切分：逗号/顿号/竖线都认，最多 3 枚。 */
 
-  /* 常用模板 + 运营自己存的模板。Coming Soon 有独立开关、Restock 不常用，
-   * 所以内置列表里先去掉它们。 */
-  const HIDDEN_TEMPLATES = ['Coming Soon', 'Restock']
-  const visibleTemplates = useMemo(
-    () =>
-      [...BADGE_TEMPLATES, ...customTemplates].filter(
-        (tpl) => !HIDDEN_TEMPLATES.includes(tpl.text),
-      ),
-    [customTemplates],
-  )
-
   /* 自定义模板存在 localStorage：这是运营自己的偏好，不必进数据库。 */
   const TEMPLATE_KEY = 'sdm-badge-templates'
   const [customTemplates, setCustomTemplates] = useState(() => {
@@ -745,6 +734,17 @@ export default function ProductEditor({
   const [composerOpen, setComposerOpen] = useState(false)
   const [newTagText, setNewTagText] = useState('')
   const [newTagColor, setNewTagColor] = useState('#2B2B2B')
+
+  /* 常用模板 + 运营自己存的模板。Coming Soon 有独立开关、Restock 不常用，
+   * 所以内置列表里先去掉它们。 */
+  const HIDDEN_TEMPLATES = ['Coming Soon', 'Restock']
+  const visibleTemplates = useMemo(
+    () =>
+      [...BADGE_TEMPLATES, ...customTemplates].filter(
+        (tpl) => !HIDDEN_TEMPLATES.includes(tpl.text),
+      ),
+    [customTemplates],
+  )
 
   const applyNewTag = (remember) => {
     const label = newTagText.trim()
