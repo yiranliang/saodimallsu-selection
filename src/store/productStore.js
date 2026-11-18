@@ -820,6 +820,34 @@ export async function deleteProducts(ids) {
  * A hidden product leaves the storefront but stays in the catalogue, so codes
  * already generated still resolve to a name and an image.
  */
+/**
+ * 批量开关「节日特选」（`is_holiday`）。
+ *
+ * 只写这一列：节日是**临时编组**，不该碰分类、标签、价格或秒杀窗口。
+ * 节日过后把同一批商品再关掉即可，商品本身的分类原样保留 —— 这正是
+ * "不能批量改分类"那个需求的解法。
+ */
+export async function setProductsHoliday(ids, holiday) {
+  const list = (Array.isArray(ids) ? ids : [ids]).filter(Boolean)
+  if (!list.length) return
+
+  const { error } = await requireClient()
+    .from('products')
+    .update({ is_holiday: Boolean(holiday) })
+    .in('id', list)
+
+  if (error) throw new Error(error.message)
+
+  const target = new Set(list)
+  cache = cache.map((product) => {
+    if (!target.has(product.id)) return product
+    if (holiday) return { ...product, isHoliday: true }
+    const { isHoliday: _dropped, ...rest } = product
+    return rest
+  })
+  notify()
+}
+
 export async function setProductsHidden(ids, hidden) {
   const list = (Array.isArray(ids) ? ids : [ids]).filter(Boolean)
   if (!list.length) return

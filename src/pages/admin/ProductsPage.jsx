@@ -19,8 +19,7 @@ import Modal from '../../components/Modal.jsx'
 import FilterMenu from '../../components/admin/FilterMenu.jsx'
 import SettingsDialog from '../../components/admin/SettingsDialog.jsx'
 import { useProducts, useCatalogueStatus } from '../../hooks/useProducts.js'
-import {
-  createProduct,
+import {createProduct,
   updateProduct,
   updateProductSpecs,
   deleteProducts,
@@ -41,8 +40,7 @@ import {
   getDealColumnStatus,
   getCampaignColumnStatus,
   getPriorityColumnStatus,
-  UNCATEGORISED,
-} from '../../store/productStore.js'
+  UNCATEGORISED, setProductsHoliday } from '../../store/productStore.js'
 import { deleteDealSlotsBySku } from '../../store/dealStore.js'
 import { useCategories } from '../../hooks/useCategories.js'
 import { addCategory, renameCategory, removeCategory, moveCategory } from '../../utils/categoryStore.js'
@@ -187,6 +185,7 @@ export default function ProductsPage() {
   /* 批量秒杀 / 批量分类。三个弹窗互斥打开（同一个按钮条，一次只想改一件事）。 */
   const [batchDealOpen, setBatchDealOpen] = useState(false)
   const [batchCategoryOpen, setBatchCategoryOpen] = useState(false)
+  const [bulkHolidayBusy, setBulkHolidayBusy] = useState(false)
 
   /* ── 轻列表 ──
    * 这一屏只需要列表形状（没有 `variant_images`，只有 `photo_count`）。从别处
@@ -778,6 +777,26 @@ export default function ProductsPage() {
       )
     } catch (err) {
       showToast?.(err.message, 'error')
+    }
+  }
+
+  /* 批量开关「节日特选」。只写 `is_holiday`：节日是临时编组，商品原本的分类、
+   * 标签、价格都不动，节日过后把同一批再关掉即可。 */
+  const handleBulkHoliday = async (next) => {
+    const ids = [...selectedIds]
+    if (!ids.length) return
+    setBulkHolidayBusy(true)
+    try {
+      await setProductsHoliday(ids, next)
+      showToast?.(
+        next ? `已把 ${ids.length} 件商品设为节日特选` : `已取消 ${ids.length} 件商品的节日特选`,
+        'success',
+      )
+      setSelectedIds(new Set())
+    } catch (err) {
+      showToast?.(err.message, 'error')
+    } finally {
+      setBulkHolidayBusy(false)
     }
   }
 
@@ -1605,6 +1624,25 @@ export default function ProductsPage() {
               onClick={() => setBatchBadgeOpen(true)}
               className="rounded-full bg-cream-dark px-2.5 py-1 text-[10.5px] font-medium text-charcoal transition hover:bg-cream-dark/70 active:scale-95"
             >{t('Batch Edit Badge')}</button>
+
+          {/* 节日是**临时编组**，不是分类：只写 `is_holiday`，商品原本的分类
+              原样保留，节日过后一键关回去即可。 */}
+          <button
+            type="button"
+            onClick={() => handleBulkHoliday(true)}
+            disabled={bulkHolidayBusy}
+            className="rounded-full bg-cream-dark px-2.5 py-1 text-[10.5px] font-medium text-charcoal transition hover:bg-cream-dark/70 active:scale-95 disabled:opacity-40"
+          >
+            批量设为节日特选
+          </button>
+          <button
+            type="button"
+            onClick={() => handleBulkHoliday(false)}
+            disabled={bulkHolidayBusy}
+            className="rounded-full bg-white px-2.5 py-1 text-[10.5px] font-medium text-charcoal ring-1 ring-charcoal/10 transition hover:ring-charcoal/25 active:scale-95 disabled:opacity-40"
+          >
+            取消节日特选
+          </button>
             <button
               type="button"
               onClick={() => setBatchDealOpen(true)}

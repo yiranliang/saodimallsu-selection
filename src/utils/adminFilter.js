@@ -115,6 +115,14 @@ export const NO_TAG = 'none'
 function matchesTagFilter(product, tagView, tagQuery) {
   if (tagView === NO_TAG) {
     if (tagTokens(product).length) return false
+  } else if (tagView === TAG_VIEW.HOLIDAY) {
+    /* Holiday 在这个筛选器里**只认标签**：它是独立开关（`is_holiday`），归
+     * 「分类 → 节日特选」。之前这里复用了 `matchesTagView`，于是节日开关
+     * 一打开，标签筛选里 Holiday 的数字跟着涨 —— 明明没有一枚 Holiday 标签。 */
+    const hasHolidayTag = tagTokens(product).some((token) =>
+      /holiday|christmas|xmas|festive|\u5723\u8bde|\u8282\u65e5/i.test(token),
+    )
+    if (!hasHolidayTag) return false
   } else if (tagView && tagView !== ALL_TAGS && !matchesTagView(product, tagView)) {
     return false
   }
