@@ -32,6 +32,7 @@ import {
   campaignOrder,
   campaignTabLabelOf,
   cardTickDelay,
+  dealPhase,
   dealsOrder,
   filterDeals,
   isCampaignDeal,

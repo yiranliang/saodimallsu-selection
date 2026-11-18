@@ -27,6 +27,7 @@
 
 import { supabase } from './supabase.js'
 import { applyProductEvent, isCatalogueLight, loadProducts } from '../store/productStore.js'
+import { loadDealSlots } from '../store/dealStore.js'
 import { loadLinks } from '../store/linkStore.js'
 import { loadCategories } from '../utils/categoryStore.js'
 import { loadSettings } from '../utils/settingsStore.js'
