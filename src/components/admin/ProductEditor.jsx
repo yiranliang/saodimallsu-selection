@@ -1164,7 +1164,9 @@ export default function ProductEditor({
                     onClick={() => {
                       const next = !tagOn
                       setTagOn(next)
-                      if (!next) patch('tag', hasHolidayTag(draft.tag) ? HOLIDAY_TOKEN : '')
+                      /* 关掉标签开关 = 清空标签。节日特选已经和标签解耦，
+                       * 这里不再牵扯 Holiday。 */
+                      if (!next) patch('tag', '')
                     }}
                     className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
                       tagOn ? 'bg-accent' : 'bg-charcoal/20'
