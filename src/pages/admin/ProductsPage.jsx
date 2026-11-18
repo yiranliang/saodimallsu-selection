@@ -261,6 +261,28 @@ export default function ProductsPage() {
   /* 标签筛选：视图（New / Bestseller / Holiday / 无标签）+ 自由文本。
    * 纯前端，和分类、搜索是 AND 关系（见 utils/adminFilter.js）。 */
   const [tagView, setTagView] = useState(ALL_TAGS)
+  const [tagMenuOpen, setTagMenuOpen] = useState(false)
+
+  /* 下拉里的选项：数量为 0 的标签不出现（“全部 / 无标签”除外，它们不是标签）。
+   * 正在选中的那一项即便变成 0 也保留，否则下拉会显示一个不存在的值。 */
+  const tagMenuOptions = useMemo(() => {
+    const options = [
+      { value: ALL_TAGS, label: '全部', count: products.length },
+      { value: TAG_VIEW.NEW, label: 'New', count: tagCounts[TAG_VIEW.NEW] || 0 },
+      { value: TAG_VIEW.BESTSELLER, label: 'Bestseller', count: tagCounts[TAG_VIEW.BESTSELLER] || 0 },
+      { value: TAG_VIEW.HOLIDAY, label: 'Holiday', count: tagCounts[TAG_VIEW.HOLIDAY] || 0 },
+      { value: NO_TAG, label: '无标签', count: tagCounts[NO_TAG] || 0 },
+    ]
+
+    return options.filter((option) => {
+      if (option.value === ALL_TAGS || option.value === NO_TAG) return true
+      if (option.value === tagView) return true
+      return option.count > 0
+    })
+  }, [products.length, tagCounts, tagView])
+
+  const tagViewLabel =
+    tagMenuOptions.find((option) => option.value === tagView)?.label || '全部'
   const [tagQuery, setTagQuery] = useState('')
   const [categoryPanel, setCategoryPanel] = useState(false)
   const [newCategory, setNewCategory] = useState('')
@@ -1502,24 +1524,48 @@ export default function ProductsPage() {
         {/* Tag filter — 和前台 New / Bestseller / Holiday 完全同一套判定
             （`matchesTagView`），所以「前台归到 New 的商品」在这里一定筛得出来。
             右边那个输入框是自由文本：输入 best 会把 Bestseller / Best-seller 一起捞出来。 */}
-        <label className="flex shrink-0 items-center gap-1.5 rounded-full bg-white py-2.5 pl-3 pr-2 ring-1 ring-charcoal/[0.07] focus-within:ring-charcoal/25">
-          <span className="whitespace-nowrap text-[11px] text-charcoal-light">标签</span>
-          <span className="relative flex items-center">
-            <select
-              value={tagView}
-              onChange={(e) => setTagView(e.target.value)}
-              aria-label="Filter by tag"
-              className="max-w-[8rem] appearance-none bg-transparent pr-4 text-[12px] text-charcoal focus:outline-none"
-            >
-              <option value={ALL_TAGS}>全部 ({products.length})</option>
-              <option value={TAG_VIEW.NEW}>New ({tagCounts[TAG_VIEW.NEW]})</option>
-              <option value={TAG_VIEW.BESTSELLER}>Bestseller ({tagCounts[TAG_VIEW.BESTSELLER]})</option>
-              <option value={TAG_VIEW.HOLIDAY}>Holiday ({tagCounts[TAG_VIEW.HOLIDAY]})</option>
-              <option value={NO_TAG}>无标签 ({tagCounts[NO_TAG]})</option>
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-0 h-3 w-3 text-charcoal-light" />
-          </span>
-        </label>
+        {/* Tag filter —— 自绘下拉：原生 <select> 的弹层由系统绘制，中文和
+            圆角都对不上这套界面。这里用按钮 + 面板，样式和分类下拉一致。 */}
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setTagMenuOpen((open) => !open)}
+            aria-haspopup="true"
+            aria-expanded={tagMenuOpen}
+            className="flex items-center gap-1.5 rounded-full bg-white py-2.5 pl-3 pr-2 text-[12px] ring-1 ring-charcoal/[0.07] transition hover:ring-charcoal/25"
+          >
+            <span className="text-[11px] text-charcoal-light">标签</span>
+            <span className="max-w-[8rem] truncate text-charcoal">
+              {tagViewLabel}
+            </span>
+            <ChevronDown className={`h-3 w-3 shrink-0 text-charcoal-light transition ${tagMenuOpen ? 'rotate-180' : ''}`} />
+          </button>
+
+          {tagMenuOpen && (
+            <div className="absolute left-0 top-full z-30 mt-1 w-44 rounded-xl bg-white p-1.5 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10">
+              {tagMenuOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => {
+                    setTagView(option.value)
+                    setTagMenuOpen(false)
+                  }}
+                  className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
+                    tagView === option.value
+                      ? 'bg-charcoal/[0.06] font-medium text-charcoal'
+                      : 'text-charcoal/75 hover:bg-charcoal/[0.04]'
+                  }`}
+                >
+                  <span className="truncate">{option.label}</span>
+                  <span className="shrink-0 text-[10px] tabular-nums text-charcoal-light/60">
+                    {option.count}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
 
         <label className="flex min-w-[9rem] shrink-0 items-center gap-1.5 rounded-full bg-white px-3 py-2.5 ring-1 ring-charcoal/[0.07] focus-within:ring-charcoal/25">
           <input
