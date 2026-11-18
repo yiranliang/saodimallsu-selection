@@ -193,11 +193,16 @@ export function buildTagIndex(products) {
  * @returns {boolean}
  */
 export function matchesTagView(product, view) {
+  /* 节日是独立开关（`is_holiday`），标签里那枚 Holiday 只是历史兜底。 */
+  if (view === TAG_VIEW.HOLIDAY) {
+    if (product?.isHoliday === true) return true
+    return tagTokens(product).some(isHolidayToken)
+  }
+
   const tokens = tagTokens(product)
   if (!tokens.length) return false
   if (view === TAG_VIEW.NEW) return tokens.some(isNewToken)
   if (view === TAG_VIEW.BESTSELLER) return tokens.some(isBestsellerToken)
-  if (view === TAG_VIEW.HOLIDAY) return tokens.some(isHolidayToken)
   return false
 }
 

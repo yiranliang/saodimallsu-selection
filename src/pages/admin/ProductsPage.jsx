@@ -83,6 +83,7 @@ import {
   ALL_CATEGORIES as ALL,
   ALL_TAGS,
   DEAL_ITEMS,
+  HOLIDAY_ITEMS,
   NO_TAG,
   dealItemsCountOf,
   filterProducts,
@@ -425,6 +426,11 @@ export default function ProductsPage() {
   const selectedCount = selectedProducts.length
   const allVisibleSelected = visible.length > 0 && visible.every((p) => selectedIds.has(p.id))
   const hiddenCount = useMemo(() => products.filter((p) => p.hidden).length, [products])
+  /* 节日特选的数量：独立开关优先，历史标签兜底。 */
+  const holidayCount = useMemo(
+    () => products.filter((product) => matchesTagView(product, TAG_VIEW.HOLIDAY)).length,
+    [products],
+  )
   /* 下拉里那枚伪选项的数字，按整本目录算 —— 它回答"点下去能看到多少件"。 */
   const dealItemsCount = useMemo(() => dealItemsCountOf(products), [products])
 
@@ -1480,6 +1486,9 @@ export default function ProductsPage() {
               {/* 秒杀状态是算出来的，不是一列，所以它不在 categories 里。
                   做成下拉里的伪选项，运营点一下就能拿全这批商品再一键全选。 */}
               <option value={DEAL_ITEMS}>⚡ 秒杀商品 ({dealItemsCount})</option>
+              {/* 节日特选是独立开关（is_holiday），放在分类下拉里，
+                  因为运营找它时想的是"哪一批商品"，不是一个标签。 */}
+              <option value={HOLIDAY_ITEMS}>🎁 节日特选 ({holidayCount})</option>
               {categoryOptions.map((option) => (
                 <option key={option} value={option}>
                   {option}

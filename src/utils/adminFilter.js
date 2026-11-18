@@ -23,7 +23,7 @@
 import { matchesQuery } from './sku.js'
 import { soldOutSummary } from './soldOut.js'
 import { dealWindow } from './deal.js'
-import { matchesTagView, tagTokens } from './navViews.js'
+import { TAG_VIEW, matchesTagView, tagTokens } from './navViews.js'
 
 /* Splitting a pasted list. Beyond the four separators we document (newline,
  * space, comma, semicolon) this also takes tab and the full-width Chinese
@@ -91,6 +91,9 @@ export const ALL_CATEGORIES = 'All'
  */
 export const DEAL_ITEMS = '__deal_items__'
 
+/** 「节日特选」视图的哨兵值：按 `is_holiday` 列筛，和分类下拉并列。 */
+export const HOLIDAY_ITEMS = '__holiday_items__'
+
 /** 这件商品当前是否算"秒杀商品"（进行中或排期中）。 */
 export function isDealItem(product, now = Date.now()) {
   const window = dealWindow(product, now)
@@ -120,6 +123,10 @@ function matchesTagFilter(product, tagView, tagQuery) {
   if (!needle) return true
   const raw = String(product?.tag ?? '').toLowerCase()
   return raw.includes(needle) || tagTokens(product).some((token) => token.includes(needle))
+}
+
+function isHolidayTagged(product) {
+  return matchesTagView(product, TAG_VIEW.HOLIDAY)
 }
 
 /** One product against one category name. A blank filter matches everything. */
@@ -176,6 +183,9 @@ export function filterProducts(
     /* 伪选项先判：它不是分类名，交给 `matchesCategory` 只会永远返回 false。 */
     if (category === DEAL_ITEMS) {
       if (!isDealItem(product, now)) return false
+    } else if (category === HOLIDAY_ITEMS) {
+      /* 节日特选是独立开关（is_holiday），历史标签只作兜底。 */
+      if (product?.isHoliday !== true && !isHolidayTagged(product)) return false
     } else if (!matchesCategory(product, category)) {
       return false
     }
