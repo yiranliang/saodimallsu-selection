@@ -1485,10 +1485,10 @@ export default function ProductsPage() {
               <option value={ALL}>All ({products.length})</option>
               {/* 秒杀状态是算出来的，不是一列，所以它不在 categories 里。
                   做成下拉里的伪选项，运营点一下就能拿全这批商品再一键全选。 */}
-              <option value={DEAL_ITEMS}>⚡ 秒杀商品 ({dealItemsCount})</option>
+              <option value={DEAL_ITEMS}>秒杀商品 ({dealItemsCount})</option>
               {/* 节日特选是独立开关（is_holiday），放在分类下拉里，
                   因为运营找它时想的是"哪一批商品"，不是一个标签。 */}
-              <option value={HOLIDAY_ITEMS}>🎁 节日特选 ({holidayCount})</option>
+              <option value={HOLIDAY_ITEMS}>节日特选 ({holidayCount})</option>
               {categoryOptions.map((option) => (
                 <option key={option} value={option}>
                   {option}

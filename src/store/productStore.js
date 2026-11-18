@@ -157,6 +157,7 @@ let badgeColumnStatus = 'unknown'
 let teaserColumnAvailable = false
 let holidayColumnAvailable = false
 let teaserColumnStatus = 'unknown'
+let holidayColumnStatus = 'unknown'
 let campaignColumnAvailable = false
 let campaignColumnStatus = 'unknown'
 let dealColumnStatus = 'unknown'
@@ -209,6 +210,14 @@ export function getBadgeColumnStatus() {
  *
  * @returns {'unknown' | 'ok' | 'missing'}
  */
+/**
+ * 节日特选这一列（`is_holiday`，19-holiday.sql）在不在。
+ * 不在时开关「看起来能点、其实存不进去」—— 编辑器据此提示运营跑迁移。
+ */
+export function getHolidayColumnStatus() {
+  return holidayColumnStatus
+}
+
 export function getTeaserColumnStatus() {
   return teaserColumnStatus
 }
@@ -509,6 +518,7 @@ export async function loadProducts({ silent = false, light } = {}) {
       teaserColumnAvailable = columns.includes('is_teaser')
       teaserColumnStatus = teaserColumnAvailable ? 'ok' : 'missing'
   holidayColumnAvailable = columns.includes('is_holiday')
+  holidayColumnStatus = holidayColumnAvailable ? 'ok' : 'missing'
       campaignColumnAvailable = columns.includes('is_campaign')
       campaignColumnStatus = campaignColumnAvailable ? 'ok' : 'missing'
       /* All five or none: a partially migrated database is exactly the case the
@@ -721,6 +731,10 @@ export async function updateProduct(id, patch) {
     /* The UI let a colour be picked on a database that has no column for it. Say
      * so once, instead of quietly losing it on the next reload. */
     console.warn('[products] badge_color 列不存在，标签颜色未保存。先跑 supabase/07-badge-color.sql。')
+  }
+
+  if (!holidayColumnAvailable && patch?.isHoliday !== undefined) {
+    console.warn('[products] is_holiday 列不存在，节日特选开关未保存。先跑 supabase/19-holiday.sql。')
   }
 
   if (!teaserColumnAvailable && row.is_teaser === undefined && patch?.isTeaser !== undefined) {

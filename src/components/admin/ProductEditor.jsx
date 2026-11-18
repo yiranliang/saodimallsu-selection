@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import Modal from '../Modal.jsx'
 import ProductImage from '../ProductImage.jsx'
 import { Close, Plus, Trash, Check, ChevronDown, ChevronUp, Image as ImageIcon, AlertCircle, ExternalLink, ArrowToTop } from '../icons.jsx'
-import { UNCATEGORISED, getBadgeColumnStatus, getTeaserColumnStatus, getDealColumnStatus, getAccColumnStatus, getPriorityColumnStatus } from '../../store/productStore.js'
+import { UNCATEGORISED, getBadgeColumnStatus, getTeaserColumnStatus, getDealColumnStatus, getAccColumnStatus, getPriorityColumnStatus, getHolidayColumnStatus } from '../../store/productStore.js'
 import { isProductPartial } from '../../store/productStore.js'
 import { useCategories } from '../../hooks/useCategories.js'
 import { useAsins } from '../../hooks/useAsins.js'
@@ -720,12 +720,72 @@ export default function ProductEditor({
   const holidayOn = Boolean(draft.isHoliday)
   /* 预览按前台同一条规则切分：逗号/顿号/竖线都认，最多 3 枚。 */
 
+  /* 常用模板 + 运营自己存的模板。Coming Soon 有独立开关、Restock 不常用，
+   * 所以内置列表里先去掉它们。 */
+  const HIDDEN_TEMPLATES = ['Coming Soon', 'Restock']
+  const visibleTemplates = useMemo(
+    () =>
+      [...BADGE_TEMPLATES, ...customTemplates].filter(
+        (tpl) => !HIDDEN_TEMPLATES.includes(tpl.text),
+      ),
+    [customTemplates],
+  )
+
+  /* 自定义模板存在 localStorage：这是运营自己的偏好，不必进数据库。 */
+  const TEMPLATE_KEY = 'sdm-badge-templates'
+  const [customTemplates, setCustomTemplates] = useState(() => {
+    try {
+      const raw = localStorage.getItem(TEMPLATE_KEY)
+      const parsed = raw ? JSON.parse(raw) : []
+      return Array.isArray(parsed) ? parsed : []
+    } catch {
+      return []
+    }
+  })
+  const [composerOpen, setComposerOpen] = useState(false)
+  const [newTagText, setNewTagText] = useState('')
+  const [newTagColor, setNewTagColor] = useState('#2B2B2B')
+
+  const applyNewTag = (remember) => {
+    const label = newTagText.trim()
+    if (!label) return
+    patch('tag', label)
+    patch('badgeColor', newTagColor)
+    if (remember) {
+      const next = [
+        ...customTemplates.filter((tpl) => tpl.text !== label),
+        { text: label, value: newTagColor, label },
+      ]
+      setCustomTemplates(next)
+      try {
+        localStorage.setItem(TEMPLATE_KEY, JSON.stringify(next))
+      } catch {
+        /* 隐私模式：本次生效，不记住 */
+      }
+    }
+    setNewTagText('')
+    setComposerOpen(false)
+  }
+
   const previewTags = normaliseTagList(draft.tag).split(', ').filter(Boolean)
+
+  /* 卡片预览上的 "N colors · M sizes"：按两个轴各自的选项数量算。 */
+  const previewCounts = (() => {
+    let colours = 0
+    let sizes = 0
+    for (const group of draft.specs) {
+      const options = (group.options || []).filter((option) => String(option || '').trim()).length
+      if (isColourType(group.type)) colours += options
+      else if (isSizeType(group.type)) sizes += options
+    }
+    return { colours, sizes }
+  })()
   /* Read during render, not in state: the flag flips once per session (when the
    * first catalogue read discovers the column), and the editor is only ever
    * opened after that read. */
   const badgeColumnMissing = getBadgeColumnStatus() === 'missing'
   const teaserColumnMissing = getTeaserColumnStatus() === 'missing'
+  const holidayColumnMissing = getHolidayColumnStatus() === 'missing'
   const dealColumnMissing = getDealColumnStatus() === 'missing'
   const accColumnMissing = getAccColumnStatus() === 'missing'
   const priorityColumnMissing = getPriorityColumnStatus() === 'missing'
@@ -936,25 +996,55 @@ export default function ProductEditor({
                     The variant tag is the point of interest: it says WHICH
                     colour/size this listing is, so a photo cannot silently
                     land on the wrong swatch. */}
-                {amazonListing && (
-                  <a
-                    href={amazonListing.url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    title={`${amazonListing.asin}${amazonListing.label ? ` · ${amazonListing.label}` : ''} — opens amazon.com in a new tab`}
-                    aria-label={`View ${amazonListing.asin}${amazonListing.label ? ` (${amazonListing.label})` : ''} on Amazon — opens in a new tab`}
-                    className="group inline-flex max-w-full items-center gap-1.5 rounded-full bg-charcoal/[0.045] py-1 pl-2 pr-2.5 text-[11px] font-medium text-charcoal transition hover:bg-charcoal/[0.09]"
-                  >
-                    <ExternalLink className="h-3 w-3 shrink-0 text-charcoal-light transition group-hover:text-charcoal" />
-                    <span className="whitespace-nowrap">在 Amazon 查看</span>
-                    {amazonListing.label && (
-                      <span className="min-w-0 truncate text-[10px] font-normal text-charcoal-light">
-                        {amazonListing.label}
-                      </span>
-                    )}
-                  </a>
+                {/* ── 前台卡片预览 ──
+                    标题 → Amazon 链接 → 颜色/尺码数量 → 标签，顺序和货架上的卡片一致。
+                    `Choose options` 不预览：它在前台是交互入口，不是商品信息。 */}
+                <div data-card-preview className="mt-3 space-y-1.5">
+                  <p className="line-clamp-2 text-[13.5px] font-normal leading-[1.35] text-charcoal">
+                    {draft.name.trim() || draft.sku || t('Untitled')}
+                  </p>
 
-                )}
+                  {amazonListing ? (
+                    <a
+                      href={amazonListing.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      title={`${amazonListing.asin}${amazonListing.label ? ` · ${amazonListing.label}` : ''} — opens amazon.com in a new tab`}
+                      aria-label={`View ${amazonListing.asin} on Amazon — opens in a new tab`}
+                      className="group inline-flex max-w-full items-center gap-1 text-[11.5px] text-charcoal-light underline-offset-2 transition hover:text-charcoal hover:underline"
+                    >
+                      <span className="whitespace-nowrap">{t('View on Amazon')}</span>
+                      <ExternalLink className="h-2.5 w-2.5 shrink-0" />
+                    </a>
+                  ) : (
+                    <span className="text-[11.5px] text-charcoal-light/50">{t('View on Amazon')}</span>
+                  )}
+
+                  <p className="text-[11.5px] text-charcoal-light">
+                    {previewCounts.colours} {t('colors')} · {previewCounts.sizes} {t('sizes')}
+                  </p>
+
+                  {previewTags.length > 0 && (
+                    <div className="flex flex-wrap items-start gap-1 pt-0.5">
+                      {previewTags.map((tag) => (
+                        <span
+                          key={tag}
+                          style={
+                            previewBadge
+                              ? {
+                                  borderColor: previewBadge.backgroundColor,
+                                  color: previewBadge.backgroundColor,
+                                }
+                              : undefined
+                          }
+                          className="max-w-full truncate rounded-[2px] border border-charcoal/50 px-1.5 py-px text-[10px] font-semibold leading-4"
+                        >
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
                 {isDataUrl && (
                   <div className="flex items-center gap-2">
@@ -1116,7 +1206,7 @@ export default function ProductEditor({
 
                     <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <span className="shrink-0 text-[10px] font-medium uppercase tracking-wider text-charcoal-light/60">{t('Quick fill')}</span>
-                      {BADGE_TEMPLATES.map((tpl) => {
+                      {visibleTemplates.map((tpl) => {
                         const hex = normaliseBadgeColor(draft.badgeColor)
                         const exact =
                           badgeTemplateMatch(draft.tag, draft.badgeColor)?.value === tpl.value
@@ -1147,26 +1237,7 @@ export default function ProductEditor({
                       })}
                     </div>
 
-                    <div className="mt-1.5 flex items-center gap-1">
-                      {BADGE_COLOR_PRESETS.map((preset) => {
-                        const active = normaliseBadgeColor(draft.badgeColor) === preset.value
-                        return (
-                          <button
-                            key={preset.value}
-                            type="button"
-                            onClick={() => patch('badgeColor', preset.value)}
-                            aria-label={`Badge colour ${preset.label}`}
-                            aria-pressed={active}
-                            title={preset.label}
-                            style={{ backgroundColor: preset.value }}
-                            className={`h-5 w-5 rounded-full transition ${
-                              active
-                                ? 'ring-2 ring-charcoal/70 ring-offset-1'
-                                : 'ring-1 ring-charcoal/15 hover:ring-charcoal/40'
-                            }`}
-                          />
-                        )
-                      })}
+                    <div className="mt-2 flex flex-wrap items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => patch('badgeColor', '')}
@@ -1178,7 +1249,48 @@ export default function ProductEditor({
                             : 'text-charcoal-light/40'
                         }`}
                       >{t('Default')}</button>
+                      <button
+                        type="button"
+                        onClick={() => setComposerOpen((open) => !open)}
+                        className="rounded-full border border-dashed border-charcoal/25 px-2.5 py-1 text-[11px] text-charcoal-light transition hover:border-charcoal/45 hover:text-charcoal"
+                      >
+                        {composerOpen ? '收起' : '新建标签'}
+                      </button>
                     </div>
+
+                    {composerOpen && (
+                      <div className="mt-2 flex flex-wrap items-center gap-1.5 rounded-xl bg-cream-dark/60 p-2">
+                        <input
+                          type="text"
+                          value={newTagText}
+                          onChange={(event) => setNewTagText(event.target.value)}
+                          placeholder="标签文字，如 Early Bird"
+                          aria-label="New tag text"
+                          className="min-w-0 flex-1 rounded-lg bg-white px-2.5 py-1.5 text-[12px] text-charcoal"
+                        />
+                        <input
+                          type="color"
+                          value={newTagColor}
+                          onChange={(event) => setNewTagColor(event.target.value.toUpperCase())}
+                          aria-label="New tag colour"
+                          className="h-8 w-8 shrink-0 cursor-pointer rounded-lg border border-charcoal/10 bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => applyNewTag(false)}
+                          className="rounded-full bg-charcoal px-3 py-1.5 text-[11px] font-medium text-cream transition hover:bg-charcoal/85"
+                        >
+                          添加
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => applyNewTag(true)}
+                          className="rounded-full bg-white px-3 py-1.5 text-[11px] font-medium text-charcoal ring-1 ring-charcoal/15 transition hover:ring-charcoal/35"
+                        >
+                          保存为模板
+                        </button>
+                      </div>
+                    )}
 
                     {badgeColumnMissing && (
                       <p
@@ -1195,13 +1307,17 @@ export default function ProductEditor({
                 )}
               </div>
 
-              {/* 节日特选：一个开关，等于在标签里加/去一枚 `Holiday`。 */}
+              {/* 节日特选：独立开关（is_holiday），和标签完全无关。 */}
               <div className="mt-3 flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-charcoal/5">
                 <div className="min-w-0">
                   <div className="text-[12px] font-medium text-charcoal">节日特选</div>
-                  <p className="mt-0.5 text-[10.5px] leading-relaxed text-charcoal-light">
-                    开启后自动加一枚 Holiday 标签，前台就会出现在节日专区里。
+                {holidayColumnMissing && (
+                  <p className="mt-1.5 rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 ring-1 ring-amber-200">
+                    这个开关暂时<strong>存不进去</strong>：数据库里没有{' '}
+                    <code className="font-mono">is_holiday</code> 列。先在 Supabase 跑一次
+                    <code className="font-mono">supabase/19-holiday.sql</code>。
                   </p>
+                )}
                 </div>
                 <button
                   type="button"
