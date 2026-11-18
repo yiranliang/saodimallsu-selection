@@ -16,6 +16,7 @@ import {
 import { CSS } from '@dnd-kit/utilities'
 import ProductEditor from '../../components/admin/ProductEditor.jsx'
 import Modal from '../../components/Modal.jsx'
+import FilterMenu from '../../components/admin/FilterMenu.jsx'
 import { useProducts, useCatalogueStatus } from '../../hooks/useProducts.js'
 import {
   createProduct,
@@ -1495,31 +1496,22 @@ export default function ProductsPage() {
             `max-w` stops a 40-character category name from eating the row.
             Only categories that actually have products are listed, so an empty
             selection can never look like a bug. */}
-        <label className="flex shrink-0 items-center gap-1.5 rounded-full bg-white py-2.5 pl-3 pr-2 ring-1 ring-charcoal/[0.07] focus-within:ring-charcoal/25">
-          <span className="whitespace-nowrap text-[11px] text-charcoal-light">{t('Category')}</span>
-          <span className="relative flex items-center">
-            <select
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-              aria-label="Filter by category"
-              className="max-w-[9rem] appearance-none bg-transparent pr-4 text-[12px] text-charcoal focus:outline-none"
-            >
-              <option value={ALL}>All ({products.length})</option>
-              {/* 秒杀状态是算出来的，不是一列，所以它不在 categories 里。
-                  做成下拉里的伪选项，运营点一下就能拿全这批商品再一键全选。 */}
-              <option value={DEAL_ITEMS}>秒杀商品 ({dealItemsCount})</option>
-              {/* 节日特选是独立开关（is_holiday），放在分类下拉里，
-                  因为运营找它时想的是"哪一批商品"，不是一个标签。 */}
-              <option value={HOLIDAY_ITEMS}>节日特选 ({holidayCount})</option>
-              {categoryOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-            <ChevronDown className="pointer-events-none absolute right-0 h-3 w-3 text-charcoal-light" />
-          </span>
-        </label>
+        <FilterMenu
+          label={t('Category')}
+          ariaLabel="Filter by category"
+          value={category}
+          onChange={setCategory}
+          options={[
+            { value: ALL, label: '全部', count: products.length },
+            { value: DEAL_ITEMS, label: '秒杀商品', count: dealItemsCount },
+            { value: HOLIDAY_ITEMS, label: '节日特选', count: holidayCount },
+            ...categoryOptions.map((option) => ({
+              value: option,
+              label: option,
+              count: products.filter((item) => (item.category || UNCATEGORISED) === option).length,
+            })),
+          ]}
+        />
 
         {/* Tag filter — 和前台 New / Bestseller / Holiday 完全同一套判定
             （`matchesTagView`），所以「前台归到 New 的商品」在这里一定筛得出来。
