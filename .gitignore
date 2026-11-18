@@ -35,3 +35,4 @@ pnpm-debug.log*
 # 缓存
 .cache/
 .vite/
+shots/
