@@ -9,7 +9,6 @@ import { useAsins } from '../../hooks/useAsins.js'
 import { getAsinsStatus, isValidAsin } from '../../utils/asinStore.js'
 import { firstListing } from '../../utils/amazon.js'
 import { isColourType, specTypeLabel } from '../../utils/variantImage.js'
-import { HOLIDAY_TOKEN, hasHolidayTag, toggleHolidayTag } from '../../utils/navViews.js'
 import { deleteDealSlotsBySku } from '../../store/dealStore.js'
 import { isSizeType, sizeOrder } from '../../utils/sizes.js'
 import { useDealSlots } from '../../hooks/useDealSlots.js'
@@ -655,6 +654,7 @@ export default function ProductEditor({
       /* 运营标签：一个字段、可以有多枚（`Bestseller, New`）。写库前统一
        * 规整成 "A, B" —— 前台按逗号切分并最多显示 3 枚（`trustBadgesFor`）。
        * 颜色仍然保留：文字空 = 没有标签，颜色跟着清（映射层也会兜底）。 */
+      isHoliday: Boolean(draft.isHoliday),
       tag: normaliseTagList(draft.tag),
       badgeColor: normaliseBadgeColor(draft.badgeColor),
       /* 大促标签（`sub_tag`）不在这里写：它由「导入秒杀 / 批量开秒杀」自动维护
@@ -715,8 +715,9 @@ export default function ProductEditor({
   /* `null` = no colour set, which means "keep the default charcoal pill" —
    * `badgeStyle` returns null rather than a default so the classes stay. */
   const previewBadge = badgeStyle(draft.badgeColor)
-  /* 节日开关的状态直接由标签串推出来：一枚 Holiday 词 = 开。 */
-  const holidayOn = hasHolidayTag(draft.tag)
+  /* 节日特选是**独立开关**（`is_holiday` 列），和标签完全解耦：
+   * 打开它不会往标签里塞 Holiday，删标签也不会把它关掉。 */
+  const holidayOn = Boolean(draft.isHoliday)
   /* 预览按前台同一条规则切分：逗号/顿号/竖线都认，最多 3 枚。 */
 
   const previewTags = normaliseTagList(draft.tag).split(', ').filter(Boolean)
@@ -1207,7 +1208,7 @@ export default function ProductEditor({
                   role="switch"
                   aria-checked={holidayOn}
                   aria-label="节日特选开关"
-                  onClick={() => patch('tag', toggleHolidayTag(draft.tag, !holidayOn))}
+                  onClick={() => patch('isHoliday', !holidayOn)}
                   className={`relative h-6 w-11 shrink-0 rounded-full transition-colors duration-200 ${
                     holidayOn ? 'bg-accent' : 'bg-charcoal/20'
                   }`}
@@ -1843,6 +1844,7 @@ function toDraft(product) {
      * 批量开秒杀整批选定，这里只负责原样带回去。漏了它，编辑一次商品就会
      * 把大促款悄悄打回常规（`productToRow` 写的是 `=== true`）。 */
     isCampaign: Boolean(product?.isCampaign),
+    isHoliday: Boolean(product?.isHoliday),
     /* ACC —— 开关只存布尔，ID 不跟开关联动（关掉时保留，理由见 utils/acc.js）。 */
     hasAcc: Boolean(product?.hasAcc),
     accId: product?.accId || '',

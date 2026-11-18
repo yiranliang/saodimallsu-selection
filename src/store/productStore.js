@@ -116,6 +116,7 @@ const OPTIONAL_COLUMNS = [
   'sold_out_variants',
   'badge_color',
   'is_teaser',
+  'is_holiday',
   ...DEAL_COLUMNS,
   CAMPAIGN_COLUMN,
   ...ACC_COLUMNS,
@@ -131,6 +132,7 @@ const ABSENT_HINTS = {
   sold_out_variants: { meaning: '「全部有货」', sql: 'supabase/05-sold-out.sql' },
   badge_color: { meaning: '「标签无自定义颜色」', sql: 'supabase/07-badge-color.sql' },
   is_teaser: { meaning: '「全部不是预告」', sql: 'supabase/08-teaser.sql' },
+  is_holiday: { meaning: '「全部不是节日特选」', sql: 'supabase/19-holiday.sql' },
   is_campaign: { meaning: '「全部算常规秒杀」', sql: 'supabase/13-campaign.sql' },
   sale_start: { meaning: '「全部没有秒杀」', sql: 'supabase/09-deal.sql' },
   sale_end: { meaning: '「全部没有秒杀」', sql: 'supabase/09-deal.sql' },
@@ -153,6 +155,7 @@ let badgeColumnAvailable = false
  * `getBadgeColumnStatus` below. */
 let badgeColumnStatus = 'unknown'
 let teaserColumnAvailable = false
+let holidayColumnAvailable = false
 let teaserColumnStatus = 'unknown'
 let campaignColumnAvailable = false
 let campaignColumnStatus = 'unknown'
@@ -406,6 +409,7 @@ function rowFor(product, options) {
   const row = productToRow(product, options)
   if (!badgeColumnAvailable) delete row.badge_color
   if (!teaserColumnAvailable) delete row.is_teaser
+  if (!holidayColumnAvailable) delete row.is_holiday
   if (!campaignColumnAvailable) delete row.is_campaign
   if (missingColumns.has('sold_out_variants')) delete row.sold_out_variants
   for (const column of DEAL_COLUMNS) if (missingColumns.has(column)) delete row[column]
@@ -504,6 +508,7 @@ export async function loadProducts({ silent = false, light } = {}) {
       badgeColumnStatus = badgeColumnAvailable ? 'ok' : 'missing'
       teaserColumnAvailable = columns.includes('is_teaser')
       teaserColumnStatus = teaserColumnAvailable ? 'ok' : 'missing'
+  holidayColumnAvailable = columns.includes('is_holiday')
       campaignColumnAvailable = columns.includes('is_campaign')
       campaignColumnStatus = campaignColumnAvailable ? 'ok' : 'missing'
       /* All five or none: a partially migrated database is exactly the case the

@@ -157,6 +157,7 @@ export function rowToProduct(row) {
       soldOutVariants: row.sold_out_variants,
       badgeColor: row.badge_color,
       isTeaser: row.is_teaser,
+    isHoliday: row.is_holiday === true,
       /* 13-*.sql。没跑过迁移的库读回来是 `undefined` → `false`（常规秒杀），
        * 正好等于拆分之前的行为：所有秒杀都在同一个 Tab 里。 */
       isCampaign: row.is_campaign === true,
@@ -208,6 +209,7 @@ export function productToRow(product, { id, sortOrder } = {}) {
      * state end up in the table. */
     badge_color: normaliseBadgeColor(product?.badgeColor) || null,
     is_teaser: product?.isTeaser === true,
+    is_holiday: product?.isHoliday === true,
     /* 大促归属（13-*.sql）。永远是布尔，`not null default false`：写 `false`
      * 才让"在编辑器里把它改回常规"真的落到行上，而不是靠默认值。 */
     is_campaign: product?.isCampaign === true,

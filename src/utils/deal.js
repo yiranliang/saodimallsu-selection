@@ -880,7 +880,7 @@ export function trustBadgesFor(product, { campaign = '', max = 3 } = {}) {
     .map((part) => part.trim())
     .filter(Boolean)
     /* 活动名不上卡片，但 Holiday 这类节日属性标要留下。 */
-    .filter((text) => isHolidayWord(text) || (!isCampaignLabel(text) && !isSameCampaign(text, campaign)))
+    .filter((text) => !isCampaignLabel(text) && !isSameCampaign(text, campaign) && !isHolidayWord(text))
     .slice(0, max)
     .map((text) => ({ text, value: product?.badgeColor || '', kind: 'tag' }))
 }

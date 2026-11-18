@@ -168,6 +168,10 @@ export function buildTagIndex(products) {
   for (const product of Array.isArray(products) ? products : []) {
     const id = String(product?.id ?? '')
     if (!id) continue
+    /* 节日专区现在由 `is_holiday` 这一列决定（和标签解耦）；
+     * 关键词兜底保留，历史数据里还写着 Holiday 的那些照样能命中。 */
+    if (product?.isHoliday === true) index[TAG_VIEW.HOLIDAY].add(id)
+
     for (const token of tagTokens(product)) {
       if (isNewToken(token)) index[TAG_VIEW.NEW].add(id)
       if (isBestsellerToken(token)) index[TAG_VIEW.BESTSELLER].add(id)
