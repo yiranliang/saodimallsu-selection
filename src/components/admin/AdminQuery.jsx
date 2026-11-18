@@ -70,7 +70,7 @@ export default function AdminQuery({ onQuery, loading, error }) {
           {loading ? (
             <>
               <span className="h-4 w-4 animate-spin rounded-full border-2 border-cream/30 border-t-cream" />
-              {t('Looking up…')}
+              查询中…
             </>
           ) : (
             '查询'
@@ -86,7 +86,10 @@ export default function AdminQuery({ onQuery, loading, error }) {
           <li>1. 红人在前台挑款，点「Generate my code」生成选品码</li>
           <li>2. 她把码发给你（以 {CODE_PREFIX}- 开头）</li>
           <li>3. 粘到上面，点查询</li>
-          <li>4. 导出 CSV，或者把清单直接复制给仓库</li>
+          <li>
+            4. <strong className="font-medium text-charcoal">复制 ASIN</strong>：把所有 ASIN 贴进寄样系统，一键寄样；
+            <strong className="font-medium text-charcoal">复制清单</strong>：把带名称、链接、尺码颜色的清单发给红人
+          </li>
         </ol>
       </div>
 
@@ -95,7 +98,7 @@ export default function AdminQuery({ onQuery, loading, error }) {
         className="mt-6 flex items-center justify-center gap-1.5 text-[12px] text-charcoal-light transition hover:text-charcoal"
       >
         <ArrowLeft className="h-3.5 w-3.5" />
-        {t('Back to storefront')}
+        返回前台
       </a>
     </div>
   )

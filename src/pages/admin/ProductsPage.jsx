@@ -243,6 +243,8 @@ export default function ProductsPage() {
   /* 节日专区名（季节性的，换季就改） */
   const [holidayDraft, setHolidayDraft] = useState(settings.holidayLabel)
   const [holidaySaving, setHolidaySaving] = useState(false)
+  /* 设置抽屉：专区改名 + 分类管理都收在这里（商品库顶部只留筛选与操作）。 */
+  const [settingsOpen, setSettingsOpen] = useState(false)
   /* 存库的值变了就同步输入框（保存成功后、或另一台设备改了）。
    * 输入过程中不会被覆盖，因为依赖只有这个值。 */
   useEffect(() => {
@@ -304,7 +306,8 @@ export default function ProductsPage() {
     [products],
   )
   const [tagView, setTagView] = useState(ALL_TAGS)
-  const [tagMenuOpen, setTagMenuOpen] = useState(false)
+  /* 'category' | 'tag' | null —— 同时只允许一个筛选下拉是展开的。 */
+  const [openFilter, setOpenFilter] = useState(null)
 
   /* 下拉里的选项：数量为 0 的标签不出现（“全部 / 无标签”除外，它们不是标签）。
    * 正在选中的那一项即便变成 0 也保留，否则下拉会显示一个不存在的值。 */
@@ -1227,6 +1230,13 @@ export default function ProductsPage() {
         <div className="flex shrink-0 items-center gap-2">
           <button
             type="button"
+            onClick={() => setSettingsOpen(true)}
+            className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-[12px] font-medium text-charcoal/75 ring-1 ring-charcoal/10 transition hover:text-charcoal hover:ring-charcoal/20 active:scale-95"
+          >
+            设置
+          </button>
+          <button
+            type="button"
             onClick={() => fileInputRef.current?.click()}
             className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-[12px] font-medium text-charcoal/75 ring-1 ring-charcoal/10 transition hover:text-charcoal hover:ring-charcoal/20 active:scale-95"
           >
@@ -1265,6 +1275,7 @@ export default function ProductsPage() {
         />
       </div>
 
+      <Modal open={settingsOpen} onClose={() => setSettingsOpen(false)} title="设置" maxWidth="max-w-2xl">
       {/* ── 前台大促专区的展示名 ──
           一个站点级设置，存在 `settings` 表（12-settings.sql）。放这里是因为
           改名的人就是"正在整理这批秒杀商品"的人 —— 改完标签顺手就能把 Tab
@@ -1306,7 +1317,6 @@ export default function ProductsPage() {
 
         {/* 节日专区名：和上面的秒杀 Tab 名同一张设置表。换季（圣诞 → 春季）
             运营自己改，不用发版。 */}
-        <span className="w-full border-t border-charcoal/[0.06] pt-2.5"></span>
         <span className="text-[10px] font-medium uppercase tracking-wider text-charcoal-light">
           节日专区
         </span>
@@ -1338,7 +1348,7 @@ export default function ProductsPage() {
           className="shrink-0 rounded-full px-2.5 py-1.5 text-[11px] font-medium text-charcoal-light transition hover:bg-cream-dark hover:text-charcoal disabled:cursor-not-allowed disabled:opacity-40"
         >{t('Reset')}</button>
         <span className="text-[10px] text-charcoal-light/70">
-          前台导航里 New / Bestseller 后面那一项；换季就改这里。
+          换季改这里。
         </span>
         {getSettingsStatus() === 'missing' && (
           <span className="w-full text-[10px] leading-relaxed text-amber-700">
@@ -1441,6 +1451,7 @@ export default function ProductsPage() {
           </div>
         )}
       </div>
+      </Modal>
 
       {/* Search + category filter + sold-out view.
           `flex-wrap`, not a single row: three `shrink-0` controls plus a long
@@ -1497,6 +1508,8 @@ export default function ProductsPage() {
             Only categories that actually have products are listed, so an empty
             selection can never look like a bug. */}
         <FilterMenu
+          open={openFilter === 'category'}
+          onOpenChange={(next) => setOpenFilter(next ? 'category' : null)}
           label={t('Category')}
           ariaLabel="Filter by category"
           value={category}
@@ -1521,19 +1534,19 @@ export default function ProductsPage() {
         <div className="relative shrink-0">
           <button
             type="button"
-            onClick={() => setTagMenuOpen((open) => !open)}
+            onClick={() => setOpenFilter((open) => (open === 'tag' ? null : 'tag'))}
             aria-haspopup="true"
-            aria-expanded={tagMenuOpen}
+            aria-expanded={openFilter === 'tag'}
             className="flex items-center gap-1.5 rounded-full bg-white py-2.5 pl-3 pr-2 text-[12px] ring-1 ring-charcoal/[0.07] transition hover:ring-charcoal/25"
           >
             <span className="text-[11px] text-charcoal-light">标签</span>
             <span className="max-w-[8rem] truncate text-charcoal">
               {tagViewLabel}
             </span>
-            <ChevronDown className={`h-3 w-3 shrink-0 text-charcoal-light transition ${tagMenuOpen ? 'rotate-180' : ''}`} />
+            <ChevronDown className={`h-3 w-3 shrink-0 text-charcoal-light transition ${openFilter === 'tag' ? 'rotate-180' : ''}`} />
           </button>
 
-          {tagMenuOpen && (
+          {openFilter === 'tag' && (
             <div className="absolute left-0 top-full z-30 mt-1 w-44 rounded-xl bg-white p-1.5 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10">
               {tagMenuOptions.map((option) => (
                 <button
@@ -1541,7 +1554,7 @@ export default function ProductsPage() {
                   type="button"
                   onClick={() => {
                     setTagView(option.value)
-                    setTagMenuOpen(false)
+                    setOpenFilter(null)
                   }}
                   className={`flex w-full items-center justify-between rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
                     tagView === option.value
@@ -1559,37 +1572,18 @@ export default function ProductsPage() {
           )}
         </div>
 
-        <label className="flex min-w-[9rem] shrink-0 items-center gap-1.5 rounded-full bg-white px-3 py-2.5 ring-1 ring-charcoal/[0.07] focus-within:ring-charcoal/25">
-          <input
-            type="text"
-            value={tagQuery}
-            onChange={(e) => setTagQuery(e.target.value)}
-            placeholder="搜标签，如 best"
-            aria-label="Search tags"
-            className="w-full min-w-0 bg-transparent text-[12px] text-charcoal placeholder:text-charcoal-light/60 focus:outline-none"
-          />
-          {tagQuery && (
-            <button
-              type="button"
-              onClick={() => setTagQuery('')}
-              aria-label="Clear tag search"
-              className="shrink-0 rounded-full p-0.5 text-charcoal-light transition hover:text-charcoal"
-            >
-              <Close className="h-3 w-3" />
-            </button>
-          )}
-        </label>
 
-        {tagFiltering && (
+        {(category !== ALL || tagView !== ALL_TAGS) && (
           <button
             type="button"
             onClick={() => {
+              setCategory(ALL)
               setTagView(ALL_TAGS)
               setTagQuery('')
             }}
             className="shrink-0 rounded-full px-2.5 py-2 text-[11px] text-charcoal-light underline-offset-2 transition hover:text-charcoal hover:underline"
           >
-            清除标签筛选
+            清除筛选
           </button>
         )}
 

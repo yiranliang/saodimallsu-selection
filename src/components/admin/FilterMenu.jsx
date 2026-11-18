@@ -20,8 +20,17 @@ export default function FilterMenu({
   align = 'left',
   maxWidth = 'max-w-[16rem]',
   panelWidth = 'w-56',
+  open: openProp,
+  onOpenChange,
 }) {
-  const [open, setOpen] = useState(false)
+  /* 开合可以由父组件控制（这样同一行里只会有一个下拉是开的）；
+   * 不传就是自管。 */
+  const [selfOpen, setSelfOpen] = useState(false)
+  const open = openProp ?? selfOpen
+  const setOpen = (next) => {
+    setSelfOpen(next)
+    onOpenChange?.(next)
+  }
 
   const current = options.find((option) => option.value === value)
 

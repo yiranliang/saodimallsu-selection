@@ -64,12 +64,12 @@ export default function LookupPage() {
     <div className="mx-auto max-w-md">
       <div className="mb-7">
         <h1 className="text-2xl font-semibold tracking-tight text-charcoal">
-          {result ? 'Selection details' : 'Look up a code'}
+          {result ? '选款详情' : '查询选品码'}
         </h1>
         <p className="mt-1.5 text-[13px] leading-relaxed text-charcoal-light">
           {result
-            ? 'Check the lines, then export to the warehouse.'
-            : 'Paste the code a creator sent you to see exactly what she picked.'}
+            ? '核对清单后导出给仓库。'
+            : '粘贴红人发来的选品码，查看她具体选了哪些商品。'}
         </p>
       </div>
 
