@@ -1227,39 +1227,6 @@ export default function ProductsPage() {
             {hiddenCount > 0 && ` · 其中 ${hiddenCount} 件已隐藏`} · 在这里改货号、图片、颜色和尺码。
           </p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          <button
-            type="button"
-            onClick={() => setSettingsOpen(true)}
-            className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-[12px] font-medium text-charcoal/75 ring-1 ring-charcoal/10 transition hover:text-charcoal hover:ring-charcoal/20 active:scale-95"
-          >
-            设置
-          </button>
-          <button
-            type="button"
-            onClick={() => fileInputRef.current?.click()}
-            className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-[12px] font-medium text-charcoal/75 ring-1 ring-charcoal/10 transition hover:text-charcoal hover:ring-charcoal/20 active:scale-95"
-          >
-            <Upload className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{t('Import (CSV/XLSX)')}</span>
-            <span className="sm:hidden">{t('Import')}</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleExportCsv}
-            className="flex items-center gap-1.5 rounded-full bg-white px-4 py-2.5 text-[12px] font-medium text-charcoal/75 ring-1 ring-charcoal/10 transition hover:text-charcoal hover:ring-charcoal/20 active:scale-95"
-          >
-            <Download className="h-3.5 w-3.5" />
-            <span className="hidden sm:inline">{t('Export to CSV')}</span>
-            <span className="sm:hidden">CSV</span>
-          </button>
-          <button
-            type="button"
-            onClick={handleCreate}
-            className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent px-4 py-2.5 text-[12px] font-medium text-white shadow-lg shadow-accent/20 transition hover:bg-accent-dark active:scale-95"
-          >
-            <Plus className="h-3.5 w-3.5" />{t('Add')}</button>
-        </div>
         {/* Visually hidden, not `display:none` — a hidden input is still
             clickable through the ref, and this one must never be reachable by
             tab because the button above is its accessible face. */}
@@ -1604,33 +1571,80 @@ export default function ProductsPage() {
           </button>
         )}
 
-        {/* Sold-out view. A toggle rather than another entry in the category
-            dropdown: it cuts across categories, and it is the one filter used
-            on its own ("what do I need to re-order?"). */}
-        <button
-          type="button"
-          onClick={() => setSoldOutOnly((on) => !on)}
-          aria-pressed={soldOutOnly}
-          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2.5 text-[12px] font-medium transition active:scale-95 ${
-            soldOutOnly
-              ? 'bg-red-500 text-white'
-              : 'bg-white text-charcoal ring-1 ring-charcoal/[0.07] hover:ring-charcoal/25'
-          }`}
-        >
-          <AlertCircle className="h-3.5 w-3.5" />{t('View Sold Out')}</button>
+        {/* 状态：断货 / 隐藏合成一个下拉，里面两个开关。 */}
+        <div className="relative shrink-0">
+          <button
+            type="button"
+            onClick={() => setOpenFilter((open) => (open === "status" ? null : "status"))}
+            aria-haspopup="true"
+            aria-expanded={openFilter === 'status'}
+            className="flex items-center gap-1.5 rounded-full bg-white py-2.5 pl-3 pr-2 text-[12px] ring-1 ring-charcoal/[0.07] transition hover:ring-charcoal/25"
+          >
+            <span className="text-[11px] text-charcoal-light">状态</span>
+            <span className="text-charcoal">
+              {soldOutOnly || hiddenOnly
+                ? [soldOutOnly ? '断货' : null, hiddenOnly ? '已隐藏' : null]
+                    .filter(Boolean)
+                    .join(' · ')
+                : '全部'}
+            </span>
+            <ChevronDown
+              className={`h-3 w-3 shrink-0 text-charcoal-light transition ${openFilter === 'status' ? 'rotate-180' : ''}`}
+            />
+          </button>
 
-        {/* 只看已隐藏：一个独立的视图，而不是混在列表里靠标签辨认。 */}
+          {openFilter === 'status' && (
+            <div className="absolute right-0 top-full z-30 mt-1 w-48 rounded-xl bg-white p-1.5 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10">
+              {[
+                { key: 'soldOut', label: '只看断货', value: soldOutOnly, set: setSoldOutOnly },
+                { key: 'hidden', label: '只看已隐藏', value: hiddenOnly, set: setHiddenOnly },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => item.set(!item.value)}
+                  aria-pressed={item.value}
+                  className="flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] text-charcoal/75 transition hover:bg-charcoal/[0.04]"
+                >
+                  <span>{item.label}</span>
+                  <span
+                    className={`relative h-4 w-7 shrink-0 rounded-full transition ${
+                      item.value ? 'bg-charcoal' : 'bg-charcoal/20'
+                    }`}
+                  >
+                    <span
+                      className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-all ${
+                        item.value ? 'left-3.5' : 'left-0.5'
+                      }`}
+                    />
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+
         <button
           type="button"
-          onClick={() => setHiddenOnly((on) => !on)}
-          aria-pressed={hiddenOnly}
-          className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-2.5 text-[12px] font-medium transition active:scale-95 ${
-            hiddenOnly
-              ? 'bg-charcoal text-cream'
-              : 'bg-white text-charcoal ring-1 ring-charcoal/[0.07] hover:ring-charcoal/25'
-          }`}
+          onClick={handleCreate}
+          className="flex shrink-0 items-center gap-1.5 rounded-full bg-accent px-4 py-2.5 text-[12px] font-medium text-white shadow-lg shadow-accent/20 transition hover:bg-accent-dark active:scale-95"
         >
-          {t('Hidden')} ({hiddenCount})
+          <Plus className="h-3.5 w-3.5" />{t('Add')}</button>
+
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-2.5 text-[12px] font-medium text-charcoal/75 ring-1 ring-charcoal/10 transition hover:text-charcoal hover:ring-charcoal/20 active:scale-95"
+        >
+          <Upload className="h-3.5 w-3.5" />批量导入
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setSettingsOpen(true)}
+          className="flex shrink-0 items-center gap-1.5 rounded-full bg-white px-3.5 py-2.5 text-[12px] font-medium text-charcoal/75 ring-1 ring-charcoal/10 transition hover:text-charcoal hover:ring-charcoal/20 active:scale-95"
+        >
+          设置
         </button>
       </div>
 
