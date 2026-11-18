@@ -86,6 +86,10 @@ function shared(product) {
   // be ordered. Only emitted when true, so exports stay clean.
   if (product?.isTeaser === true) out.isTeaser = true
 
+  /* 节日特选（19-holiday.sql）：独立开关，和标签无关。
+   * 约定同 isTeaser —— 只在 true 时出现，导出里不会多出一堆 false。 */
+  if (product?.isHoliday === true) out.isHoliday = true
+
   /* 大促归属（13-campaign.sql）：true = 归 🔥 大促专区，false / 缺省 = 常规
    * 秒杀。只在 true 时出现，和 isTeaser 同一个约定 —— 导出里不会多出 273 个
    * `isCampaign: false`。 */

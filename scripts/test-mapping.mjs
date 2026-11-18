@@ -110,6 +110,14 @@ check('hidden is a real boolean', out.hidden, true)
 check('is_teaser is a real boolean', out.is_teaser, false)
 check('a teaser writes true', productToRow({ ...product, isTeaser: true }).is_teaser, true)
 
+/* 节日特选（19-holiday.sql）：独立一列，写和读都要真的过去。
+ * 之前 `shared()` 没有透传它，于是开关存进去、读回来却是 undefined，
+ * 商品永远进不了节日筛选 —— 这条断言就是防那个回归。 */
+check('is_holiday is a real boolean', productToRow(product).is_holiday, false)
+check('holiday on writes true', productToRow({ ...product, isHoliday: true }).is_holiday, true)
+check("row with is_holiday reads back as isHoliday", rowToProduct({ id: 'p1', is_holiday: true }).isHoliday, true)
+check('row without is_holiday is falsy', rowToProduct({ id: 'p1' }).isHoliday, undefined)
+
 const noId = productToRow({ ...product, id: undefined })
 check('a new product sends no id (the sequence assigns one)', 'id' in noId, false)
 check('sort_order only when asked', 'sort_order' in noId, false)
