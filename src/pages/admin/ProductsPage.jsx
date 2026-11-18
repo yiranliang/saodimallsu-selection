@@ -1263,7 +1263,7 @@ export default function ProductsPage() {
         title="设置"
         maxWidth="max-w-3xl"
       >
-        <div className="space-y-5">
+        <div className="max-h-[68vh] space-y-5 overflow-y-auto pr-1">
           {/* 秒杀专区名 */}
           <div>
             <div className="text-[11px] font-medium tracking-wider text-charcoal-light">
@@ -1284,7 +1284,7 @@ export default function ProductsPage() {
                 maxLength={32}
                 placeholder={DEALS_TAB_DEFAULT_LABEL}
                 aria-label="Deals tab label"
-                className="min-w-[14rem] flex-1 rounded-lg bg-cream px-3 py-2 text-[13px] text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-1 focus:ring-charcoal/25"
+                className="min-w-0 flex-1 rounded-lg bg-cream px-3 py-2 text-[13px] text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-1 focus:ring-charcoal/25"
               />
               <button
                 type="button"
@@ -1328,7 +1328,7 @@ export default function ProductsPage() {
                 maxLength={24}
                 placeholder={HOLIDAY_TAB_DEFAULT_LABEL}
                 aria-label="Holiday tab label"
-                className="min-w-[14rem] flex-1 rounded-lg bg-cream px-3 py-2 text-[13px] text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-1 focus:ring-charcoal/25"
+                className="min-w-0 flex-1 rounded-lg bg-cream px-3 py-2 text-[13px] text-charcoal placeholder:text-charcoal-light/50 focus:outline-none focus:ring-1 focus:ring-charcoal/25"
               />
               <button
                 type="button"
