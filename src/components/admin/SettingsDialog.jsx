@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, Close, Plus, Trash } from '../icons.jsx'
+import { CATEGORY_GROUP_TITLES } from '../../utils/categoryStore.js'
 
 /**
  * 站点设置对话框
@@ -198,6 +199,19 @@ export default function SettingsDialog({
                       aria-label={`重命名分类 ${name}`}
                       className="min-w-0 flex-1 rounded-md bg-transparent px-1.5 py-1 text-[12px] text-charcoal focus:bg-white focus:outline-none focus:ring-1 focus:ring-charcoal/20"
                     />
+                    <select
+                      value={categories.groups?.[name] || ''}
+                      onChange={(event) => categories.setGroup?.(name, event.target.value)}
+                      aria-label={`${name} 的一级分组`}
+                      className="w-28 shrink-0 rounded-md bg-white px-1.5 py-1 text-[10.5px] text-charcoal ring-1 ring-charcoal/10 focus:outline-none focus:ring-charcoal/30"
+                    >
+                      <option value="">未分组</option>
+                      {CATEGORY_GROUP_TITLES.map((title) => (
+                        <option key={title} value={title}>
+                          {title}
+                        </option>
+                      ))}
+                    </select>
                     <span className="shrink-0 text-[10px] tabular-nums text-charcoal-light/60">{count}</span>
                     <button
                       type="button"

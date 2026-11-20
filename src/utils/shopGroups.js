@@ -48,14 +48,17 @@ export function groupOfCategory(name) {
  * @param {Record<string, number>} [counts] 每个分类的商品数
  * @returns {{ title: string, total: number, items: { value: string, label: string, count: number }[] }[]}
  */
-export function groupShopCategories(categories, counts = {}) {
+export function groupShopCategories(categories, counts = {}, explicit = {}) {
   const buckets = new Map()
 
   for (const raw of Array.isArray(categories) ? categories : []) {
     const name = String(raw ?? '').trim()
     if (!name) continue
 
-    const title = groupOfCategory(name)
+    /* 1. 数据库里配了分组（20-category-group.sql 的 group_name）就用它；
+     * 2. 没配 → 按名字关键词猜（这样旧库和没配完的分类也不会消失）。 */
+    const configured = String(explicit?.[name] ?? '').trim()
+    const title = configured || groupOfCategory(name)
     if (!buckets.has(title)) buckets.set(title, [])
     buckets.get(title).push({
       value: name,

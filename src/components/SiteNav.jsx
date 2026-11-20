@@ -42,6 +42,7 @@ const STATE_OPTIONS = [
 
 export default function SiteNav({
   categories = [],
+  categoryGroups = {},
   categoryCounts = {},
   active,
   onChange,
@@ -69,6 +70,25 @@ export default function SiteNav({
   /* Shop 的两级菜单：默认全部折叠，点大分类才展开它的下级。 */
   const [openShopGroup, setOpenShopGroup] = useState(null)
   const menuRootRef = useRef(null)
+  /* 悬停关闭要延迟：从 SHOP 按钮移到面板之间会经过顶栏空白，立刻关会让
+   * 菜单"还没到就没了"。进入按钮或面板时把计时器取消。 */
+  const shopCloseTimer = useRef(null)
+
+  const cancelShopClose = () => {
+    if (shopCloseTimer.current) {
+      clearTimeout(shopCloseTimer.current)
+      shopCloseTimer.current = null
+    }
+  }
+
+  const scheduleShopClose = () => {
+    cancelShopClose()
+    shopCloseTimer.current = setTimeout(() => {
+      setOpenMenu(null)
+      setOpenSub(null)
+      shopCloseTimer.current = null
+    }, 200)
+  }
 
   useEffect(() => {
     if (!drawer && !openMenu) return undefined
@@ -141,7 +161,7 @@ export default function SiteNav({
   ]
 
   /* 两级菜单的数据：大分类 → 具体分类。默认全部折叠。 */
-  const shopGroups = groupShopCategories(categories, categoryCounts)
+  const shopGroups = groupShopCategories(categories, categoryCounts, categoryGroups)
 
   /* 点 SALE 本身 = 进第一个**有商品**的专区。 */
   const firstSaleWithItems = [
@@ -297,13 +317,11 @@ export default function SiteNav({
 
         <div
           className="relative"
-          onMouseEnter={() => setOpenMenu('shop')}
-          /* 悬停在 SHOP 或菜单里 → 一直开着；移到别处 → 自动消失。
-           * 面板是这里的子节点，所以"从按钮移到面板"不会触发 mouseleave。 */
-          onMouseLeave={() => {
-            setOpenMenu(null)
-            setOpenSub(null)
+          onMouseEnter={() => {
+            cancelShopClose()
+            setOpenMenu('shop')
           }}
+          onMouseLeave={scheduleShopClose}
         >
           <button
             type="button"
@@ -318,7 +336,12 @@ export default function SiteNav({
                               {openMenu === 'shop' && (
             /* 整行下拉：fixed 到顶栏下面，横向铺满屏幕。
              * 左边一级分类、右边二级分类；没有选中任何一级时，右侧留白。 */
-            <div className="fixed inset-x-0 z-40" style={{ top: 'var(--site-nav-h, 4rem)' }}>
+            <div
+              className="fixed inset-x-0 z-40"
+              style={{ top: 'var(--site-nav-h, 4rem)' }}
+              onMouseEnter={cancelShopClose}
+              onMouseLeave={scheduleShopClose}
+            >
               <div className="border-b border-charcoal/10 bg-white shadow-xl shadow-charcoal/5">
                 <div className="mx-auto flex w-full max-w-[88rem] gap-8 px-5 py-5 sm:px-8">
                   {/* 一级分类 */}

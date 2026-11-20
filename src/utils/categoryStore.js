@@ -35,6 +35,17 @@ let inflight = null
  */
 const sortOrderByName = new Map()
 
+/**
+ * name → 一级分组（20-category-group.sql 的 `group_name`）。
+ *
+ * 空字符串 = 未分组；前台会退回关键词匹配（见 utils/shopGroups.js），所以旧库
+ * 没跑迁移、或者运营还没配完，菜单也不会缺分类。
+ */
+const groupByName = new Map()
+
+/** 分组选项：后台下拉和前台分组共用一份。 */
+export const CATEGORY_GROUP_TITLES = ['Tops', 'Bottoms', 'Sets & Dresses', 'Accessories', 'Shoes']
+
 const listeners = new Set()
 
 function notify() {
@@ -57,6 +68,29 @@ function normalize(list) {
 }
 
 /* ── reads ───────────────────────────────────────────────────────────────── */
+
+/** name → 一级分组。没有映射的分类不在里面（前台按关键词兜底）。 */
+export function getCategoryGroups() {
+  return Object.fromEntries(groupByName)
+}
+
+/** 改一个分类的一级分组。空字符串 = 未分组。 */
+export async function setCategoryGroup(name, group) {
+  const key = String(name ?? '').trim()
+  if (!key) return
+  const value = String(group ?? '').trim()
+
+  const { error } = await requireClient()
+    .from('categories')
+    .update({ group_name: value })
+    .eq('name', key)
+
+  if (error) throw new Error(error.message)
+
+  if (value) groupByName.set(key, value)
+  else groupByName.delete(key)
+  notify()
+}
 
 export function getCategories() {
   return cache
@@ -82,16 +116,20 @@ export async function loadCategories({ silent = false } = {}) {
     try {
       const { data, error } = await requireClient()
         .from('categories')
-        .select('name, sort_order')
+        .select('name, sort_order, group_name')
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true })
 
       if (error) throw new Error(error.message)
 
       sortOrderByName.clear()
+      groupByName.clear()
       for (const row of data || []) {
         const name = String(row.name ?? '').trim()
-        if (name) sortOrderByName.set(name, row.sort_order ?? 0)
+        if (!name) continue
+        sortOrderByName.set(name, row.sort_order ?? 0)
+        const group = String(row.group_name ?? '').trim()
+        if (group) groupByName.set(name, group)
       }
 
       cache = normalize((data || []).map((row) => row.name))

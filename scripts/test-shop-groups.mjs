@@ -68,6 +68,15 @@ check('缺失数量按 0', groupShopCategories(['Tops'])[0].items[0].count, 0)
 check('空输入不炸', groupShopCategories(undefined), [])
 check('忽略空名字', groupShopCategories(['', 'Tops']).length, 1)
 
+console.log('\n[3] 数据库分组（group_name）优先于关键词')
+const configured = groupShopCategories(['Patterned', 'Knit Sets'], { Patterned: 5, 'Knit Sets': 3 }, {
+  Patterned: 'Tops',
+})
+check('显式分组生效', configured[0].title, 'Tops')
+check('显式分组把它拉进 Tops', configured[0].items.map((i) => i.value), ['Patterned'])
+check('没配的仍走关键词', configured[1].title, 'Sets & Dresses')
+check('空字符串视为未配', groupShopCategories(['Patterned'], {}, { Patterned: '' })[0].title, SHOP_FALLBACK_GROUP)
+
 console.log(`\n────────────────────────────────────────────`)
 console.log(`${failed === 0 ? 'ALL PASSED' : 'FAILURES'}: ${passed} passed, ${failed} failed`)
 process.exit(failed === 0 ? 0 : 1)

@@ -26,22 +26,27 @@ if (await skip.count()) {
 
 const shop = page.getByRole('button', { name: 'Shop', exact: true }).first()
 await shop.hover()
-await page.waitForTimeout(600)
+await page.waitForTimeout(500)
 
-/* 1. 默认：左侧一级、右侧留白 */
-await page.screenshot({ path: 'shots/nav-mega-empty.png' })
+const panel = page.locator('button', { hasText: 'All products' }).first()
+console.log('panel open:', await panel.isVisible())
 
-/* 2. 悬停 Tops → 右侧出现二级 */
+/* 关键：鼠标移到面板里（模拟真实移动，经过中间区域） */
 const tops = page.locator('button[aria-expanded]').filter({ hasText: 'Tops' }).first()
 await tops.hover()
-await page.waitForTimeout(400)
-await page.screenshot({ path: 'shots/nav-mega-tops.png' })
+await page.waitForTimeout(300)
+console.log('still open after moving into panel:', await panel.isVisible())
 
-/* 3. 悬停 Accessories */
-const acc = page.locator('button[aria-expanded]').filter({ hasText: 'Accessories' }).first()
-await acc.hover()
+/* 再等超过 200ms 的延迟窗口，确认没有被误关 */
 await page.waitForTimeout(400)
-await page.screenshot({ path: 'shots/nav-mega-acc.png' })
+console.log('still open after 400ms:', await panel.isVisible())
+
+await page.screenshot({ path: 'shots/nav-mega-hover.png' })
+
+/* 移到页面其它地方 → 应该关闭 */
+await page.mouse.move(720, 700)
+await page.waitForTimeout(500)
+console.log('closed after leaving:', !(await panel.isVisible()))
 
 console.log('errors:', errors.length ? errors.join('\n') : 'none')
 await browser.close()

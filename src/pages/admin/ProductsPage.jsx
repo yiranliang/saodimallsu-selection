@@ -42,8 +42,8 @@ import {createProduct,
   getPriorityColumnStatus,
   UNCATEGORISED, setProductsHoliday } from '../../store/productStore.js'
 import { deleteDealSlotsBySku } from '../../store/dealStore.js'
-import { useCategories } from '../../hooks/useCategories.js'
-import { addCategory, renameCategory, removeCategory, moveCategory } from '../../utils/categoryStore.js'
+import {useCategories, useCategoryGroups } from '../../hooks/useCategories.js'
+import {addCategory, renameCategory, removeCategory, moveCategory, setCategoryGroup } from '../../utils/categoryStore.js'
 import { useAsins, useAsinsStatus } from '../../hooks/useAsins.js'
 import { useAuth } from '../../hooks/useAuth.js'
 import { removeAsins, loadAsins, saveVariantAsins, moveAsins } from '../../utils/asinStore.js'
@@ -1321,6 +1321,8 @@ export default function ProductsPage() {
         onReset={{ deals: handleResetTabLabel, holiday: handleResetHolidayLabel }}
         categories={{
           list: managedCategories,
+          groups: categoryGroupMap,
+          setGroup: handleSetCategoryGroup,
           add: (name) => handleAddCategory(name),
           rename: handleRenameCategory,
           move: handleMoveCategory,
