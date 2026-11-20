@@ -315,13 +315,14 @@ export default function SiteNav({
             Shop
           </button>
 
-                    {openMenu === 'shop' && (
-            /* 整行下拉：fixed 到顶栏下面，横向铺满屏幕，内容按容器居中。
-             * 这样它读起来是"顶栏的延伸"，而不是挂在某个按钮上的小浮层。 */
+                              {openMenu === 'shop' && (
+            /* 整行下拉：fixed 到顶栏下面，横向铺满屏幕。
+             * 左边一级分类、右边二级分类；没有选中任何一级时，右侧留白。 */
             <div className="fixed inset-x-0 z-40" style={{ top: 'var(--site-nav-h, 4rem)' }}>
               <div className="border-b border-charcoal/10 bg-white shadow-xl shadow-charcoal/5">
-                <div className="mx-auto w-full max-w-[88rem] px-5 py-5 sm:px-8">
-                  <div className="grid items-start gap-x-10 gap-y-0.5 md:grid-cols-2 xl:grid-cols-3">
+                <div className="mx-auto flex w-full max-w-[88rem] gap-8 px-5 py-5 sm:px-8">
+                  {/* 一级分类 */}
+                  <div className="w-56 shrink-0 border-r border-charcoal/[0.08] pr-3">
                     <button
                       type="button"
                       onClick={() => select('All')}
@@ -332,54 +333,63 @@ export default function SiteNav({
                     </button>
 
                     {shopGroups.map((group) => {
-                      const expanded = openShopGroup === group.title
+                      const activeGroup = openShopGroup === group.title
                       return (
-                        <div key={group.title}>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              setOpenShopGroup((current) =>
-                                current === group.title ? null : group.title,
-                              )
-                            }
-                            aria-expanded={expanded}
-                            className={rowClass(expanded)}
-                          >
-                            <span className="flex min-w-0 items-center gap-2">
-                              <span
-                                aria-hidden="true"
-                                className={`inline-block text-[9px] text-charcoal-light/70 transition-transform ${
-                                  expanded ? 'rotate-90' : ''
-                                }`}
-                              >
-                                {'▶'}
-                              </span>
-                              <span className="truncate">{group.title}</span>
-                            </span>
+                        <button
+                          key={group.title}
+                          type="button"
+                          onMouseEnter={() => setOpenShopGroup(group.title)}
+                          onFocus={() => setOpenShopGroup(group.title)}
+                          onClick={() =>
+                            setOpenShopGroup((current) =>
+                              current === group.title ? null : group.title,
+                            )
+                          }
+                          aria-expanded={activeGroup}
+                          className={rowClass(activeGroup)}
+                        >
+                          <span className="truncate">{group.title}</span>
+                          <span className="flex shrink-0 items-center gap-1">
                             {countOf(group.total)}
-                          </button>
-
-                          {expanded && (
-                            <div className="mb-1 ml-6 border-l border-charcoal/10 pl-2">
-                              {group.items.map((item) => (
-                                <button
-                                  key={item.value}
-                                  type="button"
-                                  onClick={() => select(item.value)}
-                                  aria-pressed={isActive(item.value)}
-                                  className={rowClass(isActive(item.value))}
-                                >
-                                  <span className="min-w-0 break-words leading-snug">
-                                    {item.label}
-                                  </span>
-                                  {countOf(item.count)}
-                                </button>
-                              ))}
-                            </div>
-                          )}
-                        </div>
+                            <span
+                              aria-hidden="true"
+                              className="text-[9px] text-charcoal-light/50"
+                            >
+                              ›
+                            </span>
+                          </span>
+                        </button>
                       )
                     })}
+                  </div>
+
+                  {/* 二级分类：没有选中一级时这里就是空白 */}
+                  <div className="min-h-[14rem] min-w-0 flex-1">
+                    {shopGroups
+                      .filter((group) => group.title === openShopGroup)
+                      .map((group) => (
+                        <div key={group.title}>
+                          <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-charcoal-light/60">
+                            {group.title}
+                          </div>
+                          <div className="mt-2 grid grid-cols-2 gap-x-8 gap-y-0.5 xl:grid-cols-3">
+                            {group.items.map((item) => (
+                              <button
+                                key={item.value}
+                                type="button"
+                                onClick={() => select(item.value)}
+                                aria-pressed={isActive(item.value)}
+                                className={rowClass(isActive(item.value))}
+                              >
+                                <span className="min-w-0 break-words leading-snug">
+                                  {item.label}
+                                </span>
+                                {countOf(item.count)}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                   </div>
                 </div>
               </div>

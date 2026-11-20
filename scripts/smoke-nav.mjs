@@ -21,27 +21,27 @@ await page.waitForTimeout(1200)
 const skip = page.locator('text=Skip')
 if (await skip.count()) {
   await skip.first().click()
-  await page.waitForTimeout(400)
+  await page.waitForTimeout(300)
 }
 
 const shop = page.getByRole('button', { name: 'Shop', exact: true }).first()
-console.log('shop count:', await shop.count())
-const box = await shop.boundingBox()
-console.log('shop box:', box && { x: Math.round(box.x), y: Math.round(box.y) })
 await shop.hover()
-await page.waitForTimeout(700)
+await page.waitForTimeout(600)
 
-const allRow = page.locator('button', { hasText: 'All products' }).first()
-console.log('All products visible:', await allRow.isVisible())
-await page.screenshot({ path: 'shots/nav-shop-collapsed.png' })
+/* 1. 默认：左侧一级、右侧留白 */
+await page.screenshot({ path: 'shots/nav-mega-empty.png' })
 
+/* 2. 悬停 Tops → 右侧出现二级 */
 const tops = page.locator('button[aria-expanded]').filter({ hasText: 'Tops' }).first()
-console.log('tops count:', await tops.count(), 'visible:', await tops.isVisible().catch(() => false))
-if (await tops.count()) {
-  await tops.click({ force: true })
-  await page.waitForTimeout(400)
-}
-await page.screenshot({ path: 'shots/nav-shop-expanded.png' })
+await tops.hover()
+await page.waitForTimeout(400)
+await page.screenshot({ path: 'shots/nav-mega-tops.png' })
+
+/* 3. 悬停 Accessories */
+const acc = page.locator('button[aria-expanded]').filter({ hasText: 'Accessories' }).first()
+await acc.hover()
+await page.waitForTimeout(400)
+await page.screenshot({ path: 'shots/nav-mega-acc.png' })
 
 console.log('errors:', errors.length ? errors.join('\n') : 'none')
 await browser.close()
