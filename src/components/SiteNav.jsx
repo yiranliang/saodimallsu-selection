@@ -3,6 +3,7 @@ import SearchBox from './SearchBox.jsx'
 import { Close, Search } from './icons.jsx'
 import { CAMPAIGN_TAB, DEALS_TAB, DEAL_BUCKETS, REGULAR_DEALS_LABEL } from '../utils/deal.js'
 import { FEATURED_VIEW, HOLIDAY_TAB_DEFAULT_LABEL, TAG_VIEW } from '../utils/navViews.js'
+import { groupShopCategories } from '../utils/shopGroups.js'
 
 /**
  * Site navigation
@@ -65,6 +66,8 @@ export default function SiteNav({
   const [openSub, setOpenSub] = useState(null) // 'deals' | 'campaign' | null
   const [drawer, setDrawer] = useState(false)
   const [mobileSearch, setMobileSearch] = useState(false)
+  /* Shop 的两级菜单：默认全部折叠，点大分类才展开它的下级。 */
+  const [openShopGroup, setOpenShopGroup] = useState(null)
   const menuRootRef = useRef(null)
 
   useEffect(() => {
@@ -136,6 +139,9 @@ export default function SiteNav({
       count: categoryCounts[category] || 0,
     })),
   ]
+
+  /* 两级菜单的数据：大分类 → 具体分类。默认全部折叠。 */
+  const shopGroups = groupShopCategories(categories, categoryCounts)
 
   /* 点 SALE 本身 = 进第一个**有商品**的专区。 */
   const firstSaleWithItems = [
@@ -309,22 +315,72 @@ export default function SiteNav({
             Shop
           </button>
 
-          {openMenu === 'shop' && (
-            <div className="absolute left-0 top-full z-40 w-[min(82rem,96vw)] pt-1">
-              <div className="rounded-xl bg-white p-3 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10">
-                <div className="grid grid-cols-3 gap-x-6 gap-y-2 p-2 xl:grid-cols-4 2xl:grid-cols-5">
-                  {shopItems.map((item) => (
+                    {openMenu === 'shop' && (
+            /* 整行下拉：fixed 到顶栏下面，横向铺满屏幕，内容按容器居中。
+             * 这样它读起来是"顶栏的延伸"，而不是挂在某个按钮上的小浮层。 */
+            <div className="fixed inset-x-0 z-40" style={{ top: 'var(--site-nav-h, 4rem)' }}>
+              <div className="border-b border-charcoal/10 bg-white shadow-xl shadow-charcoal/5">
+                <div className="mx-auto w-full max-w-[88rem] px-5 py-5 sm:px-8">
+                  <div className="grid items-start gap-x-10 gap-y-0.5 md:grid-cols-2 xl:grid-cols-3">
                     <button
-                      key={item.value}
                       type="button"
-                      onClick={() => select(item.value)}
-                      aria-pressed={isActive(item.value)}
-                      className={rowClass(isActive(item.value))}
+                      onClick={() => select('All')}
+                      className={rowClass(isActive('All'))}
                     >
-                      <span className="min-w-0 break-words leading-snug">{item.label}</span>
-                      {countOf(item.count)}
+                      <span>All products</span>
+                      {countOf(total)}
                     </button>
-                  ))}
+
+                    {shopGroups.map((group) => {
+                      const expanded = openShopGroup === group.title
+                      return (
+                        <div key={group.title}>
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setOpenShopGroup((current) =>
+                                current === group.title ? null : group.title,
+                              )
+                            }
+                            aria-expanded={expanded}
+                            className={rowClass(expanded)}
+                          >
+                            <span className="flex min-w-0 items-center gap-2">
+                              <span
+                                aria-hidden="true"
+                                className={`inline-block text-[9px] text-charcoal-light/70 transition-transform ${
+                                  expanded ? 'rotate-90' : ''
+                                }`}
+                              >
+                                {'▶'}
+                              </span>
+                              <span className="truncate">{group.title}</span>
+                            </span>
+                            {countOf(group.total)}
+                          </button>
+
+                          {expanded && (
+                            <div className="mb-1 ml-6 border-l border-charcoal/10 pl-2">
+                              {group.items.map((item) => (
+                                <button
+                                  key={item.value}
+                                  type="button"
+                                  onClick={() => select(item.value)}
+                                  aria-pressed={isActive(item.value)}
+                                  className={rowClass(isActive(item.value))}
+                                >
+                                  <span className="min-w-0 break-words leading-snug">
+                                    {item.label}
+                                  </span>
+                                  {countOf(item.count)}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )
+                    })}
+                  </div>
                 </div>
               </div>
             </div>
@@ -484,15 +540,60 @@ export default function SiteNav({
           </DrawerGroup>
 
           <DrawerGroup title="Shop">
-            {shopItems.map((item) => (
-              <DrawerItem
-                key={item.value}
-                label={item.label}
-                count={item.count}
-                active={isActive(item.value)}
-                onClick={() => select(item.value)}
-              />
-            ))}
+            <DrawerItem
+              label="All products"
+              count={total}
+              active={isActive('All')}
+              onClick={() => select('All')}
+            />
+            {shopGroups.map((group) => {
+              const expanded = openShopGroup === group.title
+              return (
+                <div key={group.title}>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setOpenShopGroup((current) =>
+                        current === group.title ? null : group.title,
+                      )
+                    }
+                    aria-expanded={expanded}
+                    className={`flex w-full items-center justify-between gap-2 border-b border-charcoal/[0.05] py-2.5 text-left text-[13px] transition ${
+                      expanded ? 'font-medium text-charcoal' : 'text-charcoal/75'
+                    }`}
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className={`inline-block text-[9px] text-charcoal-light/70 transition-transform ${
+                          expanded ? 'rotate-90' : ''
+                        }`}
+                      >
+                        {'▶'}
+                      </span>
+                      <span className="truncate">{group.title}</span>
+                    </span>
+                    <span className="text-[10.5px] tabular-nums text-charcoal-light/60">
+                      {group.total}
+                    </span>
+                  </button>
+
+                  {expanded && (
+                    <div className="ml-4 border-l border-charcoal/10 pl-3">
+                      {group.items.map((item) => (
+                        <DrawerItem
+                          key={item.value}
+                          label={item.label}
+                          count={item.count}
+                          active={isActive(item.value)}
+                          onClick={() => select(item.value)}
+                        />
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
           </DrawerGroup>
 
           <DrawerGroup title="Curated">
