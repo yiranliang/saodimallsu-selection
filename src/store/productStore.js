@@ -1149,6 +1149,106 @@ export async function clearProductsDeals(ids) {
  * @param {'replace'|'fill'} [mode]
  * @returns {Promise<number>} 实际被改动的商品数
  */
+/**
+ * 额外分类归属（21-product-categories.sql）。
+ *
+ * `products.category` 是主分类，这里只维护"另外还属于哪些分类"的行。
+ * 传空数组 = 清空额外归属。表不存在时抛错，由调用方 toast 提示跑迁移。
+ *
+ * @param {string} id 商品 id
+ * @param {string[]} categories 额外分类（不含主分类）
+ */
+export async function setProductExtraCategories(id, categories) {
+  const productId = String(id ?? '')
+  if (!productId) return
+
+  const list = [...new Set((Array.isArray(categories) ? categories : [])
+    .map((name) => String(name ?? '').trim())
+    .filter(Boolean))]
+
+  const client = requireClient()
+  const { error: deleteError } = await client
+    .from('product_categories')
+    .delete()
+    .eq('product_id', productId)
+  if (deleteError) throw new Error(deleteError.message)
+
+  if (list.length) {
+    const { error } = await client
+      .from('product_categories')
+      .insert(list.map((category) => ({ product_id: productId, category })))
+    if (error) throw new Error(error.message)
+  }
+
+  /* 缓存：把主分类留下，额外分类换成新的。 */
+  cache = cache.map((product) => {
+    if (String(product.id) !== productId) return product
+    const primary = String(product.category || '').trim()
+    const all = [...new Set([primary, ...list].filter(Boolean))]
+    if (all.length > 1) return { ...product, categories: all }
+    const { categories: _dropped, ...rest } = product
+    return rest
+  })
+  notify()
+}
+
+/**
+ * 批量追加 / 移除额外分类。不动主分类，只改成员表。
+ *
+ * @param {string[]} ids
+ * @param {string} category
+ * @param {'add'|'remove'} action
+ */
+export async function setProductsExtraCategory(ids, category, action = 'add') {
+  const list = (Array.isArray(ids) ? ids : [ids]).filter(Boolean)
+  const name = String(category ?? '').trim()
+  if (!list.length || !name) return 0
+
+  const client = requireClient()
+
+  if (action === 'remove') {
+    const { error } = await client
+      .from('product_categories')
+      .delete()
+      .in('product_id', list)
+      .eq('category', name)
+    if (error) throw new Error(error.message)
+
+    const target = new Set(list)
+    cache = cache.map((product) => {
+      if (!target.has(String(product.id))) return product
+      const all = (product.categories || []).filter((item) => item !== name)
+      const primary = String(product.category || '').trim()
+      const kept = all.filter((item) => item && item !== primary)
+      if (kept.length) return { ...product, categories: [primary, ...kept] }
+      const { categories: _dropped, ...rest } = product
+      return rest
+    })
+    notify()
+    return list.length
+  }
+
+  const { error } = await client
+    .from('product_categories')
+    .insert(list.map((id) => ({ product_id: String(id), category: name })))
+  if (error) {
+    /* 主键冲突 = 已经有了，视作成功 */
+    if (!/duplicate key|unique constraint/i.test(error.message)) {
+      throw new Error(error.message)
+    }
+  }
+
+  const target = new Set(list)
+  cache = cache.map((product) => {
+    if (!target.has(String(product.id))) return product
+    const primary = String(product.category || '').trim()
+    const all = [...new Set([primary, ...(product.categories || []), name].filter(Boolean))]
+    return { ...product, categories: all }
+  })
+  notify()
+  return list.length
+}
+
 export async function setProductsCategoryByIds(ids, category, mode = 'replace') {
   const list = (Array.isArray(ids) ? ids : [ids]).filter(Boolean)
   const name = String(category ?? '').trim()

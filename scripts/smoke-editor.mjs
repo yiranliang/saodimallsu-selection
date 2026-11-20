@@ -7,25 +7,20 @@ const errors = []
 const browser = await chromium.launch({ executablePath: EDGE, headless: true })
 const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
 
+page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
 page.on('console', (m) => {
-  const t = m.text()
-  if (m.type() === 'error' && !/favicon|Supabase|Failed to load resource/i.test(t)) {
-    errors.push(`console: ${t}`)
+  const text = m.text()
+  if (m.type() === 'error' && !/favicon|Failed to load resource|Supabase/i.test(text)) {
+    errors.push(`console: ${text}`)
   }
 })
-page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
 
 await page.goto(URL, { waitUntil: 'networkidle' })
 await page.waitForTimeout(1500)
 
-/* 关键：编辑器内容是否真的渲染出来（而不是崩在 render 里） */
-const titleVisible = await page.locator('text=编辑商品').count()
-console.log('editor title count:', titleVisible)
-
-const preview = await page.locator('[data-card-preview]').count()
-console.log('card preview block:', preview)
-
-await page.screenshot({ path: 'shots/editor.png' })
+console.log('editor title:', await page.locator('text=编辑商品').count())
+console.log('同时归入 block:', await page.locator('text=同时归入').count())
+await page.screenshot({ path: 'shots/editor-multicat.png' })
 
 console.log('errors:', errors.length ? errors.join('\n') : 'none')
 await browser.close()

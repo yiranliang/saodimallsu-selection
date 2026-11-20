@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef } from 'react'
 import Modal from '../Modal.jsx'
 import ProductImage from '../ProductImage.jsx'
 import { Close, Plus, Trash, Check, ChevronDown, ChevronUp, Image as ImageIcon, AlertCircle, ExternalLink, ArrowToTop } from '../icons.jsx'
-import { UNCATEGORISED, getBadgeColumnStatus, getTeaserColumnStatus, getDealColumnStatus, getAccColumnStatus, getPriorityColumnStatus, getHolidayColumnStatus } from '../../store/productStore.js'
+import {UNCATEGORISED, getBadgeColumnStatus, getTeaserColumnStatus, getDealColumnStatus, getAccColumnStatus, getPriorityColumnStatus, getHolidayColumnStatus, setProductExtraCategories } from '../../store/productStore.js'
 import { isProductPartial } from '../../store/productStore.js'
 import { useCategories } from '../../hooks/useCategories.js'
 import { useAsins } from '../../hooks/useAsins.js'
@@ -730,6 +730,10 @@ export default function ProductEditor({
       })
     } catch (err) {
       showToast?.(err.message || String(err), 'error', 6000)
+      /* 额外分类单独一张表：主分类已经随商品写完了，这里只补成员行。 */
+      if (product?.id) {
+        await setProductExtraCategories(product.id, draft.extraCategories || [])
+      }
     } finally {
       setSaving(false)
     }
@@ -1093,6 +1097,60 @@ export default function ProductEditor({
                 placeholder="Wool-Blend Wide-Leg Trousers"
                 className="input-field text-[13px]"
               />
+            </Field>
+
+            {/* 多分类：主分类在上面（Category），这里只放"另外还属于哪些"。 */}
+            <Field label="同时归入" hint="可选，商品会同时出现在这些分类里">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(draft.extraCategories || []).map((name) => (
+                  <span
+                    key={name}
+                    className="inline-flex items-center gap-1 rounded-full bg-cream-dark px-2.5 py-1 text-[11.5px] text-charcoal"
+                  >
+                    {name}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        patch(
+                          'extraCategories',
+                          (draft.extraCategories || []).filter((item) => item !== name),
+                        )
+                      }
+                      aria-label={`移除 ${name}`}
+                      className="text-charcoal-light transition hover:text-charcoal"
+                    >
+                      <Close className="h-2.5 w-2.5" />
+                    </button>
+                  </span>
+                ))}
+
+                <select
+                  value=""
+                  onChange={(event) => {
+                    const next = event.target.value
+                    if (!next) return
+                    patch(
+                      'extraCategories',
+                      [...new Set([...(draft.extraCategories || []), next])],
+                    )
+                  }}
+                  aria-label="添加额外分类"
+                  className="rounded-full bg-white px-2 py-1 text-[11.5px] text-charcoal ring-1 ring-charcoal/10 focus:outline-none focus:ring-charcoal/30"
+                >
+                  <option value="">+ 添加分类…</option>
+                  {knownCategories
+                    .filter(
+                      (name) =>
+                        name !== (draft.category || '').trim() &&
+                        !(draft.extraCategories || []).includes(name),
+                    )
+                    .map((name) => (
+                      <option key={name} value={name}>
+                        {name}
+                      </option>
+                    ))}
+                </select>
+              </div>
             </Field>
 
             {/* Category and Badge each get the full column. They used to sit
@@ -1951,6 +2009,10 @@ function toDraft(product) {
     sku: product?.sku || '',
     name: product?.name || '',
     category: product?.category || UNCATEGORISED,
+    /* 额外分类归属（主分类之外）。存库在 product_categories 表。 */
+    extraCategories: (Array.isArray(product?.categories) ? product.categories : []).filter(
+      (name) => name && name !== (product?.category || UNCATEGORISED),
+    ),
     tag: product?.tag || '',
     badgeColor: product?.badgeColor || '',
     /* 大促标签：只决定商品进哪个大促专区 Tab，不上卡片（见 trustBadgesFor）。 */

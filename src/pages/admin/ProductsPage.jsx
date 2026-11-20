@@ -40,7 +40,7 @@ import {createProduct,
   getDealColumnStatus,
   getCampaignColumnStatus,
   getPriorityColumnStatus,
-  UNCATEGORISED, setProductsHoliday } from '../../store/productStore.js'
+  UNCATEGORISED, setProductsHoliday, setProductsExtraCategory } from '../../store/productStore.js'
 import { deleteDealSlotsBySku } from '../../store/dealStore.js'
 import {useCategories, useCategoryGroups } from '../../hooks/useCategories.js'
 import {addCategory, renameCategory, removeCategory, moveCategory, setCategoryGroup } from '../../utils/categoryStore.js'
@@ -819,11 +819,12 @@ export default function ProductsPage() {
        * 顺序反了就是一次 constraint violation。 */
       if (isNew) await addCategory(name)
 
-      const count = await setProductsCategoryByIds(
-        selectedProducts.map((product) => product.id),
-        name,
-        mode,
-      )
+      /* 追加 / 移除只动成员表，主分类不动，所以走另一个写入函数。 */
+      const ids = selectedProducts.map((product) => product.id)
+      const count =
+        mode === 'add' || mode === 'remove'
+          ? await setProductsExtraCategory(ids, name, mode)
+          : await setProductsCategoryByIds(ids, name, mode)
       setBatchCategoryOpen(false)
       clearSelection()
       showToast?.(

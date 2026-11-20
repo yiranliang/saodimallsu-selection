@@ -166,6 +166,16 @@ export const CATEGORY_MODES = [
     label: 'Only fill uncategorised',
     hint: 'Products that already have a category keep it.',
   },
+  {
+    id: 'add',
+    label: 'Add as an extra category',
+    hint: 'Keeps the main category and also lists them under this one.',
+  },
+  {
+    id: 'remove',
+    label: 'Remove this extra category',
+    hint: 'Only removes the extra membership; the main category stays.',
+  },
 ]
 
 /** Rows that the `fill` mode would actually move. Pure so the dialog can show
