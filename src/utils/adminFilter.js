@@ -140,7 +140,10 @@ function isHolidayTagged(product) {
 /** One product against one category name. A blank filter matches everything. */
 export function matchesCategory(product, category) {
   if (!category || category === ALL_CATEGORIES) return true
-  return String(product?.category || '') === String(category)
+  const target = String(category)
+  if (String(product?.category || '') === target) return true
+  /* 多分类归属（21-product-categories.sql）：额外分类也算命中。 */
+  return Array.isArray(product?.categories) && product.categories.includes(target)
 }
 
 /**

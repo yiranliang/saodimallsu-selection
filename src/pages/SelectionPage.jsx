@@ -317,8 +317,12 @@ export default function SelectionPage() {
   const categoryCounts = useMemo(() => {
     const counts = {}
     catalogue.forEach((p) => {
-      const key = p.category || UNCATEGORISED
-      counts[key] = (counts[key] || 0) + 1
+      /* 多分类：一件商品在每个归属分类里各算一次（用 Set 防止同一分类重复）。 */
+      const names =
+        Array.isArray(p.categories) && p.categories.length
+          ? p.categories
+          : [p.category || UNCATEGORISED]
+      for (const name of new Set(names)) counts[name] = (counts[name] || 0) + 1
     })
     return counts
   }, [catalogue])

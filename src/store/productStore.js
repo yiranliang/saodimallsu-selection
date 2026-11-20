@@ -380,6 +380,30 @@ function warnAbsent(absent) {
  * Returns the rows plus the column list that produced them, so the caller knows
  * whether `badge_color` can be written.
  */
+/**
+ * 额外分类归属（21-product-categories.sql）。
+ *
+ * 一次小查询：`product_id, category`。表还没建时静默返回空 Map —— 菜单和筛选
+ * 会自动退回"只看主分类"，行为与迁移前一致。
+ */
+async function loadCategoryMembers() {
+  try {
+    const { data, error } = await requireClient().from('product_categories').select('product_id, category')
+    if (error) return new Map()
+    const map = new Map()
+    for (const row of data || []) {
+      const id = String(row.product_id ?? '')
+      const category = String(row.category ?? '').trim()
+      if (!id || !category) continue
+      if (!map.has(id)) map.set(id, [])
+      map.get(id).push(category)
+    }
+    return map
+  } catch {
+    return new Map()
+  }
+}
+
 async function fetchCatalogueRows({ light = false } = {}) {
   /* One probe first: on a fully migrated database this is the only extra
    * request, and on a stale one it replaces up to six failures with one
@@ -534,7 +558,17 @@ export async function loadProducts({ silent = false, light } = {}) {
       photoCountAvailable = columns.includes(PHOTO_COUNT_COLUMN)
       photoCountStatus = photoCountAvailable ? 'ok' : 'missing'
 
-      cache = rows.map(rowToProduct)
+      /* 多分类归属：主分类永远在里面，额外分类按成员表补齐。 */
+      const members = await loadCategoryMembers()
+      cache = rows.map((row) => {
+        const product = rowToProduct(row)
+        const extra = members.get(String(row.id)) || []
+        const all = [product.category, ...extra]
+          .map((name) => String(name ?? '').trim())
+          .filter(Boolean)
+        const unique = [...new Set(all)]
+        return unique.length > 1 ? { ...product, categories: unique } : product
+      })
       orderById.clear()
       for (const row of rows) orderById.set(row.id, row.sort_order ?? 0)
 

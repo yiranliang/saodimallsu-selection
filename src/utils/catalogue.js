@@ -63,7 +63,14 @@ export function filterCatalogue(products, { category = 'All', query = '', uncate
   if (category === 'All' && !needle) return list.slice()
 
   return list.filter((product) => {
-    if (category !== 'All' && (product.category || uncategorised) !== category) return false
+    /* 多分类归属：`categories` 里任一项命中就算（没有这一列时退回主分类）。 */
+    if (category !== 'All') {
+      const names =
+        Array.isArray(product.categories) && product.categories.length
+          ? product.categories
+          : [product.category || uncategorised]
+      if (!names.includes(category)) return false
+    }
     return matchesQuery(product, needle)
   })
 }

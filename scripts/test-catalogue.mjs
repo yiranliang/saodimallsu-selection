@@ -550,6 +550,18 @@ check('a DELETE removes the row', idsOf(), ['p003', 'p004', 'p001'])
 check('a payload with no id is refused', applyProductEvent({ eventType: 'UPDATE', new: {} }), false)
 check('an empty payload is refused', applyProductEvent({}), false)
 
+/* ── 多分类：一件商品挂多个分类 ── */
+console.log('\n[多分类] 一件商品挂多个分类')
+const multi = [
+  { id: 'm1', name: 'Set A', category: 'Sets & Dresses', categories: ['Sets & Dresses', 'Dresses'] },
+  { id: 'm2', name: 'Set B', category: 'Sets & Dresses' },
+]
+check('主分类命中',
+  filterCatalogue(multi, { category: 'Sets & Dresses' }).map((p) => p.id),
+  ['m1', 'm2'])
+check('额外分类命中', filterCatalogue(multi, { category: 'Dresses' }).map((p) => p.id), ['m1'])
+check('都不命中的分类为空', filterCatalogue(multi, { category: 'Shoes' }).length, 0)
+
 /* ── summary ── */
 console.log(`\n${'─'.repeat(44)}`)
 console.log(`Passed ${passed}${failed ? `, failed ${failed}` : ''}`)
