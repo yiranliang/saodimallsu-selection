@@ -123,7 +123,7 @@ import { MAX_QTY, clampQty, sanitizeSpecs, isComplete } from './lines.js'
  *
  * 当前品牌 B（Saodimallsu）→ `sdm`。
  */
-export const CODE_PREFIX = 'sdm'
+export const CODE_PREFIX = 'zby'
 
 /**
  * 历史前缀 —— 已经发出去的码必须继续能用
@@ -133,7 +133,7 @@ export const CODE_PREFIX = 'sdm'
  * 接受这里列出的前缀。**编码只用 `CODE_PREFIX`** —— 老前缀只进不出，
  * 否则新码会同时有两副面孔，运营没法一眼看出是哪一批。
  */
-export const LEGACY_CODE_PREFIXES = ['zby']
+export const LEGACY_CODE_PREFIXES = ['sdm', 'aoysky']
 
 /** 本系统接受（解码时）的全部前缀：当前品牌在前，历史在后。 */
 export const ACCEPTED_CODE_PREFIXES = [CODE_PREFIX, ...LEGACY_CODE_PREFIXES]
@@ -372,24 +372,18 @@ export function generateCodeFromLines(ref, lines = []) {
    *   后 4 位 选项指纹 —— 由商品当前的尺码/颜色表算出（防"规格表被改过"）
    * 两者职责不同，缺一个都会出事：只有校验和，运营重排尺码表时旧码会静默
    * 解成另一个尺码；只有指纹，删掉一个商品就没法验证、手改也拦不住。 */
-  const segments = [
-    VERSION_COMPACT,
-    refSlug,
-    idSegment,
-    b62(radix),
-    specSegment,
-    qtySegment,
-    tsSegment,
-  ]
+  /* 新格式（5 段）：ids . radix_specs . qty . ts . fp
+   * 版本号和红人代号都不再写进码里 —— 只剩一套逻辑，它们没有信息量。 */
+  const segments = [idSegment, `${b62(radix)}_${specSegment}`, qtySegment, tsSegment]
   const bodyText = segments.join('.')
   const fpSegment = `${checksumOf(bodyText)}${fingerprintOf(sequence)}`
 
   return {
-    /* 前缀恒为 CODE_PREFIX：发出的码永远带**当前**品牌名。 */
     code: `${CODE_PREFIX}-${[...segments, fpSegment].join('.')}`,
     payload: {
       version: Number(VERSION_COMPACT),
-      ref: refSlug,
+      /* 纯匿名选款：码里不再有红人代号，这里恒为空串。 */
+      ref: '',
       items: sequence.map((line) => ({
         id: line.id,
         name: line.product?.name || line.id,
@@ -700,6 +694,12 @@ export function decodeCode(code) {
   }
 
   const parts = raw.split('.')
+
+  /* ── 新旧格式切分 ──
+   * 老码第一段是版本号（1–7 的单个数字）；新码没有版本号，第一段是商品 ID 段，
+   * 一定以 r / i 等模式字母开头且长度 ≥ 2，所以这条判据没有歧义。 */
+  if (!/^[1-7]$/.test(parts[0])) return decodeShort(parts)
+
   const version = parts[0]
 
   if (version === VERSION_COMPACT) return decodeCompact(parts)
@@ -823,7 +823,35 @@ function specsFromDigit(product, digit) {
   return specs
 }
 
-function decodeCompact(parts) {
+/**
+ * 新格式（无版本号、无红人代号）：ids . radix_specs . qty . ts . fp
+ *
+ * 做法是把 `radix_specs` 拆开、拼回 decodeCompact 认识的 8 段形状，然后复用它
+ * 的全部解析与校验逻辑 —— 两套格式只有"头部"和"radix 放哪"不同，行级解析、
+ * 校验和、选项指纹都必须一模一样，分成两份实现迟早会漂移。
+ *
+ * 注意校验和的范围：新码只对 4 段算，所以要把明文串显式传进去。
+ */
+function decodeShort(parts) {
+  const fail = (error) => ({ ok: false, error })
+  if (parts.length !== 5) return fail('Malformed code')
+
+  const ids = parts[0]
+  const radixSpec = parts[1]
+  const cut = radixSpec.indexOf('_')
+  if (cut <= 0) return fail('Malformed code')
+  const radix = radixSpec.slice(0, cut)
+  const spec = radixSpec.slice(cut + 1) || '_'
+
+  const canonical = ['7', '', ids, radix, spec, parts[2], parts[3], parts[4]]
+  const result = decodeCompact(canonical, {
+    checksumBody: [ids, radixSpec, parts[2], parts[3]].join('.'),
+  })
+  /* 新码是纯匿名选款：结果里不该冒出一个"guest"当红人代号。 */
+  return result.ok ? { ...result, ref: '' } : result
+}
+
+function decodeCompact(parts, { checksumBody } = {}) {
   const fail = (error) => ({ ok: false, error })
   if (parts.length !== 8) return fail('Malformed v7 code')
   /* fp 段两种长度都合法：
@@ -943,7 +971,7 @@ function decodeCompact(parts) {
    * 线上那个"随手补一个字母就能解出商品"的 bug，根因就是把"无法验证"当成了
    * "没问题"。 */
   const fp = parts[7]
-  const bodyText = parts.slice(0, 7).join('.')
+  const bodyText = checksumBody ?? parts.slice(0, 7).join('.')
   const fpComparable = missing.length === 0
   const optionFp = fpComparable
     ? fingerprintOf(

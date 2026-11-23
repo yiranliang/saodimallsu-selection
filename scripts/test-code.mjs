@@ -67,7 +67,7 @@ console.log(`  code: ${code}  (${code.length} chars)`)
 check('ok flag', decoded.ok, true)
 check('version', decoded.version, 7)
 check('not legacy', decoded.legacy, false)
-check('creator', decoded.ref, 'luna')
+check('匿名码没有 creator', decoded.ref, '')
 check('style count', decoded.totalStyles, 3)
 check('unit count', decoded.totalUnits, 6)
 check('ids in order', decoded.items.map((i) => i.id), [A.id, B.id, C.id])
@@ -122,11 +122,11 @@ console.log('\n[5b] Code prefix — brand boundary')
 const prefixSample = generateCode('luna', { [A.id]: 1 }, { [A.id]: { Colour: 'Black', Size: 'M' } }).code
 const prefixBody = prefixSample.slice(CODE_PREFIX.length + 1)
 
-check('CODE_PREFIX is the current brand', CODE_PREFIX, 'sdm')
-check('the emitted prefix is configurable, not hardcoded', LEGACY_CODE_PREFIXES.includes('zby'), true)
-check('accepted prefixes = current + legacy', ACCEPTED_CODE_PREFIXES, ['sdm', 'zby'])
+check('CODE_PREFIX is the current brand', CODE_PREFIX, 'zby')
+check('历史前缀仍然可解', LEGACY_CODE_PREFIXES.includes('sdm'), true)
+check('accepted prefixes = current + legacy', ACCEPTED_CODE_PREFIXES, ['zby', 'sdm', 'aoysky'])
 check(`code starts with ${CODE_PREFIX}-`, prefixSample.startsWith(`${CODE_PREFIX}-`), true)
-check('body is plain text, not base64', prefixBody.startsWith('7.'), true)
+check('body is plain text, not base64', prefixBody.includes('.') && prefixBody.split('.').length === 5, true)
 check('no base64 padding, plus or slash', /[+/=]/.test(prefixSample), false)
 
 /* 新码走当前品牌 */
@@ -139,7 +139,7 @@ check('legacy prefix is still accepted', decodeCode(`zby-${prefixBody}`).ok, tru
 check('and resolves to the same order', decodeCode(`zby-${prefixBody}`).items.map((i) => i.id), [A.id])
 check('legacy prefix case-insensitive too', decodeCode(`ZBY-${prefixBody}`).ok, true)
 /* 一个新品牌上线只影响编码，不该让已发出的码沉掉 */
-check('but the new brand is what gets emitted', generateCode('luna', { [A.id]: 1 }, {}).code.startsWith('sdm-'), true)
+check('but the new brand is what gets emitted', generateCode('luna', { [A.id]: 1 }, {}).code.startsWith('zby-'), true)
 
 /* 别的品牌必须被拦 */
 console.log('\n[5d] A foreign brand is rejected, not decoded')
@@ -151,8 +151,8 @@ check('ancient MAKO- stays rejected', decodeCode(`MAKO-${prefixBody}`).ok, false
 check('rejected as foreign too', decodeCode(`MAKO-${prefixBody}`).error, 'Invalid brand prefix')
 /* 没有前缀 → 提示正确格式，而不是"品牌不对" */
 check('no prefix at all → not ok', decodeCode('hello').ok, false)
-check('and it names the prefix we do want', decodeCode('hello').error, 'Code must start with "sdm-"')
-check('numbers are not treated as a brand', decodeCode('12345-7.x').error, 'Code must start with "sdm-"')
+check('and it names the prefix we do want', decodeCode('hello').error, 'Code must start with "zby-"')
+check('numbers are not treated as a brand', decodeCode('12345-7.x').error, 'Code must start with "zby-"')
 
 /* ── 6. v1 codes still decode, flagged as legacy ── */
 console.log('\n[6] v1 compatibility (no quantity segment)')
@@ -329,7 +329,7 @@ check('v7 decodes to the same names', decodeCode(compactCode).items.map((i) => i
 console.log('\n[14] Handle sanitising')
 setProducts(original)
 const dirty = decodeCode(generateCode('Lu Na-测试!!', { [A.id]: 1 }, {}).code)
-check('stripped and lowercased', dirty.ref, 'luna')
+check('匿名码 ref 恒为空', dirty.ref, '')
 
 /* ── 15. multi-variant: the same product on two lines ── */
 console.log('\n[15] Multi-variant selection')
@@ -632,7 +632,7 @@ const scatteredCode = generateCodeFromLines(
   'luna',
   scattered.map((p) => ({ productId: p.id, qty: 1, specs: { Colour: 'Black', Size: 'S' } })),
 )
-check('scattered picks are a bitmap', scatteredCode.code.split('.')[2].startsWith('b'), true)
+check('scattered picks are a bitmap', scatteredCode.code.split('-')[1].split('.')[0].startsWith('b'), true)
 check(
   'scattered picks decode to the same ids',
   decodeCode(scatteredCode.code).items.map((i) => i.id),
@@ -643,7 +643,7 @@ const runCode = generateCodeFromLines(
   'luna',
   wideCatalogue.slice(0, 5).map((p) => ({ productId: p.id, qty: 1, specs: { Colour: 'Black', Size: 'S' } })),
 )
-check('a run of five ids is a range', runCode.code.split('.')[2].startsWith('r'), true)
+check('a run of five ids is a range', runCode.code.split('-')[1].split('.')[0].startsWith('r'), true)
 check('the range decodes back', decodeCode(runCode.code).items.map((i) => i.id), wideCatalogue.slice(0, 5).map((p) => p.id))
 
 /* Repeats keep their exact order, so they use the explicit sequence mode. */
@@ -651,7 +651,7 @@ const repeatCode = generateCodeFromLines('luna', [
   { productId: 'p001', qty: 2, specs: { Colour: 'Black', Size: 'M' } },
   { productId: 'p001', qty: 1, specs: { Colour: 'White', Size: 'L' } },
 ])
-check('a repeated id uses the sequence mode', repeatCode.code.split('.')[2].startsWith('s'), true)
+check('a repeated id uses the sequence mode', repeatCode.code.split('-')[1].split('.')[0].startsWith('s'), true)
 check(
   'the two variants keep their order',
   decodeCode(repeatCode.code).items.map((i) => i.specText),
@@ -743,7 +743,7 @@ check('and no items come back either', chopped.items, undefined)
 
 /* 改中间一段（时间戳），校验和同样对不上。 */
 const parts = strictBase.slice(`${CODE_PREFIX}-`.length).split('.')
-const swapped = parts.map((part, index) => (index === 6 ? `${part}x` : part))
+const swapped = parts.map((part, index) => (index === 3 ? `${part}x` : part))
 const tampered = `${CODE_PREFIX}-${swapped.join('.')}`
 check('a changed segment is rejected', decodeCode(tampered).ok, false)
 
@@ -790,6 +790,41 @@ check('a Chinese comma in the qty segment', decodeCode(commaCode.replace(/,/g, '
 
 /* 清洗不是修复：少一位的码洗完还是少一位。 */
 check('cleaning does not repair a truncated code', decodeCode(`${dotted.slice(0, -1)}`).ok, false)
+
+/* ── 19. 新格式（无版本号、无红人代号、5 段） ── */
+console.log('\n[19] 新格式 zby- 5 段')
+const shortCode = generateCodeFromLines('luna', [
+  { productId: 'p001', qty: 1, specs: { Colour: 'Black', Size: 'M' } },
+  { productId: 'p003', qty: 2, specs: { Colour: 'Black', Size: 'M' } },
+]).code
+
+check('前缀 zby-', shortCode.startsWith('zby-'), true)
+check('正好 5 段', shortCode.split('-')[1].split('.').length, 5)
+check('不含版本号', /^zby-\d\./.test(shortCode), false)
+check('不含 guest', shortCode.includes('guest'), false)
+check('新码可解', decodeCode(shortCode).ok, true)
+check('解码后 ref 为空（纯匿名）', decodeCode(shortCode).ref, '')
+check(
+  '新码数量正确',
+  decodeCode(shortCode).items.map((item) => item.qty),
+  [1, 2],
+)
+
+/* 老码必须仍然可解：7 段的版本号判据把两种格式分开 */
+const legacyV7 = 'sdm-7.guest.s31Q,1Q,2L,2L,2L,2X,2X,2X,3K,3K,3K,43,43,6E,6E.n.JB3gQWTdrmNB02._.1xTsQ3.eqOCgLHw'
+check('老 sdm-7 码仍可解', decodeCode(legacyV7).ok, true)
+check('老码行数不变', decodeCode(legacyV7).items.length, 15)
+check(
+  'zby- 前缀下的老码（带 7.）也走长格式',
+  decodeCode(legacyV7.replace('sdm-', 'zby-')).ok,
+  true,
+)
+check(
+  'zby- 前缀下的老码行数一致',
+  decodeCode(legacyV7.replace('sdm-', 'zby-')).items.length,
+  15,
+)
+check('aoysky- 前缀同样接受', decodeCode(legacyV7.replace('sdm-', 'aoysky-')).ok, true)
 
 /* summary */
 console.log(`\n${'─'.repeat(44)}`)
