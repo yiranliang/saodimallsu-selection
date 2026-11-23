@@ -238,6 +238,8 @@ export default function ProductsPage() {
 
   /* ── 前台秒杀专区的展示名 ── */
   const settings = useSettings()
+  /* 分类的一级分组（20-category-group.sql）：设置弹窗里逐行可改。 */
+  const categoryGroupMap = useCategoryGroups()
   const [tabLabelDraft, setTabLabelDraft] = useState(settings.dealsTabLabel)
   const [tabLabelSaving, setTabLabelSaving] = useState(false)
   /* 节日专区名（季节性的，换季就改） */
@@ -912,6 +914,20 @@ export default function ProductsPage() {
   }
 
   /* ── categories ── */
+
+  /* 改一个分类的一级分组（20-category-group.sql）。写库成功后 store 会通知，
+   * 前台菜单和设置弹窗都跟着更新。 */
+  const handleSetCategoryGroup = async (name, group) => {
+    try {
+      await setCategoryGroup(name, group)
+      showToast?.(
+        group ? `「${name}」已归入 ${group}` : `「${name}」已设为未分组`,
+        'success',
+      )
+    } catch (err) {
+      showToast?.(err.message, 'error')
+    }
+  }
 
   const handleAddCategory = async (value) => {
     const name = String(value ?? newCategory).trim()
