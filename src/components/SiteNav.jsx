@@ -203,10 +203,10 @@ export default function SiteNav({
   /* Shop 面板的行：hover / 选中都是**文字下划线**，不铺背景 —— 一整列灰底
    * 看起来像按钮，和 SHOP 这种"目录"语义不符。 */
   const shopRowClass = (on) =>
-    `flex w-full items-center justify-between gap-2 rounded-md px-1 py-2 text-left text-[13px] leading-snug transition ${
+    `flex w-full items-center justify-between gap-2 border-b px-1 py-2 text-left text-[13px] leading-snug transition ${
       on
-        ? 'font-medium text-charcoal underline decoration-1 underline-offset-[6px]'
-        : 'text-charcoal/75 hover:text-charcoal hover:underline hover:decoration-1 hover:underline-offset-[6px]'
+        ? 'border-charcoal/35 font-medium text-charcoal'
+        : 'border-transparent text-charcoal/75 hover:border-charcoal/35 hover:text-charcoal'
     }`
 
   const countOf = (n) => (
