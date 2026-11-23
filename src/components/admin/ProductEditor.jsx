@@ -730,16 +730,19 @@ export default function ProductEditor({
        * this. Empty when no option was renamed. */
       asinRenames: sku && asinsReady && renameNotes.length ? renameNotes : undefined,
       })
-    } catch (err) {
-      showToast?.(err.message || String(err), 'error', 6000)
-      /* 额外分类单独一张表：主分类已经随商品写完了，这里只补成员行。
-       * 主分类本身不放进"额外"里 —— 换了主分类、旧分类还留在芯片里时，
+
+      /* 额外分类单独一张表：主分类已经随商品写完了，这里补成员行。
+       * 必须在 onSave 成功之后 —— 之前误放在 catch 里，等于"只有保存失败才写"，
+       * 于是保存成功反而把额外分类丢了。
+       * 主分类本身不放进"额外"里：换了主分类、旧分类还留在芯片里时，
        * 会出现同一件商品在两个地方写着同一行。 */
       if (product?.id) {
         const primary = (draft.category || '').trim()
         const extras = (draft.extraCategories || []).filter((name) => name !== primary)
         await setProductExtraCategories(product.id, extras)
       }
+    } catch (err) {
+      showToast?.(err.message || String(err), 'error', 6000)
     } finally {
       setSaving(false)
     }
