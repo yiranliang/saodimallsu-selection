@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, useRef } from 'react'
 import Modal from '../Modal.jsx'
+import InlineSelect from './InlineSelect.jsx'
 import ProductImage from '../ProductImage.jsx'
 import { Close, Plus, Trash, Check, ChevronDown, ChevronUp, Image as ImageIcon, AlertCircle, ExternalLink, ArrowToTop } from '../icons.jsx'
 import {UNCATEGORISED, getBadgeColumnStatus, getTeaserColumnStatus, getDealColumnStatus, getAccColumnStatus, getPriorityColumnStatus, getHolidayColumnStatus, setProductExtraCategories } from '../../store/productStore.js'
@@ -1105,7 +1106,7 @@ export default function ProductEditor({
                 {(draft.extraCategories || []).map((name) => (
                   <span
                     key={name}
-                    className="inline-flex items-center gap-1 rounded-full bg-cream-dark px-2.5 py-1 text-[11.5px] text-charcoal"
+                    className="inline-flex items-center gap-1 rounded-full bg-cream-dark px-2.5 py-1 text-[11.5px] text-charcoal ring-1 ring-charcoal/[0.06]"
                   >
                     {name}
                     <button
@@ -1124,32 +1125,27 @@ export default function ProductEditor({
                   </span>
                 ))}
 
-                <select
+                <InlineSelect
                   value=""
-                  onChange={(event) => {
-                    const next = event.target.value
+                  placeholder="+ 添加分类"
+                  ariaLabel="添加额外分类"
+                  width="w-[7.5rem]"
+                  align="left"
+                  onChange={(next) => {
                     if (!next) return
                     patch(
                       'extraCategories',
                       [...new Set([...(draft.extraCategories || []), next])],
                     )
                   }}
-                  aria-label="添加额外分类"
-                  className="rounded-full bg-white px-2 py-1 text-[11.5px] text-charcoal ring-1 ring-charcoal/10 focus:outline-none focus:ring-charcoal/30"
-                >
-                  <option value="">+ 添加分类…</option>
-                  {knownCategories
+                  options={knownCategories
                     .filter(
                       (name) =>
                         name !== (draft.category || '').trim() &&
                         !(draft.extraCategories || []).includes(name),
                     )
-                    .map((name) => (
-                      <option key={name} value={name}>
-                        {name}
-                      </option>
-                    ))}
-                </select>
+                    .map((name) => ({ value: name, label: name }))}
+                />
               </div>
             </Field>
 
