@@ -138,12 +138,24 @@ function isHolidayTagged(product) {
 }
 
 /** One product against one category name. A blank filter matches everything. */
-export function matchesCategory(product, category) {
+export const GROUP_PREFIX = 'group:'
+
+export function matchesCategory(product, category, groups = {}) {
   if (!category || category === ALL_CATEGORIES) return true
   const target = String(category)
-  if (String(product?.category || '') === target) return true
-  /* 多分类归属（21-product-categories.sql）：额外分类也算命中。 */
-  return Array.isArray(product?.categories) && product.categories.includes(target)
+
+  const names =
+    Array.isArray(product?.categories) && product.categories.length
+      ? product.categories
+      : [String(product?.category || '')]
+
+  /* 按一级分组筛：任一个归属分类落在这个分组里就算命中。 */
+  if (target.startsWith(GROUP_PREFIX)) {
+    const group = target.slice(GROUP_PREFIX.length)
+    return names.some((name) => String(groups?.[name] || '') === group)
+  }
+
+  return names.includes(target)
 }
 
 /**
@@ -156,6 +168,7 @@ export function filterProducts(
   {
     query = '',
     category = ALL_CATEGORIES,
+  categoryGroups = {},
     soldOutOnly = false,
     asinMap = {},
     now = Date.now(),
@@ -197,7 +210,7 @@ export function filterProducts(
     } else if (category === HOLIDAY_ITEMS) {
       /* 节日特选是独立开关（is_holiday），历史标签只作兜底。 */
       if (product?.isHoliday !== true && !isHolidayTagged(product)) return false
-    } else if (!matchesCategory(product, category)) {
+    } else if (!matchesCategory(product, category, categoryGroups)) {
       return false
     }
 

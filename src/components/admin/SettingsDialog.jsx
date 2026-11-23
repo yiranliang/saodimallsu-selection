@@ -30,6 +30,10 @@ export default function SettingsDialog({
   const [panelOpen, setPanelOpen] = useState(true)
   const [newName, setNewName] = useState('')
   const [newGroupName, setNewGroupName] = useState('')
+  /* 菜单布局草稿：只在本地改，点「保存布局」才写库。 */
+  const [menuDraft, setMenuDraft] = useState([])
+  const [menuDirty, setMenuDirty] = useState(false)
+  const [menuSaving, setMenuSaving] = useState(false)
   /* 分组列在不在：不在时下面给一条「先跑迁移」的提示。 */
   const groupColumnStatus = getCategoryGroupStatus()
   const [dragName, setDragName] = useState('')
@@ -37,6 +41,22 @@ export default function SettingsDialog({
   /* 弹窗打开时锁住 body 的滚动：滚轮只作用在弹窗内容上，背后的列表不动。 */
   useEffect(() => {
     if (!open) return undefined
+    /* 草稿 = 当前的分组顺序 + 每组的分类；未分组的分类放进最后一块。 */
+    /* categories.list 里是 { name, count }，这里只要名字。 */
+    const allNames = (categories.list || []).map((item) =>
+      typeof item === 'string' ? item : String(item?.name ?? ''),
+    )
+    const built = []
+    const used = new Set()
+    for (const title of categories.groupList || []) {
+      const items = allNames.filter((name) => (categories.groups?.[name] || '') === title)
+      items.forEach((name) => used.add(name))
+      built.push({ title, categories: items })
+    }
+    const loose = allNames.filter((name) => !used.has(name))
+    if (loose.length) built.push({ title: '', categories: loose })
+    setMenuDraft(built)
+    setMenuDirty(false)
     const previous = document.body.style.overflow
     document.body.style.overflow = 'hidden'
     return () => {
@@ -45,6 +65,37 @@ export default function SettingsDialog({
   }, [open])
 
   if (!open) return null
+
+  const moveMenuGroup = (index, direction) => {
+    const target = index + direction
+    if (target < 0 || target >= menuDraft.length) return
+    const next = [...menuDraft]
+    ;[next[index], next[target]] = [next[target], next[index]]
+    setMenuDraft(next)
+    setMenuDirty(true)
+  }
+
+  const moveMenuCategory = (groupIndex, index, direction) => {
+    const group = menuDraft[groupIndex]
+    const target = index + direction
+    if (!group || target < 0 || target >= group.categories.length) return
+    const next = [...menuDraft]
+    const items = [...group.categories]
+    ;[items[index], items[target]] = [items[target], items[index]]
+    next[groupIndex] = { ...group, categories: items }
+    setMenuDraft(next)
+    setMenuDirty(true)
+  }
+
+  const saveMenuDraft = async () => {
+    setMenuSaving(true)
+    try {
+      await categories.saveLayout?.(menuDraft)
+      setMenuDirty(false)
+    } finally {
+      setMenuSaving(false)
+    }
+  }
 
   const fields = [
     {
@@ -141,6 +192,103 @@ export default function SettingsDialog({
               settings 表不存在，改名存不进去。先在 Supabase 跑一次 supabase/12-settings.sql。
             </p>
           )}
+
+          {/* 菜单布局草稿：改完再保存，避免每次拖动都写库 */}
+          <div className="border-t border-charcoal/[0.06] pt-5">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <div className="text-[11px] font-medium tracking-wider text-charcoal-light">
+                  菜单布局（草稿）
+                </div>
+                <p className="mt-0.5 text-[10.5px] leading-relaxed text-charcoal-light/80">
+                  在这里排好再点保存；不保存就关掉，前台不受影响。
+                </p>
+              </div>
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setMenuDirty(false)}
+                  className="rounded-full px-2.5 py-1.5 text-[11px] text-charcoal-light transition hover:text-charcoal"
+                >
+                  撤销
+                </button>
+                <button
+                  type="button"
+                  onClick={saveMenuDraft}
+                  disabled={!menuDirty || menuSaving}
+                  className="rounded-full bg-charcoal px-3.5 py-1.5 text-[11px] font-medium text-cream transition hover:bg-charcoal/85 disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  {menuSaving ? '保存中…' : menuDirty ? '保存布局' : '已保存'}
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-3 space-y-2">
+              {menuDraft.map((group, groupIndex) => (
+                <div key={`${group.title || 'loose'}-${groupIndex}`} className="rounded-xl bg-cream/60 p-2">
+                  <div className="flex items-center gap-2">
+                    <span className="min-w-0 flex-1 truncate text-[12px] font-medium text-charcoal">
+                      {group.title || '未分组'}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => moveMenuGroup(groupIndex, -1)}
+                      disabled={groupIndex === 0}
+                      aria-label={`上移分组 ${group.title}`}
+                      className="rounded p-1 text-charcoal-light transition hover:bg-white hover:text-charcoal disabled:opacity-30"
+                    >
+                      ↑
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => moveMenuGroup(groupIndex, 1)}
+                      disabled={groupIndex === menuDraft.length - 1}
+                      aria-label={`下移分组 ${group.title}`}
+                      className="rounded p-1 text-charcoal-light transition hover:bg-white hover:text-charcoal disabled:opacity-30"
+                    >
+                      ↓
+                    </button>
+                  </div>
+
+                  <div className="mt-1 space-y-0.5">
+                    {group.categories.map((name, index) => (
+                      <div
+                        key={name}
+                        className="flex items-center gap-2 rounded-lg bg-white/70 px-2 py-1"
+                      >
+                        <span className="min-w-0 flex-1 truncate text-[11.5px] text-charcoal/80">
+                          {name}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => moveMenuCategory(groupIndex, index, -1)}
+                          disabled={index === 0}
+                          aria-label={`上移 ${name}`}
+                          className="rounded p-0.5 text-charcoal-light transition hover:bg-cream hover:text-charcoal disabled:opacity-30"
+                        >
+                          ↑
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => moveMenuCategory(groupIndex, index, 1)}
+                          disabled={index === group.categories.length - 1}
+                          aria-label={`下移 ${name}`}
+                          className="rounded p-0.5 text-charcoal-light transition hover:bg-cream hover:text-charcoal disabled:opacity-30"
+                        >
+                          ↓
+                        </button>
+                      </div>
+                    ))}
+                    {group.categories.length === 0 && (
+                      <p className="px-2 py-1 text-[10.5px] text-charcoal-light/60">
+                        这个分组还没有分类
+                      </p>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
 
           {/* 一级分组本身：新增 / 排序 / 删除。 */}
           <div className="border-t border-charcoal/[0.06] pt-5">

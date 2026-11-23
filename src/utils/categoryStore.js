@@ -148,6 +148,49 @@ export async function moveCategoryGroup(name, direction) {
   notify()
 }
 
+/**
+ * 一次性保存菜单布局（草稿模式用）。
+ *
+ * @param {{ title: string, categories: string[] }[]} layout
+ *   数组顺序 = 一级分组的展示顺序；每组里的 categories 顺序 = 二级展示顺序。
+ *   `title` 为空的组表示"未分组"，其分类 group_name 写成空串。
+ */
+export async function saveMenuLayout(layout) {
+  const groups = Array.isArray(layout) ? layout : []
+  const client = requireClient()
+
+  let categoryOrder = 0
+  const writes = []
+
+  groups.forEach((group, groupIndex) => {
+    const title = String(group?.title ?? '').trim()
+
+    if (title) {
+      writes.push(
+        client.from('category_groups').update({ sort_order: groupIndex }).eq('name', title),
+      )
+    }
+
+    for (const name of group?.categories || []) {
+      const category = String(name ?? '').trim()
+      if (!category) continue
+      writes.push(
+        client
+          .from('categories')
+          .update({ group_name: title, sort_order: categoryOrder })
+          .eq('name', category),
+      )
+      categoryOrder += 1
+    }
+  })
+
+  const results = await Promise.all(writes)
+  const failed = results.find((result) => result?.error)
+  if (failed) throw new Error(failed.error.message)
+
+  await loadCategories({ silent: true })
+}
+
 export function getCategoryGroups() {
   return Object.fromEntries(groupByName)
 }

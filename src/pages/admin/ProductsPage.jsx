@@ -43,7 +43,7 @@ import {createProduct,
   UNCATEGORISED, setProductsHoliday, setProductsExtraCategory } from '../../store/productStore.js'
 import { deleteDealSlotsBySku } from '../../store/dealStore.js'
 import {useCategories, useCategoryGroups, useCategoryGroupList } from '../../hooks/useCategories.js'
-import {addCategory, renameCategory, removeCategory, moveCategory, setCategoryGroup, addCategoryGroup, removeCategoryGroup, moveCategoryGroup } from '../../utils/categoryStore.js'
+import {addCategory, renameCategory, removeCategory, moveCategory, setCategoryGroup, addCategoryGroup, removeCategoryGroup, moveCategoryGroup, saveMenuLayout } from '../../utils/categoryStore.js'
 import { useAsins, useAsinsStatus } from '../../hooks/useAsins.js'
 import { useAuth } from '../../hooks/useAuth.js'
 import { removeAsins, loadAsins, saveVariantAsins, moveAsins } from '../../utils/asinStore.js'
@@ -79,8 +79,7 @@ import {
 } from '../../components/icons.jsx'
 import { copyToClipboard, downloadText } from '../../utils/clipboard.js'
 import { skuOf, variantKey } from '../../utils/sku.js'
-import {
-  ALL_CATEGORIES as ALL,
+import {ALL_CATEGORIES as ALL,
   ALL_TAGS,
   DEAL_ITEMS,
   HOLIDAY_ITEMS,
@@ -88,8 +87,7 @@ import {
   dealItemsCountOf,
   filterProducts,
   categoryOptionsOf,
-  parseBulkQuery,
-} from '../../utils/adminFilter.js'
+  parseBulkQuery, GROUP_PREFIX } from '../../utils/adminFilter.js'
 import { HOLIDAY_TAB_DEFAULT_LABEL, TAG_VIEW, matchesTagView, normaliseHolidayLabel } from '../../utils/navViews.js'
 import {
   getSettingsStatus,
@@ -407,6 +405,7 @@ export default function ProductsPage() {
       filterProducts(products, {
         query,
         category,
+    categoryGroups: categoryGroupMap,
         soldOutOnly,
         asinMap,
         tagView,
@@ -785,6 +784,56 @@ export default function ProductsPage() {
 
   /* 批量开关「节日特选」。只写 `is_holiday`：节日是临时编组，商品原本的分类、
    * 标签、价格都不动，节日过后把同一批再关掉即可。 */
+  /* 分类筛选的两级列表：一级分组（可按分组筛）+ 其下的分类。
+   * 分组来自 categories.group_name；没配分组的分类排在最后。 */
+  const categoryFilterOptions = useMemo(() => {
+    const namesOf = (item) =>
+      Array.isArray(item.categories) && item.categories.length
+        ? item.categories
+        : [item.category || UNCATEGORISED]
+
+    const countOf = (names) =>
+      products.filter((item) => {
+        const own = namesOf(item)
+        return names.some((name) => own.includes(name))
+      }).length
+
+    const base = [
+      { value: ALL, label: '全部', count: products.length },
+      { value: DEAL_ITEMS, label: '秒杀商品', count: dealItemsCount },
+      { value: HOLIDAY_ITEMS, label: '节日特选', count: holidayCount },
+    ]
+
+    const grouped = new Map()
+    const loose = []
+    for (const name of categoryOptions) {
+      const group = categoryGroupMap?.[name]
+      if (group) {
+        if (!grouped.has(group)) grouped.set(group, [])
+        grouped.get(group).push(name)
+      } else {
+        loose.push(name)
+      }
+    }
+
+    const rows = []
+    for (const [group, names] of grouped) {
+      rows.push({
+        value: `${GROUP_PREFIX}${group}`,
+        label: group,
+        count: countOf(names),
+      })
+      for (const name of names) {
+        rows.push({ value: name, label: name, count: countOf([name]), depth: 1 })
+      }
+    }
+    for (const name of loose) {
+      rows.push({ value: name, label: name, count: countOf([name]), depth: 1 })
+    }
+
+    return [...base, ...rows]
+  }, [products, categoryOptions, categoryGroupMap, dealItemsCount, holidayCount])
+
   const handleBulkHoliday = async (next) => {
     const ids = [...selectedIds]
     if (!ids.length) return
@@ -915,6 +964,16 @@ export default function ProductsPage() {
   }
 
   /* ── categories ── */
+
+  /* 一次性保存菜单布局草稿：分组顺序 + 组内分类顺序 + 分类归属。 */
+  const handleSaveMenuLayout = async (layout) => {
+    try {
+      await saveMenuLayout(layout)
+      showToast?.('菜单布局已保存', 'success')
+    } catch (err) {
+      showToast?.(err.message, 'error')
+    }
+  }
 
   /* 一级分组本身的新增 / 排序 / 删除（22-category-groups.sql）。 */
   const handleAddCategoryGroup = async (name) => {
@@ -1376,6 +1435,7 @@ export default function ProductsPage() {
           addGroup: handleAddCategoryGroup,
           moveGroup: handleMoveCategoryGroup,
           removeGroup: handleRemoveCategoryGroup,
+          saveLayout: handleSaveMenuLayout,
           add: (name) => handleAddCategory(name),
           rename: handleRenameCategory,
           move: handleMoveCategory,
@@ -1453,16 +1513,7 @@ export default function ProductsPage() {
           ariaLabel="Filter by category"
           value={category}
           onChange={setCategory}
-          options={[
-            { value: ALL, label: '全部', count: products.length },
-            { value: DEAL_ITEMS, label: '秒杀商品', count: dealItemsCount },
-            { value: HOLIDAY_ITEMS, label: '节日特选', count: holidayCount },
-            ...categoryOptions.map((option) => ({
-              value: option,
-              label: option,
-              count: products.filter((item) => (item.category || UNCATEGORISED) === option).length,
-            })),
-          ]}
+          options={categoryFilterOptions}
         />
 
         {/* Tag filter — 和前台 New / Bestseller / Holiday 完全同一套判定

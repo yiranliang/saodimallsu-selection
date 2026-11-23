@@ -93,10 +93,14 @@ export default function FilterMenu({
                   onChange?.(option.value)
                   applyOpen(false)
                 }}
-                className={`flex w-full items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-left text-[12px] transition ${
+                className={`flex w-full items-center justify-between gap-2 rounded-lg py-1.5 text-left text-[12px] transition ${
+                  option.depth ? 'pl-5 pr-2.5' : 'px-2.5'
+                } ${
                   active
                     ? 'bg-charcoal/[0.06] font-medium text-charcoal'
-                    : 'text-charcoal/75 hover:bg-charcoal/[0.04]'
+                    : option.depth
+                      ? 'text-charcoal/65 hover:bg-charcoal/[0.04]'
+                      : 'text-charcoal/80 hover:bg-charcoal/[0.04]'
                 }`}
               >
                 <span className="min-w-0 truncate">{option.label}</span>
