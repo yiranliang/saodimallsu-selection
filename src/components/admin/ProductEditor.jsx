@@ -930,7 +930,26 @@ export default function ProductEditor({
          506px below the fold — measured, not guessed. */
       maxWidth="max-w-xl lg:max-w-6xl"
     >
-      <div className="flex max-h-[92vh] flex-col">
+      <div className="relative flex max-h-[92vh] flex-col">
+      {/* 保存中：盖住整个编辑器，避免"手快又点一次"或改到别的字段。
+          这是一次写请求，不产生额外 egress。 */}
+      {saving && (
+        <div
+          className="absolute inset-0 z-30 flex items-center justify-center rounded-2xl bg-cream/70 backdrop-blur-[1px]"
+          role="status"
+          aria-live="polite"
+        >
+          <div className="flex items-center gap-2.5 rounded-full bg-white px-4 py-2.5 shadow-lg shadow-charcoal/10 ring-1 ring-charcoal/10">
+            <span
+              aria-hidden="true"
+              className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-accent/25 border-t-accent"
+            />
+            <span className="text-[12.5px] font-medium text-charcoal">正在保存…</span>
+          </div>
+        </div>
+      )}
+
+      
         <button
           type="button"
           onClick={onClose}
