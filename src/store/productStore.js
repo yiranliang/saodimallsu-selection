@@ -412,10 +412,30 @@ function withMemberships(product) {
 
 async function loadCategoryMembers() {
   try {
-    const { data, error } = await requireClient().from('product_categories').select('product_id, category')
+    const client = requireClient()
+    const { data, error } = await client
+      .from('product_categories')
+      .select('product_id, category, created_at')
     if (error) return new Map()
+
+    /* 历史回填识别：`21-product-categories.sql` 当年一次性给每件商品插了一行
+     * "当时的主分类"。这批行的 created_at 全部落在同一秒里，之后运营手动加的
+     * （"同时归入"）都晚得多。所以"最早那一簇"就是回填，不能当成额外分类 ——
+     * 否则改主分类后它会被当成用户设置、原样写回去，表现为"旧分类自动变同时
+     * 归入"。 */
+    const rows = data || []
+    const times = rows
+      .map((row) => Date.parse(row.created_at))
+      .filter((value) => Number.isFinite(value))
+    const earliest = times.length ? Math.min(...times) : 0
+    const cutoff = earliest + 2000
+    const isBackfill = (row) => {
+      const t = Date.parse(row.created_at)
+      return Number.isFinite(t) && t <= cutoff
+    }
+
     const map = new Map()
-    for (const row of data || []) {
+    for (const row of rows.filter((row) => !isBackfill(row))) {
       const id = String(row.product_id ?? '')
       const category = String(row.category ?? '').trim()
       if (!id || !category) continue
@@ -423,6 +443,22 @@ async function loadCategoryMembers() {
       map.get(id).push(category)
     }
     membershipsById = map
+
+    /* 一次性清理：只删"最早那一簇"的行，绝不碰之后手动加的。 */
+    if (rows.some(isBackfill)) {
+      try {
+        const { error: purgeError } = await client
+          .from('product_categories')
+          .delete()
+          .lte('created_at', new Date(cutoff).toISOString())
+        if (purgeError) {
+          /* 前台匿名没有写权限，属于预期情况 */
+        }
+      } catch {
+        /* 忽略：读路径不能因为清理失败而挂掉 */
+      }
+    }
+
     return map
   } catch {
     return new Map()
