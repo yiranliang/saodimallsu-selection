@@ -27,13 +27,15 @@ export default function SettingsDialog({
   onReset,
   categories,
 }) {
-  const [panelOpen, setPanelOpen] = useState(true)
+  const [panelOpen, setPanelOpen] = useState(false)
   const [newName, setNewName] = useState('')
   const [newGroupName, setNewGroupName] = useState('')
   /* 菜单布局草稿：只在本地改，点「保存布局」才写库。 */
   const [menuDraft, setMenuDraft] = useState([])
   const [menuDirty, setMenuDirty] = useState(false)
   const [menuSaving, setMenuSaving] = useState(false)
+  /* 单开手风琴：同一次只展开一块，默认都收起（太长）。 */
+  const [openSection, setOpenSection] = useState(null)
   /* 分组列在不在：不在时下面给一条「先跑迁移」的提示。 */
   const groupColumnStatus = getCategoryGroupStatus()
   const [dragName, setDragName] = useState('')
@@ -193,7 +195,30 @@ export default function SettingsDialog({
             </p>
           )}
 
-          {/* 菜单布局草稿：改完再保存，避免每次拖动都写库 */}
+          <button
+            type="button"
+            onClick={() => setOpenSection((current) => (current === 'layout' ? null : 'layout'))}
+            aria-expanded={openSection === 'layout'}
+            className="flex w-full items-center justify-between gap-3 border-t border-charcoal/[0.06] pt-4 text-left"
+          >
+            <span>
+              <span className="block text-[11px] font-medium tracking-wider text-charcoal-light">
+                菜单布局（草稿）
+              </span>
+              <span className="mt-0.5 block text-[10.5px] leading-relaxed text-charcoal-light/80">
+                排好再保存；不保存不影响前台。
+              </span>
+            </span>
+            <ChevronDown
+              className={`h-3.5 w-3.5 shrink-0 text-charcoal-light transition-transform ${
+                openSection === 'layout' ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          {openSection === 'layout' && (
+            <>
+              {/* 菜单布局草稿：改完再保存，避免每次拖动都写库 */}
           <div className="border-t border-charcoal/[0.06] pt-5">
             <div className="flex items-center justify-between gap-3">
               <div>
@@ -290,7 +315,33 @@ export default function SettingsDialog({
             </div>
           </div>
 
-          {/* 一级分组本身：新增 / 排序 / 删除。 */}
+            </>
+          )}
+
+          <button
+            type="button"
+            onClick={() => setOpenSection((current) => (current === 'groups' ? null : 'groups'))}
+            aria-expanded={openSection === 'groups'}
+            className="flex w-full items-center justify-between gap-3 border-t border-charcoal/[0.06] pt-4 text-left"
+          >
+            <span>
+              <span className="block text-[11px] font-medium tracking-wider text-charcoal-light">
+                一级分组
+              </span>
+              <span className="mt-0.5 block text-[10.5px] leading-relaxed text-charcoal-light/80">
+                前台 SHOP 菜单左栏的顺序就是这里的顺序。
+              </span>
+            </span>
+            <ChevronDown
+              className={`h-3.5 w-3.5 shrink-0 text-charcoal-light transition-transform ${
+                openSection === 'groups' ? 'rotate-180' : ''
+              }`}
+            />
+          </button>
+
+          {openSection === 'groups' && (
+            <>
+              {/* 一级分组本身：新增 / 排序 / 删除。 */}
           <div className="border-t border-charcoal/[0.06] pt-5">
             <div className="text-[11px] font-medium tracking-wider text-charcoal-light">
               一级分组
@@ -366,6 +417,9 @@ export default function SettingsDialog({
               </div>
             </div>
           </div>
+
+            </>
+          )}
 
           {/* 分类管理 */}
           <div className="border-t border-charcoal/[0.06] pt-5">
