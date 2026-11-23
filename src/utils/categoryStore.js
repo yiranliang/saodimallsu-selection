@@ -108,6 +108,39 @@ export async function addCategoryGroup(name) {
 }
 
 /** 删除一个一级分组。用它归类的分类会被置为"未分组"。 */
+/** 给分组改名：先建新行、把分类指过去、再删旧行（group_name 是文本，不是外键）。 */
+export async function renameCategoryGroup(from, to) {
+  const oldName = String(from ?? '').trim()
+  const newName = String(to ?? '').trim()
+  if (!oldName || !newName || oldName === newName) return false
+  if (groupList.some((item) => item.toLowerCase() === newName.toLowerCase())) return false
+
+  const client = requireClient()
+  const order = groupOrderByName.get(oldName) ?? groupList.length
+
+  const { error: insertError } = await client
+    .from('category_groups')
+    .insert({ name: newName, sort_order: order })
+  if (insertError) throw new Error(insertError.message)
+
+  const { error: moveError } = await client
+    .from('categories')
+    .update({ group_name: newName })
+    .eq('group_name', oldName)
+  if (moveError) throw new Error(moveError.message)
+
+  await client.from('category_groups').delete().eq('name', oldName)
+
+  groupList = groupList.map((item) => (item === oldName ? newName : item))
+  groupOrderByName.delete(oldName)
+  groupOrderByName.set(newName, order)
+  for (const [category, group] of [...groupByName.entries()]) {
+    if (group === oldName) groupByName.set(category, newName)
+  }
+  notify()
+  return true
+}
+
 export async function removeCategoryGroup(name) {
   const value = String(name ?? '').trim()
   if (!value) return

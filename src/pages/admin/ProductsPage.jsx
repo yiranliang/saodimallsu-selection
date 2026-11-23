@@ -43,7 +43,7 @@ import {createProduct,
   UNCATEGORISED, setProductsHoliday, setProductsExtraCategory } from '../../store/productStore.js'
 import { deleteDealSlotsBySku } from '../../store/dealStore.js'
 import {useCategories, useCategoryGroups, useCategoryGroupList } from '../../hooks/useCategories.js'
-import {addCategory, renameCategory, removeCategory, moveCategory, setCategoryGroup, addCategoryGroup, removeCategoryGroup, moveCategoryGroup, saveMenuLayout } from '../../utils/categoryStore.js'
+import {addCategory, renameCategory, removeCategory, moveCategory, setCategoryGroup, addCategoryGroup, removeCategoryGroup, moveCategoryGroup, saveMenuLayout, renameCategoryGroup } from '../../utils/categoryStore.js'
 import { useAsins, useAsinsStatus } from '../../hooks/useAsins.js'
 import { useAuth } from '../../hooks/useAuth.js'
 import { removeAsins, loadAsins, saveVariantAsins, moveAsins } from '../../utils/asinStore.js'
@@ -997,6 +997,16 @@ export default function ProductsPage() {
     }
   }
 
+  const handleRenameCategoryGroup = async (from, to) => {
+    try {
+      const renamed = await renameCategoryGroup(from, to)
+      if (!renamed) showToast?.('分组名不能为空或已存在', 'error')
+      else showToast?.(`已把「${from}」改名为「${to}」`, 'success')
+    } catch (err) {
+      showToast?.(err.message, 'error')
+    }
+  }
+
   const handleMoveCategoryGroup = async (name, direction) => {
     try {
       await moveCategoryGroup(name, direction)
@@ -1023,6 +1033,23 @@ export default function ProductsPage() {
         group ? `「${name}」已归入 ${group}` : `「${name}」已设为未分组`,
         'success',
       )
+    } catch (err) {
+      showToast?.(err.message, 'error')
+    }
+  }
+
+  /* 在某个分组下新增分类：先建分类行，再写它的 group_name。 */
+  const handleAddCategoryNamed = async (name, group) => {
+    const trimmed = String(name ?? '').trim()
+    if (!trimmed) return
+    try {
+      const added = await addCategory(trimmed)
+      if (!added) {
+        showToast?.(`列表里已经有「${trimmed}」了`, 'error')
+        return
+      }
+      if (group) await setCategoryGroup(trimmed, group)
+      showToast?.(`已添加「${trimmed}」`, 'success')
     } catch (err) {
       showToast?.(err.message, 'error')
     }
@@ -1436,27 +1463,17 @@ export default function ProductsPage() {
         onSave={{ deals: handleSaveTabLabel, holiday: handleSaveHolidayLabel }}
         onReset={{ deals: handleResetTabLabel, holiday: handleResetHolidayLabel }}
         categories={{
-          list: managedCategories,
-          groups: categoryGroupMap,
-          setGroup: handleSetCategoryGroup,
           groupList: categoryGroupList,
+          groupsOf: categoryGroupMap,
+          categories: managedCategories,
           addGroup: handleAddCategoryGroup,
+          renameGroup: handleRenameCategoryGroup,
           moveGroup: handleMoveCategoryGroup,
           removeGroup: handleRemoveCategoryGroup,
-          saveLayout: handleSaveMenuLayout,
-          add: (name) => handleAddCategory(name),
-          rename: handleRenameCategory,
-          move: handleMoveCategory,
-          /* 拖拽排序：从 from 到 to 需要走几步，就连续调用几次 move（±1）。
-           * 名字不变，所以每步都还是同一个分类。 */
-          reorder: async (name, steps) => {
-            if (!steps) return
-            const direction = steps > 0 ? 1 : -1
-            for (let i = 0; i < Math.abs(steps); i += 1) {
-              await handleMoveCategory(name, direction)
-            }
-          },
-          remove: handleDeleteCategory,
+          addCategory: (name, group) => handleAddCategoryNamed(name, group),
+          renameCategory: handleRenameCategory,
+          moveCategory: handleMoveCategory,
+          removeCategory: handleDeleteCategory,
         }}
       />
 

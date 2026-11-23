@@ -1,37 +1,44 @@
+import { readFileSync } from 'node:fs'
 import { chromium } from 'playwright-core'
 
+const env = readFileSync('.env', 'utf8')
+const pick = (k) => (env.match(new RegExp(`^${k}=(.*)$`, 'm')) || [])[1]?.trim() || ''
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
 
-const errors = []
 const browser = await chromium.launch({ executablePath: EDGE, headless: true })
-const page = await browser.newPage({ viewport: { width: 1400, height: 900 } })
+const page = await browser.newPage({ viewport: { width: 1400, height: 1000 } })
+const logs = []
+page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`))
 
-page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
+await page.goto('http://localhost:5199/#/admin', { waitUntil: 'networkidle' })
+await page.waitForTimeout(1200)
+if (await page.locator('text=Admin access').count()) {
+  await page.locator('input[type="email"]').fill(pick('SUPABASE_ADMIN_EMAIL'))
+  await page.locator('input[type="password"]').fill(pick('SUPABASE_ADMIN_PASSWORD'))
+  await page.locator('button', { hasText: /Sign in/ }).first().click()
+  await page.waitForTimeout(3500)
+}
 
-await page.goto('http://localhost:5199/scripts/preview-admin.html', { waitUntil: 'networkidle' })
-await page.waitForTimeout(1600)
-
+await page.goto('http://localhost:5199/#/admin/products', { waitUntil: 'networkidle' })
+await page.waitForTimeout(2500)
 await page.locator('button', { hasText: '设置' }).first().click()
 await page.waitForTimeout(700)
 
-const height = await page.evaluate(() => {
-  const panel = document.querySelector('.fixed .rounded-2xl.bg-white')
-  return panel ? Math.round(panel.getBoundingClientRect().height) : null
-})
-console.log('面板高度(收起态):', height)
-console.log('折叠头数量:', await page.locator('button[aria-expanded]').count())
+/* 展开「分类 & 分组布局」 */
+await page.locator('button[aria-expanded]').filter({ hasText: '分类 & 分组布局' }).first().click()
+await page.waitForTimeout(600)
+await page.screenshot({ path: 'shots/settings-layout-collapsed.png' })
 
-await page.screenshot({ path: 'shots/settings-collapsed.png' })
-
-/* 展开「菜单布局」 */
-await page.locator('button', { hasText: '菜单布局（草稿）' }).first().click()
-await page.waitForTimeout(500)
-const height2 = await page.evaluate(() => {
-  const panel = document.querySelector('.fixed .rounded-2xl.bg-white')
-  return panel ? Math.round(panel.getBoundingClientRect().height) : null
-})
-console.log('面板高度(展开布局):', height2)
+/* 展开第一个分组 */
+const firstGroup = page.locator('button[aria-label^="展开 "]').first()
+if (await firstGroup.count()) {
+  await firstGroup.click()
+  await page.waitForTimeout(500)
+}
 await page.screenshot({ path: 'shots/settings-layout-open.png' })
 
-console.log('errors:', errors.length ? errors.join('\n') : 'none')
+const text = await page.locator('body').innerText()
+const idx = text.indexOf('分类 & 分组布局')
+console.log('布局区域:', text.slice(idx, idx + 220).replace(/\n/g, ' | '))
+console.log('诊断:', logs.length ? logs.join('\n') : 'none')
 await browser.close()
