@@ -13,7 +13,7 @@ import { isColourType, specTypeLabel } from '../../utils/variantImage.js'
 import { deleteDealSlotsBySku } from '../../store/dealStore.js'
 import { isSizeType, sizeOrder } from '../../utils/sizes.js'
 import { useDealSlots } from '../../hooks/useDealSlots.js'
-import { useCategoryGroups } from '../../hooks/useCategories.js'
+import { useCategoryGroups, useCategoryGroupList } from '../../hooks/useCategories.js'
 import { looksLikeUrl } from '../../utils/lines.js'
 import { variantKey } from '../../utils/sku.js'
 import {
@@ -97,6 +97,7 @@ export default function ProductEditor({
   const [saving, setSaving] = useState(false)
   const knownCategories = useCategories()
   const categoryGroups = useCategoryGroups()
+  const categoryGroupOrder = useCategoryGroupList()
 
   /* ASIN edits, keyed by `"Colour|Size"`. Deliberately a sparse overlay on top
    * of the store rather than a copy of it: the map can land after the modal
@@ -769,6 +770,40 @@ export default function ProductEditor({
      * 前台菜单就会对不上 —— 那种"看起来有分组"比"未分组"更误导。 */
     return String(categoryGroups?.[category] || '').trim()
   })()
+  /* 下拉里的分类按「分组顺序 → 组内名字」排；没配分组的放最后。 */
+  const groupedCategoryOptions = (() => {
+    const buckets = new Map()
+    const loose = []
+    for (const name of categoryOptions) {
+      const group = String(categoryGroups?.[name] || '').trim()
+      if (!group) {
+        loose.push(name)
+        continue
+      }
+      if (!buckets.has(group)) buckets.set(group, [])
+      buckets.get(group).push(name)
+    }
+
+    const titles = [...buckets.keys()].sort((a, b) => {
+      const ia = categoryGroupOrder.indexOf(a)
+      const ib = categoryGroupOrder.indexOf(b)
+      if (ia === -1 && ib === -1) return a.localeCompare(b)
+      if (ia === -1) return 1
+      if (ib === -1) return -1
+      return ia - ib
+    })
+
+    return [
+      ...titles.map((title) => ({
+        title,
+        items: buckets.get(title).slice().sort((a, b) => a.localeCompare(b)),
+      })),
+      ...(loose.length
+        ? [{ title: '', items: loose.slice().sort((a, b) => a.localeCompare(b)) }]
+        : []),
+    ]
+  })()
+
   const holidayOn = Boolean(draft.isHoliday)
   /* 预览按前台同一条规则切分：逗号/顿号/竖线都认，最多 3 枚。 */
 
@@ -1124,13 +1159,8 @@ export default function ProductEditor({
                 into two ragged rows. Stacked, the badge area reads as one
                 block: text, templates, swatches. */}
             <div className="space-y-4">
-              <Field label="分组" hint="由分类自动决定（只读）">
-              <div className="flex items-center gap-2 rounded-lg bg-cream/70 px-3 py-2 text-[13px] text-charcoal/80">
-                {draftGroup || <span className="text-charcoal-light/60">未分组</span>}
-              </div>
-            </Field>
 
-            <Field label="Category" hint="from the categories table">
+            <Field label="分类" hint="来自分类表；分组自动跟随">
                 {newCategory ? (
                   <div className="flex items-center gap-1.5">
                     <input
@@ -1155,27 +1185,38 @@ export default function ProductEditor({
                     </button>
                   </div>
                 ) : (
-                  <select
-                    value={draft.category || UNCATEGORISED}
-                    onChange={(e) => {
-                      if (e.target.value === NEW_CATEGORY) {
-                        setBeforeNew(draft.category || UNCATEGORISED)
-                        setNewCategory(true)
-                        patch('category', '')
-                        return
-                      }
-                      patch('category', e.target.value)
-                    }}
-                    aria-label="Category"
-                    className="input-field text-[13px]"
-                  >
-                    {categoryOptions.map((category) => (
-                      <option key={category} value={category}>
-                        {category}
-                      </option>
-                    ))}
-                    <option value={NEW_CATEGORY}>{t('＋ New category…')}</option>
-                  </select>
+                  <div className="flex items-center gap-2">
+                    <select
+                      value={draft.category || UNCATEGORISED}
+                      onChange={(e) => {
+                        if (e.target.value === NEW_CATEGORY) {
+                          setBeforeNew(draft.category || UNCATEGORISED)
+                          setNewCategory(true)
+                          patch('category', '')
+                          return
+                        }
+                        patch('category', e.target.value)
+                      }}
+                      aria-label="Category"
+                      className="input-field flex-1 text-[13px]"
+                    >
+                      {groupedCategoryOptions.map((group) => (
+                        <optgroup key={group.title || '__loose'} label={group.title || '未分组'}>
+                          {group.items.map((category) => (
+                            <option key={category} value={category}>
+                              {category}
+                            </option>
+                          ))}
+                        </optgroup>
+                      ))}
+                      <option value={NEW_CATEGORY}>{t('＋ New category…')}</option>
+                    </select>
+
+                    {/* 分组由分类自动决定，和选择器同一行，不再单独占一行 */}
+                    <span className="shrink-0 rounded-full bg-cream-dark px-2.5 py-1 text-[10.5px] text-charcoal/70">
+                      分组：{draftGroup || '未分组'}
+                    </span>
+                  </div>
                 )}
               </Field>
 
