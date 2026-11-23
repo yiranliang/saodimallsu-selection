@@ -296,6 +296,8 @@ export default function ProductEditor({
   const [composerOpen, setComposerOpen] = useState(false)
   const [newTagText, setNewTagText] = useState('')
   const [newTagColor, setNewTagColor] = useState('#2B2B2B')
+  /* 「同时归入」空态只显示一行提示，点「添加」才出现选择器。 */
+  const [extraPickerOpen, setExtraPickerOpen] = useState(false)
 
   /* 常用模板 + 运营自己存的模板。Coming Soon 有独立开关、Restock 不常用，
    * 所以内置列表里先去掉它们。 */
@@ -1154,52 +1156,66 @@ export default function ProductEditor({
               </Field>
 
             {/* 多分类：主分类在上面（Category），这里只放"另外还属于哪些"。 */}
-            <Field label="同时归入" hint="可选：因为款式元素同时出现在这些分类里；元素没了就删掉它">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {(draft.extraCategories || []).map((name) => (
-                  <span
-                    key={name}
-                    className="inline-flex items-center gap-1 rounded-full bg-cream-dark px-2.5 py-1 text-[11.5px] text-charcoal ring-1 ring-charcoal/[0.06]"
+            <Field
+              label="同时归入"
+              hint="可选：因为款式元素同时出现在这些分类里；元素没了就删掉它"
+            >
+              {(draft.extraCategories || []).length === 0 && !extraPickerOpen ? (
+                <p className="text-[11.5px] leading-relaxed text-charcoal-light/60">
+                  未设置额外分类
+                  <button
+                    type="button"
+                    onClick={() => setExtraPickerOpen(true)}
+                    className="ml-2 text-[11.5px] text-charcoal/60 underline underline-offset-2 transition hover:text-charcoal"
                   >
-                    {name}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        patch(
-                          'extraCategories',
-                          (draft.extraCategories || []).filter((item) => item !== name),
-                        )
-                      }
-                      aria-label={`移除 ${name}`}
-                      className="text-charcoal-light transition hover:text-charcoal"
+                    添加
+                  </button>
+                </p>
+              ) : (
+                <div className="flex flex-wrap items-center gap-1.5">
+                  {(draft.extraCategories || []).map((name) => (
+                    <span
+                      key={name}
+                      className="inline-flex items-center gap-1 rounded-full bg-cream-dark px-2.5 py-1 text-[11.5px] text-charcoal ring-1 ring-charcoal/[0.06]"
                     >
-                      <Close className="h-2.5 w-2.5" />
-                    </button>
-                  </span>
-                ))}
+                      {name}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          patch(
+                            'extraCategories',
+                            (draft.extraCategories || []).filter((item) => item !== name),
+                          )
+                        }
+                        aria-label={`移除 ${name}`}
+                        className="text-charcoal-light transition hover:text-charcoal"
+                      >
+                        <Close className="h-2.5 w-2.5" />
+                      </button>
+                    </span>
+                  ))}
 
-                <InlineSelect
-                  value=""
-                  placeholder="+ 添加分类"
-                  ariaLabel="添加额外分类"
-                  width="w-[7.5rem]"
-                  align="left"
-                  onChange={(next) => {
-                    if (!next) return
-                    patch(
-                      'extraCategories',
-                      [...new Set([...(draft.extraCategories || []), next])],
-                    )
-                  }}
-                  options={knownCategories
-                    .filter(
-                      (name) =>
-                        name !== (draft.category || '').trim() &&
-                        !(draft.extraCategories || []).includes(name),
-                    )
-                    .map((name) => ({ value: name, label: name }))}
-                />
-              </div>
+                  <InlineSelect
+                    value=""
+                    placeholder="+ 添加分类"
+                    ariaLabel="添加额外分类"
+                    width="w-[7.5rem]"
+                    align="left"
+                    onChange={(next) => {
+                      if (!next) return
+                      patch('extraCategories', [...new Set([...(draft.extraCategories || []), next])])
+                      setExtraPickerOpen(false)
+                    }}
+                    options={knownCategories
+                      .filter(
+                        (name) =>
+                          name !== (draft.category || '').trim() &&
+                          !(draft.extraCategories || []).includes(name),
+                      )
+                      .map((name) => ({ value: name, label: name }))}
+                  />
+                </div>
+              )}
             </Field>
               <div className="block">
                 {/* 标签开关：关掉 = 这件商品没有标签（保存时写空串）。 */}
