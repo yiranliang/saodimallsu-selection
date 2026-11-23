@@ -200,6 +200,15 @@ export default function SiteNav({
       on ? 'bg-cream-dark font-medium text-charcoal' : 'text-charcoal/75 hover:bg-cream-dark/60'
     }`
 
+  /* Shop 面板的行：hover / 选中都是**文字下划线**，不铺背景 —— 一整列灰底
+   * 看起来像按钮，和 SHOP 这种"目录"语义不符。 */
+  const shopRowClass = (on) =>
+    `flex w-full items-center justify-between gap-2 rounded-md px-1 py-2 text-left text-[13px] leading-snug transition ${
+      on
+        ? 'font-medium text-charcoal underline decoration-1 underline-offset-[6px]'
+        : 'text-charcoal/75 hover:text-charcoal hover:underline hover:decoration-1 hover:underline-offset-[6px]'
+    }`
+
   const countOf = (n) => (
     <span className="shrink-0 text-[10px] tabular-nums text-charcoal-light/60">{n}</span>
   )
@@ -360,7 +369,7 @@ export default function SiteNav({
                     <button
                       type="button"
                       onClick={() => select('All')}
-                      className={rowClass(isActive('All'))}
+                      className={shopRowClass(isActive('All'))}
                     >
                       <span>All products</span>
                       {countOf(total)}
@@ -380,7 +389,7 @@ export default function SiteNav({
                             )
                           }
                           aria-expanded={activeGroup}
-                          className={rowClass(activeGroup)}
+                          className={shopRowClass(activeGroup)}
                         >
                           <span className="truncate">{group.title}</span>
                           <span className="flex shrink-0 items-center gap-1">
@@ -413,7 +422,7 @@ export default function SiteNav({
                                 type="button"
                                 onClick={() => select(item.value)}
                                 aria-pressed={isActive(item.value)}
-                                className={rowClass(isActive(item.value))}
+                                className={shopRowClass(isActive(item.value))}
                               >
                                 <span className="min-w-0 break-words leading-snug">
                                   {item.label}
