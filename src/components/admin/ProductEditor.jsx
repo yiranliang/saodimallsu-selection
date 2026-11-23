@@ -741,7 +741,13 @@ export default function ProductEditor({
        * 会出现同一件商品在两个地方写着同一行。 */
       if (product?.id) {
         const primary = (draft.category || '').trim()
-        const extras = (draft.extraCategories || []).filter((name) => name !== primary)
+        /* 旧主分类也不能留下：历史回填在成员表里给每件商品写过一行"原主分类"，
+         * 那行会被当成用户设置的额外分类。改分类时把它一并剔除，就不会出现
+         * "改了分类，旧分类却变成同时归入"。 */
+        const previousPrimary = String(product.category || '').trim()
+        const extras = (draft.extraCategories || []).filter(
+          (name) => name !== primary && name !== previousPrimary,
+        )
         await setProductExtraCategories(product.id, extras)
       }
     } catch (err) {
