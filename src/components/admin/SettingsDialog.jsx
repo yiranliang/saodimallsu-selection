@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, Close, Plus, Trash } from '../icons.jsx'
-import { CATEGORY_GROUP_TITLES } from '../../utils/categoryStore.js'
+import { CATEGORY_GROUP_TITLES, getCategoryGroupStatus } from '../../utils/categoryStore.js'
 
 /**
  * 站点设置对话框
@@ -26,8 +26,10 @@ export default function SettingsDialog({
   onReset,
   categories,
 }) {
-  const [panelOpen, setPanelOpen] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(true)
   const [newName, setNewName] = useState('')
+  /* 分组列在不在：不在时下面给一条「先跑迁移」的提示。 */
+  const groupColumnStatus = getCategoryGroupStatus()
   const [dragName, setDragName] = useState('')
 
   /* 弹窗打开时锁住 body 的滚动：滚轮只作用在弹窗内容上，背后的列表不动。 */
@@ -160,6 +162,14 @@ export default function SettingsDialog({
                 }`}
               />
             </button>
+
+            {panelOpen && groupColumnStatus === 'missing' && (
+              <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-amber-800 ring-1 ring-amber-200">
+                一级分组暂时存不进去：数据库里没有{' '}
+                <code className="font-mono">group_name</code> 列。先在 Supabase 跑一次{' '}
+                <code className="font-mono">supabase/20-category-group.sql</code>。
+              </p>
+            )}
 
             {panelOpen && (
               <div className="mt-3 space-y-1.5">

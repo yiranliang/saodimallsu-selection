@@ -43,6 +43,16 @@ const sortOrderByName = new Map()
  */
 const groupByName = new Map()
 
+/**
+ * `categories.group_name`（20-category-group.sql）在不在。
+ * 不在时设置里要明说"先跑迁移"，否则下拉改了也存不进去。
+ */
+let groupColumnStatus = 'unknown'
+
+export function getCategoryGroupStatus() {
+  return groupColumnStatus
+}
+
 /** 分组选项：后台下拉和前台分组共用一份。 */
 export const CATEGORY_GROUP_TITLES = ['Tops', 'Bottoms', 'Sets & Dresses', 'Accessories', 'Shoes']
 
@@ -114,11 +124,25 @@ export async function loadCategories({ silent = false } = {}) {
 
   inflight = (async () => {
     try {
-      const { data, error } = await requireClient()
+      let { data, error } = await requireClient()
         .from('categories')
         .select('name, sort_order, group_name')
         .order('sort_order', { ascending: true })
         .order('name', { ascending: true })
+
+      /* 迁移没跑：退回两列的查询，功能照常，"分组"下拉会被 UI 标出来。 */
+      if (error && /group_name/i.test(error.message)) {
+        groupColumnStatus = 'missing'
+        const retry = await requireClient()
+          .from('categories')
+          .select('name, sort_order')
+          .order('sort_order', { ascending: true })
+          .order('name', { ascending: true })
+        data = retry.data
+        error = retry.error
+      } else if (!error) {
+        groupColumnStatus = 'ok'
+      }
 
       if (error) throw new Error(error.message)
 

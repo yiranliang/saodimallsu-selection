@@ -16,7 +16,7 @@ page.on('console', (m) => {
 })
 
 await page.goto(BASE, { waitUntil: 'networkidle' })
-await page.waitForTimeout(1200)
+await page.waitForTimeout(1000)
 
 const skip = page.locator('text=Skip')
 if (await skip.count()) {
@@ -26,27 +26,22 @@ if (await skip.count()) {
 
 const shop = page.getByRole('button', { name: 'Shop', exact: true }).first()
 await shop.hover()
-await page.waitForTimeout(500)
 
-const panel = page.locator('button', { hasText: 'All products' }).first()
-console.log('panel open:', await panel.isVisible())
+/* 动画：出现后 60ms 内不应完全就位 */
+await page.waitForTimeout(60)
+const panel = page.locator('.nav-drop').first()
+const animation = await panel.evaluate((node) => {
+  const style = getComputedStyle(node)
+  return {
+    name: style.animationName,
+    duration: style.animationDuration,
+  }
+})
+console.log('animation:', animation)
 
-/* 关键：鼠标移到面板里（模拟真实移动，经过中间区域） */
-const tops = page.locator('button[aria-expanded]').filter({ hasText: 'Tops' }).first()
-await tops.hover()
-await page.waitForTimeout(300)
-console.log('still open after moving into panel:', await panel.isVisible())
-
-/* 再等超过 200ms 的延迟窗口，确认没有被误关 */
 await page.waitForTimeout(400)
-console.log('still open after 400ms:', await panel.isVisible())
-
-await page.screenshot({ path: 'shots/nav-mega-hover.png' })
-
-/* 移到页面其它地方 → 应该关闭 */
-await page.mouse.move(720, 700)
-await page.waitForTimeout(500)
-console.log('closed after leaving:', !(await panel.isVisible()))
+console.log('panel visible after animation:', await panel.isVisible())
+await page.screenshot({ path: 'shots/nav-anim.png' })
 
 console.log('errors:', errors.length ? errors.join('\n') : 'none')
 await browser.close()

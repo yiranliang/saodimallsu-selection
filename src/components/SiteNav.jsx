@@ -337,7 +337,7 @@ export default function SiteNav({
             /* 整行下拉：fixed 到顶栏下面，横向铺满屏幕。
              * 左边一级分类、右边二级分类；没有选中任何一级时，右侧留白。 */
             <div
-              className="fixed inset-x-0 z-40"
+              className="nav-drop fixed inset-x-0 z-40"
               style={{ top: 'var(--site-nav-h, 4rem)' }}
               onMouseEnter={cancelShopClose}
               onMouseLeave={scheduleShopClose}
