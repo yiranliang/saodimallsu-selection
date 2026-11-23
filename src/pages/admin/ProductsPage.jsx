@@ -3678,7 +3678,8 @@ const NEW_CATEGORY = '__new__'
 function BatchCategoryDialog({ open, products, categories, onClose, onApply }) {
   const [choice, setChoice] = useState('')
   const [custom, setCustom] = useState('')
-  const [mode, setMode] = useState('replace')
+  /* 默认不预选：两种动作后果完全不同，让运营明确点一次。 */
+  const [mode, setMode] = useState('')
   const [busy, setBusy] = useState(false)
 
   const count = products.length
@@ -3688,7 +3689,7 @@ function BatchCategoryDialog({ open, products, categories, onClose, onApply }) {
     if (!open) return
     setChoice('')
     setCustom('')
-    setMode('replace')
+    setMode('')
     setBusy(false)
   }, [open])
 
@@ -3809,6 +3810,17 @@ function BatchCategoryDialog({ open, products, categories, onClose, onApply }) {
           <div className="mt-1 space-y-1.5">{extraModes.map(renderMode)}</div>
         </div>
 
+        {/* 即将执行什么：用一句话写死，避免点下去才发现是另一种动作 */}
+        {name && mode && (
+          <p className="mt-3 rounded-lg bg-cream-dark/60 px-3 py-2 text-[11px] leading-relaxed text-charcoal">
+            将执行：
+            {mode === 'replace' && `把 ${count} 件商品的主分类改成「${name}」`}
+            {mode === 'fill' && `给 ${fillCount} 件还没有分类的商品补上「${name}」`}
+            {mode === 'add' && `在保留主分类的前提下，把 ${count} 件同时归入「${name}」`}
+            {mode === 'remove' && `取消 ${count} 件商品在「${name}」下的同时归类`}
+          </p>
+        )}
+
         <p className="mt-3 text-[10.5px] leading-relaxed text-charcoal-light/70">
           分组由分类自动决定，不在这里改 —— 改完分类后，商品的分组会跟着分类走。
         </p>
@@ -3824,7 +3836,7 @@ function BatchCategoryDialog({ open, products, categories, onClose, onApply }) {
           <button
             type="button"
             onClick={apply}
-            disabled={!name || busy || (mode === 'fill' && fillCount === 0)}
+            disabled={!name || !mode || busy || (mode === 'fill' && fillCount === 0)}
             className="ml-auto rounded-full bg-charcoal px-4 py-2.5 text-[12.5px] font-medium text-cream transition hover:bg-charcoal/85 disabled:cursor-not-allowed disabled:opacity-40"
           >
             {busy ? '保存中…' : name ? actionLabel : `移动 ${count} 件`}
