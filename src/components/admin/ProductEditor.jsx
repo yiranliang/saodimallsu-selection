@@ -732,9 +732,13 @@ export default function ProductEditor({
       })
     } catch (err) {
       showToast?.(err.message || String(err), 'error', 6000)
-      /* 额外分类单独一张表：主分类已经随商品写完了，这里只补成员行。 */
+      /* 额外分类单独一张表：主分类已经随商品写完了，这里只补成员行。
+       * 主分类本身不放进"额外"里 —— 换了主分类、旧分类还留在芯片里时，
+       * 会出现同一件商品在两个地方写着同一行。 */
       if (product?.id) {
-        await setProductExtraCategories(product.id, draft.extraCategories || [])
+        const primary = (draft.category || '').trim()
+        const extras = (draft.extraCategories || []).filter((name) => name !== primary)
+        await setProductExtraCategories(product.id, extras)
       }
     } finally {
       setSaving(false)
