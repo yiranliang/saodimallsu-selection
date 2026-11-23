@@ -837,15 +837,15 @@ check('scheduled, six days out', countdownDisplay('scheduled', 6 * DD), {
 })
 check('live, six days out', countdownDisplay('live', 6 * DD), {
   mode: 'days',
-  lead: '',
-  value: '6 days left',
+  lead: 'Discount ends in',
+  value: '6 days',
 })
-check('25 hours floors to one day', countdownDisplay('live', 25 * 3600000).value, '1 day left')
+check('25 hours floors to one day', countdownDisplay('live', 25 * 3600000).value, '1 day')
 check('and it is singular', countdownDisplay('scheduled', 25 * 3600000).value, '1 day')
 /* 恰好 24 小时走时钟 —— 需求写的是"<= 24 小时"。 */
 check('exactly 24h is still a clock', countdownDisplay('live', DD), {
   mode: 'clock',
-  lead: 'Deal ends in',
+  lead: 'Discount ends in',
   value: '24:00:00',
 })
 check('one second under is a clock too', countdownDisplay('live', DD - 1000).value, '23:59:59')

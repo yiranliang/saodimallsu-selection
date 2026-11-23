@@ -607,7 +607,8 @@ export const COUNTDOWN_DAY_MS = 24 * 60 * 60 * 1000
 /** 倒计时上那句前缀。详情页和测试都从这里取，不要各写一份。 */
 export const COUNTDOWN_LEAD = {
   scheduled: 'Deal starts in',
-  live: 'Deal ends in',
+  /* 「折扣结束」而不是「还剩几天」：后者读起来像商品要下架。 */
+  live: 'Discount ends in',
 }
 
 /**
@@ -641,11 +642,9 @@ export function countdownDisplay(phase, ms) {
   if (remaining > COUNTDOWN_DAY_MS) {
     const days = Math.floor(remaining / COUNTDOWN_DAY_MS)
     const unit = days === 1 ? 'day' : 'days'
-    /* 进行中说「还有几天」（days left），排期中说「几天后开始」——
+    /* 进行中说「折扣还有几天结束」，排期中说「几天后开始」——
      * 同一个数字，两种时态，硬凑成一句会别扭。 */
-    return phase === 'scheduled'
-      ? { mode: 'days', lead, value: `${days} ${unit}` }
-      : { mode: 'days', lead: '', value: `${days} ${unit} left` }
+    return { mode: 'days', lead, value: `${days} ${unit}` }
   }
 
   return { mode: 'clock', lead, value: formatCountdown(remaining) }
