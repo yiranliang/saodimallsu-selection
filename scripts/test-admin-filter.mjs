@@ -360,5 +360,15 @@ check('hidden only', idsOf(filterProducts(withHidden, { hiddenOnly: true })), ['
 check('hidden AND category', idsOf(filterProducts(withHidden, { hiddenOnly: true, category: 'Bottoms' })), ['h2'])
 check('hidden AND a non-matching query', filterProducts(withHidden, { hiddenOnly: true, query: 'visible' }), [])
 
+/* ── 多分类：旧分类只留在"同时归入"里，选项也不能消失 ── */
+console.log('\n[多分类] 分类选项来自主分类 + 额外归属')
+const moved = [
+  { id: 'x1', category: 'Cropped Cardigans', categories: ['Cropped Cardigans', 'Striped'] },
+  { id: 'x2', category: 'Cropped Cardigans', categories: ['Cropped Cardigans'] },
+]
+check('选项包含额外分类', categoryOptionsOf(moved).includes('Striped'), true)
+check('按额外分类筛能得到商品', idsOf(filterProducts(moved, { category: 'Striped' })), ['x1'])
+check('主分类仍然命中两件', filterProducts(moved, { category: 'Cropped Cardigans' }).length, 2)
+
 console.log(`Passed ${passed}${failed ? `, failed ${failed}` : ''}`)
 if (failed) process.exit(1)

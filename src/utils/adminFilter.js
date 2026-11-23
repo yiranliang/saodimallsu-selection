@@ -262,12 +262,17 @@ export function dealItemsCountOf(products, now = Date.now()) {
 export function categoryOptionsOf(products) {
   const seen = new Set()
   for (const product of Array.isArray(products) ? products : []) {
-    const name = product?.category
-    /* A category literally named "All" would collide with the sentinel: the
-     * dropdown would carry two `value="All"` options and the second one could
-     * never be selected. Leaving it out of the list is the honest trade — those
-     * products are still reachable with the search box. */
-    if (name && name !== ALL_CATEGORIES) seen.add(name)
+    /* 主分类 + 额外归属（21-product-categories.sql）。只取主分类的话，
+     * 一件商品改走主分类、只把旧分类留在"同时归入"里，那个分类就会从
+     * 下拉和前台入口里彻底消失 —— 明明它下面还有商品。 */
+    const names =
+      Array.isArray(product?.categories) && product.categories.length
+        ? product.categories
+        : [product?.category]
+    for (const name of names) {
+      /* 叫 "All" 的分类会和哨兵值撞车，历史上就不列；保持这个取舍。 */
+      if (name && name !== ALL_CATEGORIES) seen.add(name)
+    }
   }
   return [...seen].sort((a, b) => a.localeCompare(b))
 }

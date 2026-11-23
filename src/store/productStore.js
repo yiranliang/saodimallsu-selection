@@ -1167,17 +1167,38 @@ export async function setProductExtraCategories(id, categories) {
     .filter(Boolean))]
 
   const client = requireClient()
-  const { error: deleteError } = await client
-    .from('product_categories')
-    .delete()
-    .eq('product_id', productId)
-  if (deleteError) throw new Error(deleteError.message)
 
+  /* 先写需要的行（upsert 幂等），再删掉多余的行。
+   * 之前是"先全删再加"：一旦 insert 因为外键 / 策略失败，商品的分类归属就
+   * 被清空了 —— 分类从此没有商品，前台入口也跟着消失。 */
   if (list.length) {
     const { error } = await client
       .from('product_categories')
-      .insert(list.map((category) => ({ product_id: productId, category })))
-    if (error) throw new Error(error.message)
+      .upsert(
+        list.map((category) => ({ product_id: productId, category })),
+        { onConflict: 'product_id,category' },
+      )
+    if (error) throw new Error(`额外分类没存上：${error.message}`)
+  }
+
+  const keep = new Set(list)
+  const { data: existing, error: readError } = await client
+    .from('product_categories')
+    .select('category')
+    .eq('product_id', productId)
+  if (readError) throw new Error(`额外分类读取失败：${readError.message}`)
+
+  const stale = (existing || [])
+    .map((row) => String(row.category ?? ''))
+    .filter((category) => category && !keep.has(category))
+
+  for (const category of stale) {
+    const { error } = await client
+      .from('product_categories')
+      .delete()
+      .eq('product_id', productId)
+      .eq('category', category)
+    if (error) throw new Error(`额外分类移除失败：${error.message}`)
   }
 
   /* 缓存：把主分类留下，额外分类换成新的。 */
