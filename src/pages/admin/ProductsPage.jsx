@@ -41,7 +41,7 @@ import {createProduct,
   getDealColumnStatus,
   getCampaignColumnStatus,
   getPriorityColumnStatus,
-  UNCATEGORISED, setProductsHoliday, setProductsExtraCategory, clearAllExtraMemberships } from '../../store/productStore.js'
+  UNCATEGORISED, setProductsHoliday, setProductsExtraCategory } from '../../store/productStore.js'
 import { deleteDealSlotsBySku } from '../../store/dealStore.js'
 import {useCategories, useCategoryGroups, useCategoryGroupList } from '../../hooks/useCategories.js'
 import {addCategory, renameCategory, removeCategory, moveCategory, setCategoryGroup, addCategoryGroup, removeCategoryGroup, moveCategoryGroup, saveMenuLayout, renameCategoryGroup } from '../../utils/categoryStore.js'
@@ -984,20 +984,6 @@ export default function ProductsPage() {
     }
   }
 
-  /* 一次性修复：清空所有「同时归入」。 */
-  const handleClearExtras = async () => {
-    const ok = window.confirm(
-      '清空所有商品的「同时归入」？\n\n只保留每件商品的主分类；之后需要的可以重新设置。',
-    )
-    if (!ok) return
-    try {
-      await clearAllExtraMemberships()
-      showToast?.('已清空额外分类归属', 'success')
-    } catch (err) {
-      showToast?.(err.message, 'error')
-    }
-  }
-
   /* 一级分组本身的新增 / 排序 / 删除（22-category-groups.sql）。 */
   const handleAddCategoryGroup = async (name) => {
     try {
@@ -1489,7 +1475,6 @@ export default function ProductsPage() {
           renameCategory: handleRenameCategory,
           moveCategory: handleMoveCategory,
           removeCategory: handleDeleteCategory,
-          clearExtras: handleClearExtras,
         }}
       />
 
