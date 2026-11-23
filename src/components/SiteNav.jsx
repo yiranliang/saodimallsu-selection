@@ -70,6 +70,11 @@ export default function SiteNav({
   const [mobileSearch, setMobileSearch] = useState(false)
   /* Shop 的两级菜单：默认全部折叠，点大分类才展开它的下级。 */
   const [openShopGroup, setOpenShopGroup] = useState(null)
+  /* 手机抽屉：分段与分组都用 +/- 控制，默认全部收起（Free People 那种）。 */
+  const [drawerOpen, setDrawerOpen] = useState({})
+
+  const toggleDrawer = (key) =>
+    setDrawerOpen((current) => ({ ...current, [key]: !current[key] }))
   const menuRootRef = useRef(null)
   /* 悬停关闭要延迟：从 SHOP 按钮移到面板之间会经过顶栏空白，立刻关会让
    * 菜单"还没到就没了"。进入按钮或面板时把计时器取消。 */
@@ -510,7 +515,11 @@ export default function SiteNav({
         }`}
       >
         <div className="px-5 pb-6 pt-3">
-          <DrawerGroup title="Sale">
+          <DrawerGroup
+            title="Sale"
+            open={Boolean(drawerOpen.sale)}
+            onToggle={() => toggleDrawer('sale')}
+          >
             {dealsCount > 0 && (
               <DrawerItem
                 label={REGULAR_DEALS_LABEL}
@@ -578,7 +587,11 @@ export default function SiteNav({
             )}
           </DrawerGroup>
 
-          <DrawerGroup title="Shop">
+          <DrawerGroup
+            title="Shop"
+            open={Boolean(drawerOpen.shop)}
+            onToggle={() => toggleDrawer('shop')}
+          >
             <DrawerItem
               label="All products"
               count={total}
@@ -602,13 +615,8 @@ export default function SiteNav({
                     }`}
                   >
                     <span className="flex min-w-0 items-center gap-2">
-                      <span
-                        aria-hidden="true"
-                        className={`inline-block text-[9px] text-charcoal-light/70 transition-transform ${
-                          expanded ? 'rotate-90' : ''
-                        }`}
-                      >
-                        {'▶'}
+                      <span aria-hidden="true" className="text-[15px] leading-none text-charcoal/60">
+                        {expanded ? '－' : '＋'}
                       </span>
                       <span className="truncate">{group.title}</span>
                     </span>
@@ -635,7 +643,11 @@ export default function SiteNav({
             })}
           </DrawerGroup>
 
-          <DrawerGroup title="Curated">
+          <DrawerGroup
+            title="Curated"
+            open={Boolean(drawerOpen.curated)}
+            onToggle={() => toggleDrawer('curated')}
+          >
             <DrawerItem
               label="INSPO"
               count={total}
@@ -658,13 +670,23 @@ export default function SiteNav({
   )
 }
 
-function DrawerGroup({ title, children }) {
+function DrawerGroup({ title, open, onToggle, children }) {
   return (
-    <div className="mt-3 first:mt-1">
-      <div className="text-[10px] font-medium uppercase tracking-[0.18em] text-charcoal-light/70">
-        {title}
-      </div>
-      <div className="mt-1 flex flex-col">{children}</div>
+    <div className="border-b border-charcoal/[0.06] first:border-t first:border-t-charcoal/[0.06]">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 py-3 text-left"
+      >
+        <span className="text-[10px] font-medium uppercase tracking-[0.18em] text-charcoal-light/70">
+          {title}
+        </span>
+        <span aria-hidden="true" className="text-[15px] leading-none text-charcoal/60">
+          {open ? '－' : '＋'}
+        </span>
+      </button>
+      {open && <div className="flex flex-col pb-2">{children}</div>}
     </div>
   )
 }

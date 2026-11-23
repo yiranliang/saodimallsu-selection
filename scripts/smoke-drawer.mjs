@@ -1,40 +1,42 @@
 import { chromium } from 'playwright-core'
 
 const EDGE = 'C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe'
-const BASE = 'http://localhost:5199/'
-
-const errors = []
 const browser = await chromium.launch({ executablePath: EDGE, headless: true })
-const page = await browser.newPage({ viewport: { width: 390, height: 844 } })
+const page = await browser.newPage({ viewport: { width: 430, height: 900 } })
+const logs = []
+page.on('pageerror', (e) => logs.push(`pageerror: ${e.message}`))
 
-page.on('pageerror', (e) => errors.push(`pageerror: ${e.message}`))
-
-await page.goto(BASE, { waitUntil: 'networkidle' })
-await page.waitForTimeout(1200)
-
+await page.goto('http://localhost:5199/', { waitUntil: 'networkidle' })
+await page.waitForTimeout(1500)
 const skip = page.locator('text=Skip')
 if (await skip.count()) {
   await skip.first().click()
   await page.waitForTimeout(300)
 }
 
-/* 汉堡菜单 */
-const burger = page.getByRole('button', { name: /menu|导航|打开/i }).first()
-console.log('burger count:', await burger.count())
-if (await burger.count()) {
-  await burger.click()
-  await page.waitForTimeout(500)
-}
+/* 打开汉堡菜单 */
+await page.getByRole('button', { name: /menu|导航|打开/i }).first().click()
+await page.waitForTimeout(600)
+await page.screenshot({ path: 'shots/drawer-collapsed.png' })
 
-await page.screenshot({ path: 'shots/nav-drawer.png' })
+const collapsed = await page.locator('text=Black Friday Special').count()
+console.log('默认收起（看不到 Black Friday Special）:', collapsed === 0)
 
-/* 展开 Tops */
-const tops = page.locator('button[aria-expanded="false"]').filter({ hasText: 'Tops' }).first()
-if (await tops.count()) {
-  await tops.click({ force: true })
+/* 展开 SHOP */
+const shopRow = page.locator('button', { hasText: 'Shop' }).last()
+if (await shopRow.count()) {
+  await shopRow.click()
   await page.waitForTimeout(400)
-  await page.screenshot({ path: 'shots/nav-drawer-expanded.png' })
+  await page.screenshot({ path: 'shots/drawer-shop.png' })
 }
 
-console.log('errors:', errors.length ? errors.join('\n') : 'none')
+/* 再展开一个分组（Tops） */
+const tops = page.locator('button').filter({ hasText: 'Tops' }).last()
+if (await tops.count()) {
+  await tops.click()
+  await page.waitForTimeout(400)
+  await page.screenshot({ path: 'shots/drawer-tops.png' })
+}
+
+console.log('页面错误:', logs.length ? logs.join('\n') : 'none')
 await browser.close()
