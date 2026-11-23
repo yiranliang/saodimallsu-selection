@@ -18,6 +18,7 @@ import ProductEditor from '../../components/admin/ProductEditor.jsx'
 import Modal from '../../components/Modal.jsx'
 import FilterMenu from '../../components/admin/FilterMenu.jsx'
 import SettingsDialog from '../../components/admin/SettingsDialog.jsx'
+import InlineSelect from '../../components/admin/InlineSelect.jsx'
 import { useProducts, useCatalogueStatus } from '../../hooks/useProducts.js'
 import {createProduct,
   updateProduct,
@@ -1783,7 +1784,7 @@ export default function ProductsPage() {
               type="button"
               onClick={() => setBatchCategoryOpen(true)}
               className="rounded-full bg-cream-dark px-2.5 py-1 text-[10.5px] font-medium text-charcoal transition hover:bg-cream-dark/70 active:scale-95"
-            >{t('Batch Edit Category')}</button>
+            >批量分类</button>
             <button
               type="button"
               onClick={() => setConfirmBulkDelete(true)}
@@ -3689,99 +3690,128 @@ function BatchCategoryDialog({ open, products, categories, onClose, onApply }) {
     }
   }
 
+  const mainModes = CATEGORY_MODES.filter((option) => option.section === 'main')
+  const extraModes = CATEGORY_MODES.filter((option) => option.section === 'extra')
+
+  const renderMode = (option) => {
+    const affected = option.id === 'fill' ? fillCount : count
+    const active = mode === option.id
+    return (
+      <label
+        key={option.id}
+        className={`flex cursor-pointer items-start gap-2 rounded-xl px-3 py-2.5 transition ${
+          active ? 'bg-cream-dark/70 ring-1 ring-charcoal/15' : 'hover:bg-cream-dark/40'
+        }`}
+      >
+        <input
+          type="radio"
+          name="batch-category-mode"
+          value={option.id}
+          checked={active}
+          onChange={() => setMode(option.id)}
+          className="mt-0.5 h-3.5 w-3.5 accent-charcoal"
+        />
+        <span className="min-w-0">
+          <span className="flex items-baseline gap-1.5">
+            <span className="text-[12px] font-medium text-charcoal">{option.label}</span>
+            <span className="text-[10px] tabular-nums text-charcoal-light">{affected} 件</span>
+          </span>
+          <span className="mt-0.5 block text-[10.5px] leading-relaxed text-charcoal-light">
+            {option.hint}
+          </span>
+        </span>
+      </label>
+    )
+  }
+
+  const actionLabel =
+    mode === 'add'
+      ? `把 ${count} 件同时归入「${name}」`
+      : mode === 'remove'
+        ? `取消「${name}」这个同时归类`
+        : mode === 'fill'
+          ? `给 ${fillCount} 件补上「${name}」`
+          : `把 ${count} 件改成「${name}」`
+
   return (
-    <Modal open={open} onClose={onClose} title="批量改分类" maxWidth="max-w-md">
+    <Modal open={open} onClose={onClose} title="批量分类" maxWidth="max-w-md">
       <div className="px-5 pb-5 pt-5 sm:px-6">
         <p className="text-[11.5px] leading-relaxed text-charcoal-light">
-          把 <span className="font-medium text-charcoal">{count} 件商品</span>
-          移到一个分类。只写分类这一列，别的不动。
+          已选 <span className="font-medium text-charcoal">{count} 件商品</span>。只写分类相关的列，
+          价格、库存、标签都不动。
         </p>
 
         <div className="mt-4">
-          <label className="block">
-            <span className="text-[10px] font-medium uppercase tracking-wider text-charcoal-light">{t('Category')}</span>
-            <select
+          <div className="text-[10px] font-medium uppercase tracking-wider text-charcoal-light">
+            目标分类
+          </div>
+          <div className="mt-1">
+            <InlineSelect
               value={choice}
-              onChange={(event) => setChoice(event.target.value)}
-              aria-label="Batch category"
-              className="input-field mt-1 text-[13px]"
-            >
-              <option value="">{t('Choose a category…')}</option>
-              {categories.map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-              <option value={NEW_CATEGORY}>{t('＋ New category…')}</option>
-            </select>
-          </label>
+              placeholder="选择分类…"
+              ariaLabel="批量分类目标"
+              width="w-full"
+              align="left"
+              onChange={setChoice}
+              options={[
+                ...categories.map((category) => ({ value: category, label: category })),
+                { value: NEW_CATEGORY, label: '＋ 新建分类…' },
+              ]}
+            />
+          </div>
 
           {isNew && (
             <label className="mt-2 block">
-              <span className="text-[10px] font-medium uppercase tracking-wider text-charcoal-light">{t('New category name')}</span>
               <input
                 type="text"
                 value={custom}
                 onChange={(event) => setCustom(event.target.value)}
-                placeholder="例如 Black Friday"
-                aria-label="New batch category name"
-                className="input-field mt-1 text-[13px]"
+                placeholder="新分类名，例如 Black Friday"
+                aria-label="新分类名"
+                className="input-field text-[13px]"
               />
               {willCreate && name && (
-                <span className="mt-1 block text-[10px] text-charcoal-light/70">{t('will be added to the categories table')}</span>
+                <span className="mt-1 block text-[10px] text-charcoal-light/70">
+                  会先创建这个分类
+                </span>
               )}
             </label>
           )}
         </div>
 
-        <div className="mt-4 space-y-1.5">
-          {CATEGORY_MODES.map((option) => {
-            const affected = option.id === 'fill' ? fillCount : count
-            const active = mode === option.id
-            return (
-              <label
-                key={option.id}
-                className={`flex cursor-pointer items-start gap-2 rounded-xl px-3 py-2.5 transition ${
-                  active ? 'bg-cream-dark/70 ring-1 ring-charcoal/15' : 'hover:bg-cream-dark/40'
-                }`}
-              >
-                <input
-                  type="radio"
-                  name="batch-category-mode"
-                  value={option.id}
-                  checked={active}
-                  onChange={() => setMode(option.id)}
-                  className="mt-0.5 h-3.5 w-3.5 accent-charcoal"
-                />
-                <span className="min-w-0">
-                  <span className="flex items-baseline gap-1.5">
-                    <span className="text-[12px] font-medium text-charcoal">{t(option.label)}</span>
-                    <span className="text-[10px] tabular-nums text-charcoal-light">
-                      {affected} 件
-                    </span>
-                  </span>
-                  <span className="mt-0.5 block text-[10.5px] leading-relaxed text-charcoal-light">
-                    {option.hint}
-                  </span>
-                </span>
-              </label>
-            )
-          })}
+        <div className="mt-4">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-charcoal-light">
+            改主分类
+          </div>
+          <div className="mt-1 space-y-1.5">{mainModes.map(renderMode)}</div>
         </div>
+
+        <div className="mt-3">
+          <div className="text-[10px] font-medium uppercase tracking-wider text-charcoal-light">
+            同时归类（不动主分类）
+          </div>
+          <div className="mt-1 space-y-1.5">{extraModes.map(renderMode)}</div>
+        </div>
+
+        <p className="mt-3 text-[10.5px] leading-relaxed text-charcoal-light/70">
+          分组由分类自动决定，不在这里改 —— 改完分类后，商品的分组会跟着分类走。
+        </p>
 
         <div className="mt-5 flex items-center gap-2">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full bg-cream-dark px-4 py-2.5 text-[12.5px] font-medium text-charcoal/75 transition hover:text-charcoal"
-          >{t('Cancel')}</button>
+            className="rounded-full bg-cream-dark px-4 py-2.5 text-[12.5px] font-medium text-charcoal transition hover:bg-cream-dark/70"
+          >
+            取消
+          </button>
           <button
             type="button"
             onClick={apply}
             disabled={!name || busy || (mode === 'fill' && fillCount === 0)}
-            className="ml-auto rounded-full bg-charcoal px-4 py-2.5 text-[12.5px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-40"
+            className="ml-auto rounded-full bg-charcoal px-4 py-2.5 text-[12.5px] font-medium text-cream transition hover:bg-charcoal/85 disabled:cursor-not-allowed disabled:opacity-40"
           >
-            {busy ? '保存中…' : name ? `移到「${name}」` : `移动 ${count} 件`}
+            {busy ? '保存中…' : name ? actionLabel : `移动 ${count} 件`}
           </button>
         </div>
       </div>

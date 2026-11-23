@@ -158,23 +158,27 @@ export function parsePriorityInput(value) {
 export const CATEGORY_MODES = [
   {
     id: 'replace',
-    label: 'Overwrite all',
-    hint: 'Every selected product moves to this category.',
+    section: 'main',
+    label: '改写主分类',
+    hint: '所选商品的主分类都改成它；原来是什么分类都不保留。',
   },
   {
     id: 'fill',
-    label: 'Only fill uncategorised',
-    hint: 'Products that already have a category keep it.',
+    section: 'main',
+    label: '只补「未分类」',
+    hint: '已经有主分类的商品不动，只给还没有分类的补上。',
   },
   {
     id: 'add',
-    label: 'Add as an extra category',
-    hint: 'Keeps the main category and also lists them under this one.',
+    section: 'extra',
+    label: '同时归类到它',
+    hint: '保留各自的主分类，再额外归到这个分类下（会出现"同时归入"）。',
   },
   {
     id: 'remove',
-    label: 'Remove this extra category',
-    hint: 'Only removes the extra membership; the main category stays.',
+    section: 'extra',
+    label: '取消这个同时归类',
+    hint: '只移除额外归属，商品的主分类不变。',
   },
 ]
 
