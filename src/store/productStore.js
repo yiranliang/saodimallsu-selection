@@ -144,6 +144,7 @@ const ABSENT_HINTS = {
   sub_tag: { meaning: '「全部没有副标签」', sql: 'supabase/11-sub-badge-deal-priority.sql' },
   sub_badge_color: { meaning: '「全部没有副标签」', sql: 'supabase/11-sub-badge-deal-priority.sql' },
   deal_priority: { meaning: '「秒杀专区全部不置顶」', sql: 'supabase/11-sub-badge-deal-priority.sql' },
+  category_pins: { meaning: '「分类内全部不置顶」', sql: 'supabase/23-category-pins.sql' },
   photo_count: { meaning: '「列表仍会带上变体图 JSON」', sql: 'supabase/15-photo-count.sql' },
 }
 
@@ -167,6 +168,9 @@ let subBadgeAvailable = false
 let subBadgeStatus = 'unknown'
 let priorityColumnAvailable = false
 let priorityColumnStatus = 'unknown'
+/* 23-category-pins.sql：分类内置顶。缺列时按钮会明确报错，而不是静默丢掉。 */
+let pinsColumnAvailable = false
+let pinsColumnStatus = 'unknown'
 /* 15-photo-count.sql。有它，列表就能省掉 `variant_images`。 */
 let photoCountAvailable = false
 let photoCountStatus = 'unknown'
@@ -616,6 +620,8 @@ export async function loadProducts({ silent = false, light } = {}) {
       subBadgeStatus = subBadgeAvailable ? 'ok' : 'missing'
       priorityColumnAvailable = columns.includes('deal_priority')
       priorityColumnStatus = priorityColumnAvailable ? 'ok' : 'missing'
+      pinsColumnAvailable = columns.includes('category_pins')
+      pinsColumnStatus = pinsColumnAvailable ? 'ok' : 'missing'
       photoCountAvailable = columns.includes(PHOTO_COUNT_COLUMN)
       photoCountStatus = photoCountAvailable ? 'ok' : 'missing'
 
@@ -1292,6 +1298,38 @@ export async function clearAllExtraMemberships() {
     return rest
   })
   notify()
+}
+
+/**
+ * 分类内置顶：写 `products.category_pins[category]`。
+ *
+ * `weight > 0` = 在该分类置顶（值越大越靠前），`0` = 取消。
+ * 只动这一列，**不碰全局 sort_order** —— 这正是"只在某个分类里置顶"的实现方式。
+ */
+export async function setProductCategoryPin(id, category, weight) {
+  const name = String(category || '').trim()
+  if (!name) throw new Error('缺少分类名')
+
+  const product = cache.find((item) => String(item.id) === String(id))
+  const pins = { ...(product?.categoryPins || {}) }
+  const value = Math.max(0, Math.trunc(Number(weight) || 0))
+  if (value > 0) pins[name] = value
+  else delete pins[name]
+
+  const client = requireClient()
+  const query = client.from('products').update({ category_pins: pins }).eq('id', id)
+  const { error } = await query
+  if (error) {
+    throw new Error(
+      /category_pins/.test(error.message)
+        ? '分类置顶存不进去：缺 category_pins 列。先在 Supabase 跑一次 supabase/23-category-pins.sql。'
+        : error.message,
+    )
+  }
+
+  patchCachedRow(id, { category_pins: pins })
+  notify()
+  return pins
 }
 
 export async function setProductsExtraCategory(ids, category, action = 'add') {

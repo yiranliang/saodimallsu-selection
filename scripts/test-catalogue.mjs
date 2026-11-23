@@ -21,6 +21,7 @@ import {
   slicePage,
   nextLimit,
   hasMore,
+  applyCategoryPins,
 } from '../src/utils/catalogue.js'
 import { isShoppable } from '../src/utils/teaser.js'
 import {
@@ -561,6 +562,50 @@ check('主分类命中',
   ['m1', 'm2'])
 check('额外分类命中', filterCatalogue(multi, { category: 'Dresses' }).map((p) => p.id), ['m1'])
 check('都不命中的分类为空', filterCatalogue(multi, { category: 'Shoes' }).length, 0)
+
+/* ── 分类内置顶 ── */
+console.log('\n分类内置顶')
+
+const pinned = [
+  { id: 'a', categoryPins: {} },
+  { id: 'b', categoryPins: { Sweaters: 1 } },
+  { id: 'c', categoryPins: {} },
+  { id: 'd', categoryPins: { Sweaters: 2 } },
+]
+
+check(
+  '按权重把置顶项排到最前',
+  applyCategoryPins(pinned, 'Sweaters').map((p) => p.id),
+  ['d', 'b', 'a', 'c'],
+)
+check(
+  '其它分类不受影响',
+  applyCategoryPins(pinned, 'Cardigans').map((p) => p.id),
+  ['a', 'b', 'c', 'd'],
+)
+check('All products 忽略置顶', applyCategoryPins(pinned, 'All').map((p) => p.id), [
+  'a',
+  'b',
+  'c',
+  'd',
+])
+check(
+  '没有置顶时保持原顺序',
+  applyCategoryPins([{ id: 'x' }, { id: 'y' }], 'Sweaters').map((p) => p.id),
+  ['x', 'y'],
+)
+check(
+  '同权重保持进入顺序',
+  applyCategoryPins(
+    [
+      { id: 'p1', categoryPins: { X: 3 } },
+      { id: 'p2', categoryPins: { X: 3 } },
+      { id: 'p3' },
+    ],
+    'X',
+  ).map((p) => p.id),
+  ['p1', 'p2', 'p3'],
+)
 
 /* ── summary ── */
 console.log(`\n${'─'.repeat(44)}`)

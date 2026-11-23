@@ -234,6 +234,40 @@ export function storefrontOrder(list) {
   return live.concat(teasers, hidden)
 }
 
+/**
+ * 分类内置顶。
+ *
+ * 运营在某个分类里点「置顶」写的是 `categoryPins[分类名]`，而不是全局
+ * `sort_order` —— 后者会把一件商品搬到全站第一位，只在 All products 里看得出来。
+ * 这里只做一件事：把**当前分类**下被钉住的商品按权重挪到最前，其余保持传入顺序
+ * （= 后台拖拽序 / 现有 storefrontOrder），所以取消置顶能原样还原。
+ *
+ * 只在"叶分类"视图生效：All / 分组 / 标签 / SALE 各自有排序规则，传进来的
+ * category 对不上任何键，自然原样返回。
+ *
+ * @param {Array} list 已经排好序的商品
+ * @param {string} category 当前分类名
+ */
+export function applyCategoryPins(list, category) {
+  const items = Array.isArray(list) ? list : []
+  const name = String(category || '').trim()
+  if (!name || name === 'All' || items.length < 2) return items.slice()
+
+  const pinned = []
+  const rest = []
+  items.forEach((product, index) => {
+    const weight = Number(product?.categoryPins?.[name])
+    if (Number.isFinite(weight) && weight > 0) pinned.push({ product, index, weight })
+    else rest.push(product)
+  })
+
+  if (!pinned.length) return items.slice()
+
+  /* 权重大的在前；同权重按原顺序 —— 两次点击得到 1、2，第二次点的排更前。 */
+  pinned.sort((a, b) => b.weight - a.weight || a.index - b.index)
+  return pinned.map((entry) => entry.product).concat(rest)
+}
+
 /** The first `limit` items. `limit <= 0` means "nothing", not "everything". */
 export function slicePage(list, limit) {
   const items = Array.isArray(list) ? list : []

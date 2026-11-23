@@ -130,12 +130,36 @@ function shared(product) {
   const dealPriority = Number(product?.dealPriority)
   if (Number.isFinite(dealPriority) && dealPriority > 0) out.dealPriority = Math.trunc(dealPriority)
 
+  /* 分类内置顶：{ 分类名: 权重 }。0 / 空对象不写进形状。 */
+  const pins = product?.categoryPins
+  if (pins && typeof pins === 'object') {
+    const clean = {}
+    for (const [name, value] of Object.entries(pins)) {
+      const weight = Number(value)
+      if (name && Number.isFinite(weight) && weight > 0) clean[name] = Math.trunc(weight)
+    }
+    if (Object.keys(clean).length) out.categoryPins = clean
+  }
+
   /* 图片数（`15-photo-count.sql` 的 `photo_count`，由触发器维护）。
    * 后台列表用这个整数画「N 张图」，从而不必拉 `variant_images` 本体。
    * 0 = 没有专属图，和以前一样不显示标签，所以不写进形状。 */
   const photoCount = Number(product?.photoCount)
   if (Number.isFinite(photoCount) && photoCount > 0) out.photoCount = Math.trunc(photoCount)
 
+  return out
+}
+
+/** 置顶表规整：只保留"名字非空 + 权重 > 0"的键，返回普通对象（不是 null） */
+function normalizePins(value) {
+  const out = {}
+  if (value && typeof value === 'object') {
+    for (const [name, weight] of Object.entries(value)) {
+      const clean = String(name || '').trim()
+      const number = Number(weight)
+      if (clean && Number.isFinite(number) && number > 0) out[clean] = Math.trunc(number)
+    }
+  }
   return out
 }
 
@@ -162,6 +186,7 @@ export function rowToProduct(row) {
       badgeColor: row.badge_color,
       isTeaser: row.is_teaser,
     isHoliday: row.is_holiday === true,
+      categoryPins: row.category_pins,
       /* 13-*.sql。没跑过迁移的库读回来是 `undefined` → `false`（常规秒杀），
        * 正好等于拆分之前的行为：所有秒杀都在同一个 Tab 里。 */
       isCampaign: row.is_campaign === true,
@@ -217,6 +242,9 @@ export function productToRow(product, { id, sortOrder } = {}) {
     /* 大促归属（13-*.sql）。永远是布尔，`not null default false`：写 `false`
      * 才让"在编辑器里把它改回常规"真的落到行上，而不是靠默认值。 */
     is_campaign: product?.isCampaign === true,
+    /* 分类内置顶（23-category-pins.sql）。永远写对象，空对象 = 不置顶：
+     * 列是 `not null default '{}'`，显式写空对象才能把"取消置顶"落到行上。 */
+    category_pins: normalizePins(product?.categoryPins),
     /* `null`, not '': same reasoning as badge_color. An empty string and a
      * missing value would mean the same thing to the storefront but would look
      * like two different states in the table. */

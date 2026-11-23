@@ -41,7 +41,7 @@ import {createProduct,
   getDealColumnStatus,
   getCampaignColumnStatus,
   getPriorityColumnStatus,
-  UNCATEGORISED, setProductsHoliday, setProductsExtraCategory } from '../../store/productStore.js'
+  UNCATEGORISED, setProductsHoliday, setProductsExtraCategory, setProductCategoryPin } from '../../store/productStore.js'
 import { deleteDealSlotsBySku } from '../../store/dealStore.js'
 import {useCategories, useCategoryGroups, useCategoryGroupList } from '../../hooks/useCategories.js'
 import {addCategory, renameCategory, removeCategory, moveCategory, setCategoryGroup, addCategoryGroup, removeCategoryGroup, moveCategoryGroup, saveMenuLayout, renameCategoryGroup } from '../../utils/categoryStore.js'
@@ -1276,6 +1276,33 @@ export default function ProductsPage() {
     moveProduct(id, direction).catch((err) => showToast?.(err.message, 'error'))
   }
 
+  /* ── 分类内置顶 ──
+   * 只有"选中某个叶分类"时才有意义：那时 ⇧ 写的是 `category_pins[该分类]`，
+   * 全局 sort_order 一动不动。All products 视图下 ⇧ 仍是原来的"移到全站最前"。 */
+  const pinnedCategory = categoryOptions.includes(category) ? category : null
+
+  const handleToggleCategoryPin = (product) => {
+    if (!pinnedCategory) return
+    const current = Number(product?.categoryPins?.[pinnedCategory]) || 0
+    const nextWeight = current > 0
+      ? 0
+      : products.reduce((max, item) => {
+          const weight = Number(item?.categoryPins?.[pinnedCategory]) || 0
+          return Math.max(max, weight)
+        }, 0) + 1
+
+    setProductCategoryPin(product.id, pinnedCategory, nextWeight)
+      .then(() => {
+        showToast?.(
+          current > 0
+            ? `已取消「${pinnedCategory}」置顶`
+            : `已置顶到「${pinnedCategory}」最前`,
+          'success',
+        )
+      })
+      .catch((err) => showToast?.(err.message, 'error'))
+  }
+
   /* One write each, so the toast can be specific: "moved to top" is true the
    * moment the promise resolves, not after a reindex settles. */
   const handleMoveToEdge = (id, edge) => {
@@ -1967,6 +1994,12 @@ export default function ProductsPage() {
                   )}
                 </div>
 
+                {pinnedCategory && Number(product?.categoryPins?.[pinnedCategory]) > 0 && (
+                  <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-accent/10 px-1.5 py-0.5 text-[10px] font-medium text-accent">
+                    📌 「{pinnedCategory}」置顶
+                  </p>
+                )}
+
                 {specSummary && (
                   <p className="mt-0.5 truncate text-[10.5px] text-charcoal-light/80">
                     {specSummary}
@@ -2026,11 +2059,21 @@ export default function ProductsPage() {
                   <div className="flex items-center gap-0.5">
                     <button
                       type="button"
-                      onClick={() => handleMoveToEdge(product.id, 'top')}
-                      disabled={index === 0}
-                      aria-label={`Move ${heading} to top`}
-                      title="Move to top"
-                      className="flex h-7 w-7 items-center justify-center rounded-full text-charcoal-light transition hover:bg-cream-dark hover:text-charcoal disabled:opacity-20 disabled:hover:bg-transparent"
+                      onClick={() =>
+                        pinnedCategory ? handleToggleCategoryPin(product) : handleMoveToEdge(product.id, 'top')
+                      }
+                      disabled={!pinnedCategory && index === 0}
+                      aria-label={
+                        pinnedCategory
+                          ? `${Number(product?.categoryPins?.[pinnedCategory]) > 0 ? '取消' : ''}在 ${pinnedCategory} 置顶 ${heading}`
+                          : `Move ${heading} to top`
+                      }
+                      title={pinnedCategory ? (Number(product?.categoryPins?.[pinnedCategory]) > 0 ? `取消「${pinnedCategory}」置顶` : `置顶到「${pinnedCategory}」`) : 'Move to top'}
+                      className={`flex h-7 w-7 items-center justify-center rounded-full transition disabled:opacity-20 disabled:hover:bg-transparent ${
+                        Number(product?.categoryPins?.[pinnedCategory]) > 0
+                          ? 'bg-accent/12 text-accent hover:bg-accent/20'
+                          : 'text-charcoal-light hover:bg-cream-dark hover:text-charcoal'
+                      }`}
                     >
                       <ArrowToTop className="h-3.5 w-3.5" />
                     </button>

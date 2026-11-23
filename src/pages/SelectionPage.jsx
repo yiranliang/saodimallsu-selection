@@ -45,7 +45,14 @@ import {
 } from '../utils/deal.js'
 import { hasSeenGuide, markGuideSeen, shouldAutoOpen } from '../utils/guide.js'
 import { mulberry32, nextSeed, pickFeatured } from '../utils/featured.js'
-import { storefrontOrder, filterCatalogue, slicePage, nextLimit, hasMore } from '../utils/catalogue.js'
+import {
+  applyCategoryPins,
+  storefrontOrder,
+  filterCatalogue,
+  slicePage,
+  nextLimit,
+  hasMore,
+} from '../utils/catalogue.js'
 import { pageSizeFor } from '../utils/grid.js'
 import { useGridColumns } from '../hooks/useGridColumns.js'
 import { useDealSlots } from '../hooks/useDealSlots.js'
@@ -544,8 +551,9 @@ const ordered = useMemo(
       : isDeals
         ? /* ⚡ 常规：紧迫度（进行中 → 排期中），和拆分之前一致。 */
           dealsOrder(filtered)
-        : storefrontOrder(filtered),
-  [filtered, isCampaign, isDeals],
+        : /* 分类视图：先应用"分类内置顶"，其余保持原顺序。 */
+          applyCategoryPins(storefrontOrder(filtered), activeCategory),
+  [filtered, isCampaign, isDeals, activeCategory],
 )
 
 const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit])

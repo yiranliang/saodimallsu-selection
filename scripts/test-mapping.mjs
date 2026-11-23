@@ -158,6 +158,15 @@ check('local product keeps its shape', Object.keys(local.specs), ['Colour'])
 check('local hidden kept', local.hidden, true)
 check('local id kept', local.id, 'p009')
 
+/* ── 分类内置顶：列 ↔ 形状 ── */
+console.log('\n分类内置顶')
+
+const pinRow = rowToProduct({ ...row, category_pins: { Sweaters: 3, Cardigans: 1 } })
+check('读回来是对象', pinRow.categoryPins, { Sweaters: 3, Cardigans: 1 })
+check('写回去是同一份', productToRow({ ...pinRow }).category_pins, { Sweaters: 3, Cardigans: 1 })
+check('没有置顶时写空对象而不是 null', productToRow({ ...row, categoryPins: {} }).category_pins, {})
+check('权重 0 / 负数会被丢掉', productToRow({ ...row, categoryPins: { Sweaters: 0, Cardigans: -2, Tops: 4 } }).category_pins, { Tops: 4 })
+
 console.log(`\n${'─'.repeat(44)}`)
 console.log(`Passed ${passed}${failed ? `, failed ${failed}` : ''}`)
 if (failed) process.exit(1)
