@@ -373,10 +373,18 @@ export default function ProductsPage() {
    * about — a hand-typed category must never become unreachable.
    */
   const managedCategories = useMemo(() => {
+    /* 数量按"主分类 + 额外归属"统计：一件商品可能只通过"同时归入"挂在某个
+     * 分类下（主分类已经换成别的），只数主分类会显示成 0。 */
     const counts = new Map()
     for (const product of products) {
-      const name = product.category || UNCATEGORISED
-      counts.set(name, (counts.get(name) || 0) + 1)
+      const names =
+        Array.isArray(product.categories) && product.categories.length
+          ? product.categories
+          : [product.category || UNCATEGORISED]
+      for (const name of new Set(names)) {
+        const key = name || UNCATEGORISED
+        counts.set(key, (counts.get(key) || 0) + 1)
+      }
     }
 
     const ordered = []
