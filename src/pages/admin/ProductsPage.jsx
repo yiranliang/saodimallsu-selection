@@ -42,8 +42,8 @@ import {createProduct,
   getPriorityColumnStatus,
   UNCATEGORISED, setProductsHoliday, setProductsExtraCategory } from '../../store/productStore.js'
 import { deleteDealSlotsBySku } from '../../store/dealStore.js'
-import {useCategories, useCategoryGroups } from '../../hooks/useCategories.js'
-import {addCategory, renameCategory, removeCategory, moveCategory, setCategoryGroup } from '../../utils/categoryStore.js'
+import {useCategories, useCategoryGroups, useCategoryGroupList } from '../../hooks/useCategories.js'
+import {addCategory, renameCategory, removeCategory, moveCategory, setCategoryGroup, addCategoryGroup, removeCategoryGroup, moveCategoryGroup } from '../../utils/categoryStore.js'
 import { useAsins, useAsinsStatus } from '../../hooks/useAsins.js'
 import { useAuth } from '../../hooks/useAuth.js'
 import { removeAsins, loadAsins, saveVariantAsins, moveAsins } from '../../utils/asinStore.js'
@@ -240,6 +240,7 @@ export default function ProductsPage() {
   const settings = useSettings()
   /* 分类的一级分组（20-category-group.sql）：设置弹窗里逐行可改。 */
   const categoryGroupMap = useCategoryGroups()
+  const categoryGroupList = useCategoryGroupList()
   const [tabLabelDraft, setTabLabelDraft] = useState(settings.dealsTabLabel)
   const [tabLabelSaving, setTabLabelSaving] = useState(false)
   /* 节日专区名（季节性的，换季就改） */
@@ -915,6 +916,37 @@ export default function ProductsPage() {
 
   /* ── categories ── */
 
+  /* 一级分组本身的新增 / 排序 / 删除（22-category-groups.sql）。 */
+  const handleAddCategoryGroup = async (name) => {
+    try {
+      const added = await addCategoryGroup(name)
+      if (!added) {
+        showToast?.('分组名不能为空或已存在', 'error')
+        return
+      }
+      showToast?.(`已添加分组「${String(name).trim()}」`, 'success')
+    } catch (err) {
+      showToast?.(err.message, 'error')
+    }
+  }
+
+  const handleMoveCategoryGroup = async (name, direction) => {
+    try {
+      await moveCategoryGroup(name, direction)
+    } catch (err) {
+      showToast?.(err.message, 'error')
+    }
+  }
+
+  const handleRemoveCategoryGroup = async (name) => {
+    try {
+      await removeCategoryGroup(name)
+      showToast?.(`已删除分组「${name}」，其下分类变为未分组`, 'success')
+    } catch (err) {
+      showToast?.(err.message, 'error')
+    }
+  }
+
   /* 改一个分类的一级分组（20-category-group.sql）。写库成功后 store 会通知，
    * 前台菜单和设置弹窗都跟着更新。 */
   const handleSetCategoryGroup = async (name, group) => {
@@ -1340,6 +1372,10 @@ export default function ProductsPage() {
           list: managedCategories,
           groups: categoryGroupMap,
           setGroup: handleSetCategoryGroup,
+          groupList: categoryGroupList,
+          addGroup: handleAddCategoryGroup,
+          moveGroup: handleMoveCategoryGroup,
+          removeGroup: handleRemoveCategoryGroup,
           add: (name) => handleAddCategory(name),
           rename: handleRenameCategory,
           move: handleMoveCategory,

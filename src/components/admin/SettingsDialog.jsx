@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { ChevronDown, Close, Plus, Trash } from '../icons.jsx'
-import { CATEGORY_GROUP_TITLES, getCategoryGroupStatus } from '../../utils/categoryStore.js'
+import { getCategoryGroupStatus } from '../../utils/categoryStore.js'
+import InlineSelect from './InlineSelect.jsx'
 
 /**
  * 站点设置对话框
@@ -28,6 +29,7 @@ export default function SettingsDialog({
 }) {
   const [panelOpen, setPanelOpen] = useState(true)
   const [newName, setNewName] = useState('')
+  const [newGroupName, setNewGroupName] = useState('')
   /* 分组列在不在：不在时下面给一条「先跑迁移」的提示。 */
   const groupColumnStatus = getCategoryGroupStatus()
   const [dragName, setDragName] = useState('')
@@ -140,6 +142,83 @@ export default function SettingsDialog({
             </p>
           )}
 
+          {/* 一级分组本身：新增 / 排序 / 删除。 */}
+          <div className="border-t border-charcoal/[0.06] pt-5">
+            <div className="text-[11px] font-medium tracking-wider text-charcoal-light">
+              一级分组
+            </div>
+            <p className="mt-0.5 text-[10.5px] leading-relaxed text-charcoal-light/80">
+              前台 SHOP 菜单左栏的顺序就是这里的顺序。
+            </p>
+
+            <div className="mt-2 space-y-1">
+              {(categories.groupList || []).map((title, index) => (
+                <div
+                  key={title}
+                  className="flex items-center gap-2 rounded-lg bg-cream/60 px-2 py-1.5"
+                >
+                  <span className="min-w-0 flex-1 truncate text-[12px] text-charcoal">
+                    {title}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => categories.moveGroup?.(title, -1)}
+                    disabled={index === 0}
+                    aria-label={`上移 ${title}`}
+                    className="rounded p-1 text-charcoal-light transition hover:bg-white hover:text-charcoal disabled:opacity-30"
+                  >
+                    ↑
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => categories.moveGroup?.(title, 1)}
+                    disabled={index === (categories.groupList || []).length - 1}
+                    aria-label={`下移 ${title}`}
+                    className="rounded p-1 text-charcoal-light transition hover:bg-white hover:text-charcoal disabled:opacity-30"
+                  >
+                    ↓
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => categories.removeGroup?.(title)}
+                    aria-label={`删除分组 ${title}`}
+                    className="rounded p-1 text-charcoal-light transition hover:bg-red-50 hover:text-red-500"
+                  >
+                    <Trash className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+
+              <div className="mt-2 flex gap-1.5">
+                <input
+                  type="text"
+                  value={newGroupName}
+                  onChange={(event) => setNewGroupName(event.target.value)}
+                  onKeyDown={(event) => {
+                    if (event.key !== 'Enter') return
+                    event.preventDefault()
+                    categories.addGroup?.(newGroupName)
+                    setNewGroupName('')
+                  }}
+                  placeholder="新分组名，如 Knitwear"
+                  aria-label="新分组名"
+                  className="min-w-0 flex-1 rounded-full bg-cream-dark/70 px-3 py-1.5 text-[11.5px] text-charcoal placeholder:text-charcoal-light/55 focus:outline-none focus:ring-1 focus:ring-accent"
+                />
+                <button
+                  type="button"
+                  onClick={() => {
+                    categories.addGroup?.(newGroupName)
+                    setNewGroupName('')
+                  }}
+                  className="flex shrink-0 items-center gap-1 rounded-full bg-charcoal px-3 py-1.5 text-[11px] font-medium text-cream transition hover:bg-charcoal/85 active:scale-95"
+                >
+                  <Plus className="h-3 w-3" />
+                  添加分组
+                </button>
+              </div>
+            </div>
+          </div>
+
           {/* 分类管理 */}
           <div className="border-t border-charcoal/[0.06] pt-5">
             <button
@@ -209,19 +288,18 @@ export default function SettingsDialog({
                       aria-label={`重命名分类 ${name}`}
                       className="min-w-0 flex-1 rounded-md bg-transparent px-1.5 py-1 text-[12px] text-charcoal focus:bg-white focus:outline-none focus:ring-1 focus:ring-charcoal/20"
                     />
-                    <select
+                    <InlineSelect
                       value={categories.groups?.[name] || ''}
-                      onChange={(event) => categories.setGroup?.(name, event.target.value)}
-                      aria-label={`${name} 的一级分组`}
-                      className="w-28 shrink-0 rounded-md bg-white px-1.5 py-1 text-[10.5px] text-charcoal ring-1 ring-charcoal/10 focus:outline-none focus:ring-charcoal/30"
-                    >
-                      <option value="">未分组</option>
-                      {CATEGORY_GROUP_TITLES.map((title) => (
-                        <option key={title} value={title}>
-                          {title}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(next) => categories.setGroup?.(name, next)}
+                      ariaLabel={`${name} 的一级分组`}
+                      placeholder="未分组"
+                      width="w-[7.5rem]"
+                      options={[
+                        { value: '', label: '未分组' },
+                        ...(categories.groupList || []).map((title) => ({ value: title, label: title })),
+                      ]}
+                    />
+
                     <span className="shrink-0 text-[10px] tabular-nums text-charcoal-light/60">{count}</span>
                     <button
                       type="button"

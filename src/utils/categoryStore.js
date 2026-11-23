@@ -49,6 +49,10 @@ const groupByName = new Map()
  */
 let groupColumnStatus = 'unknown'
 
+/** 一级分组本身（顺序即展示顺序）。表缺失时退回内置五个。 */
+let groupList = ['Tops', 'Bottoms', 'Sets & Dresses', 'Accessories', 'Shoes']
+const groupOrderByName = new Map(groupList.map((name, index) => [name, index]))
+
 export function getCategoryGroupStatus() {
   return groupColumnStatus
 }
@@ -80,6 +84,70 @@ function normalize(list) {
 /* ── reads ───────────────────────────────────────────────────────────────── */
 
 /** name → 一级分组。没有映射的分类不在里面（前台按关键词兜底）。 */
+/** 一级分组列表（顺序即前台菜单顺序）。 */
+export function getCategoryGroupList() {
+  return groupList
+}
+
+/** 新增一个一级分组（排在最后）。返回 false 表示重名或空。 */
+export async function addCategoryGroup(name) {
+  const value = String(name ?? '').trim()
+  if (!value) return false
+  if (groupList.some((item) => item.toLowerCase() === value.toLowerCase())) return false
+
+  const max = groupList.length ? Math.max(...groupList.map((item) => groupOrderByName.get(item) ?? 0)) : -1
+  const { error } = await requireClient()
+    .from('category_groups')
+    .insert({ name: value, sort_order: max + 1 })
+  if (error) throw new Error(error.message)
+
+  groupOrderByName.set(value, max + 1)
+  groupList = [...groupList, value]
+  notify()
+  return true
+}
+
+/** 删除一个一级分组。用它归类的分类会被置为"未分组"。 */
+export async function removeCategoryGroup(name) {
+  const value = String(name ?? '').trim()
+  if (!value) return
+
+  const client = requireClient()
+  await client.from('categories').update({ group_name: '' }).eq('group_name', value)
+  const { error } = await client.from('category_groups').delete().eq('name', value)
+  if (error) throw new Error(error.message)
+
+  groupOrderByName.delete(value)
+  groupList = groupList.filter((item) => item !== value)
+  for (const [category, group] of [...groupByName.entries()]) {
+    if (group === value) groupByName.delete(category)
+  }
+  notify()
+}
+
+/** 上移 / 下移一个一级分组（direction: -1 上，1 下）。 */
+export async function moveCategoryGroup(name, direction) {
+  const index = groupList.indexOf(String(name))
+  if (index < 0) return
+  const target = index + direction
+  if (target < 0 || target >= groupList.length) return
+
+  const reordered = [...groupList]
+  ;[reordered[index], reordered[target]] = [reordered[target], reordered[index]]
+
+  const client = requireClient()
+  await Promise.all(
+    reordered.map((item, order) =>
+      client.from('category_groups').update({ sort_order: order }).eq('name', item),
+    ),
+  )
+
+  groupList = reordered
+  groupOrderByName.clear()
+  reordered.forEach((item, order) => groupOrderByName.set(item, order))
+  notify()
+}
+
 export function getCategoryGroups() {
   return Object.fromEntries(groupByName)
 }
@@ -113,6 +181,29 @@ export function subscribeCategories(listener) {
 
 /* ── loading ─────────────────────────────────────────────────────────────── */
 
+/** 读一级分组表；表不存在时保留内置五个，不抛错。 */
+async function loadCategoryGroups() {
+  try {
+    const { data, error } = await requireClient()
+      .from('category_groups')
+      .select('name, sort_order')
+      .order('sort_order', { ascending: true })
+    if (error) return
+    const names = (data || [])
+      .map((row) => String(row.name ?? '').trim())
+      .filter(Boolean)
+    if (!names.length) return
+    groupList = names
+    groupOrderByName.clear()
+    for (const row of data || []) {
+      const name = String(row.name ?? '').trim()
+      if (name) groupOrderByName.set(name, row.sort_order ?? 0)
+    }
+  } catch {
+    /* 表还没建：用内置列表 */
+  }
+}
+
 export async function loadCategories({ silent = false } = {}) {
   if (!isConfigured) return cache
   if (inflight) return inflight
@@ -124,6 +215,7 @@ export async function loadCategories({ silent = false } = {}) {
 
   inflight = (async () => {
     try {
+      await loadCategoryGroups()
       let { data, error } = await requireClient()
         .from('categories')
         .select('name, sort_order, group_name')

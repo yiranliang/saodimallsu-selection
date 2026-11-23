@@ -2,6 +2,7 @@ import { useEffect, useState, useSyncExternalStore } from 'react'
 import {
   getCategories,
   getCategoryGroups,
+  getCategoryGroupList,
   subscribeCategories,
 } from '../utils/categoryStore.js'
 
@@ -29,4 +30,17 @@ export function useCategoryGroups() {
   }, [])
 
   return groups
+}
+
+/** 一级分组列表（顺序即前台菜单顺序）。 */
+export function useCategoryGroupList() {
+  const [list, setList] = useState(() => getCategoryGroupList())
+
+  useEffect(() => {
+    const update = () => setList(getCategoryGroupList())
+    update()
+    return subscribeCategories(update)
+  }, [])
+
+  return list
 }
