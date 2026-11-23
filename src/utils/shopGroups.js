@@ -48,7 +48,7 @@ export function groupOfCategory(name) {
  * @param {Record<string, number>} [counts] 每个分类的商品数
  * @returns {{ title: string, total: number, items: { value: string, label: string, count: number }[] }[]}
  */
-export function groupShopCategories(categories, counts = {}, explicit = {}) {
+export function groupShopCategories(categories, counts = {}, explicit = {}, order = []) {
   const buckets = new Map()
 
   for (const raw of Array.isArray(categories) ? categories : []) {
@@ -67,11 +67,20 @@ export function groupShopCategories(categories, counts = {}, explicit = {}) {
     })
   }
 
-  /* 按 SHOP_GROUPS 的顺序排，兜底组永远在最后 */
-  const order = [...SHOP_GROUPS.map((group) => group.title), SHOP_FALLBACK_GROUP]
+  /* 顺序：数据库里配的顺序（order）优先 → 代码里的默认顺序 → 兜底组最后。
+   * 之前只用代码里的顺序，于是运营自建的分组（Cardigans / Trending）因为没有
+   * 排序值，反而挤到最前面，和后台看到的顺序对不上。 */
+  const fallbackOrder = SHOP_GROUPS.map((group) => group.title)
+  const rank = (title) => {
+    if (title === SHOP_FALLBACK_GROUP) return Number.MAX_SAFE_INTEGER
+    const configured = order.indexOf(title)
+    if (configured >= 0) return configured
+    const builtin = fallbackOrder.indexOf(title)
+    return builtin >= 0 ? order.length + builtin : order.length + fallbackOrder.length
+  }
 
   return [...buckets.entries()]
-    .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
+    .sort((a, b) => rank(a[0]) - rank(b[0]))
     .map(([title, items]) => ({
       title,
       total: items.reduce((sum, item) => sum + item.count, 0),

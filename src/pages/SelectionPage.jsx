@@ -19,7 +19,11 @@ import { getInfluencerRef } from '../utils/storage.js'
 import { generateCodeFromLines, saveRecord } from '../utils/code.js'
 import { UNCATEGORISED, loadProducts, getCatalogueError, isCatalogueLight } from '../store/productStore.js'
 import { amazonUrlFor, listingKnownFor } from '../store/linkStore.js'
-import { useCategories, useCategoryGroups } from '../hooks/useCategories.js'
+import {
+  useCategories,
+  useCategoryGroups,
+  useCategoryGroupList,
+} from '../hooks/useCategories.js'
 import { useSettings } from '../hooks/useSettings.js'
 import { isComplete } from '../utils/lines.js'
 import { isSoldOut } from '../utils/soldOut.js'
@@ -87,6 +91,7 @@ export default function SelectionPage() {
 
   const categoryOrder = useCategories()
   const categoryGroups = useCategoryGroups()
+  const categoryGroupOrder = useCategoryGroupList()
   /* 大促专区的名字（后台可改成 `Black Friday`）。卡片要用它去重：进了这个
    * 专区，挂"同一场活动"的标签是零信息。
    *
@@ -769,6 +774,7 @@ const visibleProducts = useMemo(() => slicePage(ordered, limit), [ordered, limit
         <SiteNav
           categories={categoryList}
         categoryGroups={categoryGroups}
+        categoryGroupOrder={categoryGroupOrder}
           categoryCounts={categoryCounts}
           active={activeCategory}
           total={catalogue.length}

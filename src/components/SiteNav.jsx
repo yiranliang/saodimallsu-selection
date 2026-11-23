@@ -43,6 +43,7 @@ const STATE_OPTIONS = [
 export default function SiteNav({
   categories = [],
   categoryGroups = {},
+  categoryGroupOrder = [],
   categoryCounts = {},
   active,
   onChange,
@@ -161,7 +162,12 @@ export default function SiteNav({
   ]
 
   /* 两级菜单的数据：大分类 → 具体分类。默认全部折叠。 */
-  const shopGroups = groupShopCategories(categories, categoryCounts, categoryGroups)
+  const shopGroups = groupShopCategories(
+    categories,
+    categoryCounts,
+    categoryGroups,
+    categoryGroupOrder,
+  )
 
   /* 点 SALE 本身 = 进第一个**有商品**的专区。 */
   const firstSaleWithItems = [

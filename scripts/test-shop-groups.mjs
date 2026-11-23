@@ -77,6 +77,21 @@ check('显式分组把它拉进 Tops', configured[0].items.map((i) => i.value), 
 check('没配的仍走关键词', configured[1].title, 'Sets & Dresses')
 check('空字符串视为未配', groupShopCategories(['Patterned'], {}, { Patterned: '' })[0].title, SHOP_FALLBACK_GROUP)
 
+console.log('\n[4] 分组顺序以数据库为准')
+const ordered = groupShopCategories(
+  ['Tops', 'Long Cardigans', 'Bottoms', 'Floral'],
+  {},
+  { Tops: 'Tops', 'Long Cardigans': 'Cardigans', Bottoms: 'Bottoms', Floral: 'Trending' },
+  ['Cardigans', 'Trending', 'Tops', 'Bottoms'],
+)
+check('按 order 排列', ordered.map((g) => g.title), ['Cardigans', 'Trending', 'Tops', 'Bottoms'])
+
+const noOrder = groupShopCategories(['Tops', 'Floral'], {}, { Tops: 'Tops', Floral: 'Trending' })
+check('没有 order 时自建分组排在最后', noOrder.map((g) => g.title), ['Tops', 'Trending'])
+
+const withMore = groupShopCategories(['Tops', 'Patterned'], {}, { Tops: 'Tops' }, ['Tops'])
+check('兜底组永远最后', withMore.map((g) => g.title), ['Tops', SHOP_FALLBACK_GROUP])
+
 console.log(`\n────────────────────────────────────────────`)
 console.log(`${failed === 0 ? 'ALL PASSED' : 'FAILURES'}: ${passed} passed, ${failed} failed`)
 process.exit(failed === 0 ? 0 : 1)
