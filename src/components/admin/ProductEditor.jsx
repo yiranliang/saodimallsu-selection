@@ -664,7 +664,6 @@ export default function ProductEditor({
       discountLabel: dealOn ? draft.discountLabel.trim() : '',
     }
 
-
     // `id` is internal and never changes; `sku` is the 货号 and is free-form
     setSaving(true)
     try {
@@ -752,7 +751,6 @@ export default function ProductEditor({
    * 打开它不会往标签里塞 Holiday，删标签也不会把它关掉。 */
   const holidayOn = Boolean(draft.isHoliday)
   /* 预览按前台同一条规则切分：逗号/顿号/竖线都认，最多 3 枚。 */
-
 
   const applyNewTag = (remember) => {
     const label = newTagText.trim()
@@ -993,7 +991,6 @@ export default function ProductEditor({
                   className="input-field text-[12px]"
                 />
 
-
                 {/* The shortcut this whole block exists for: open the listing the
                     photo is coming from, in a new tab, without going through the
                     storefront to copy a link first. `noopener` because it is a
@@ -1100,55 +1097,6 @@ export default function ProductEditor({
               />
             </Field>
 
-            {/* 多分类：主分类在上面（Category），这里只放"另外还属于哪些"。 */}
-            <Field label="同时归入" hint="可选，商品会同时出现在这些分类里">
-              <div className="flex flex-wrap items-center gap-1.5">
-                {(draft.extraCategories || []).map((name) => (
-                  <span
-                    key={name}
-                    className="inline-flex items-center gap-1 rounded-full bg-cream-dark px-2.5 py-1 text-[11.5px] text-charcoal ring-1 ring-charcoal/[0.06]"
-                  >
-                    {name}
-                    <button
-                      type="button"
-                      onClick={() =>
-                        patch(
-                          'extraCategories',
-                          (draft.extraCategories || []).filter((item) => item !== name),
-                        )
-                      }
-                      aria-label={`移除 ${name}`}
-                      className="text-charcoal-light transition hover:text-charcoal"
-                    >
-                      <Close className="h-2.5 w-2.5" />
-                    </button>
-                  </span>
-                ))}
-
-                <InlineSelect
-                  value=""
-                  placeholder="+ 添加分类"
-                  ariaLabel="添加额外分类"
-                  width="w-[7.5rem]"
-                  align="left"
-                  onChange={(next) => {
-                    if (!next) return
-                    patch(
-                      'extraCategories',
-                      [...new Set([...(draft.extraCategories || []), next])],
-                    )
-                  }}
-                  options={knownCategories
-                    .filter(
-                      (name) =>
-                        name !== (draft.category || '').trim() &&
-                        !(draft.extraCategories || []).includes(name),
-                    )
-                    .map((name) => ({ value: name, label: name }))}
-                />
-              </div>
-            </Field>
-
             {/* Category and Badge each get the full column. They used to sit
                 side by side in two half-width cells, which was fine while a
                 badge was one text box — but the quick-fill row needs ~370px
@@ -1204,6 +1152,55 @@ export default function ProductEditor({
                   </select>
                 )}
               </Field>
+
+            {/* 多分类：主分类在上面（Category），这里只放"另外还属于哪些"。 */}
+            <Field label="同时归入" hint="可选：因为款式元素同时出现在这些分类里；元素没了就删掉它">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(draft.extraCategories || []).map((name) => (
+                  <span
+                    key={name}
+                    className="inline-flex items-center gap-1 rounded-full bg-cream-dark px-2.5 py-1 text-[11.5px] text-charcoal ring-1 ring-charcoal/[0.06]"
+                  >
+                    {name}
+                    <button
+                      type="button"
+                      onClick={() =>
+                        patch(
+                          'extraCategories',
+                          (draft.extraCategories || []).filter((item) => item !== name),
+                        )
+                      }
+                      aria-label={`移除 ${name}`}
+                      className="text-charcoal-light transition hover:text-charcoal"
+                    >
+                      <Close className="h-2.5 w-2.5" />
+                    </button>
+                  </span>
+                ))}
+
+                <InlineSelect
+                  value=""
+                  placeholder="+ 添加分类"
+                  ariaLabel="添加额外分类"
+                  width="w-[7.5rem]"
+                  align="left"
+                  onChange={(next) => {
+                    if (!next) return
+                    patch(
+                      'extraCategories',
+                      [...new Set([...(draft.extraCategories || []), next])],
+                    )
+                  }}
+                  options={knownCategories
+                    .filter(
+                      (name) =>
+                        name !== (draft.category || '').trim() &&
+                        !(draft.extraCategories || []).includes(name),
+                    )
+                    .map((name) => ({ value: name, label: name }))}
+                />
+              </div>
+            </Field>
               <div className="block">
                 {/* 标签开关：关掉 = 这件商品没有标签（保存时写空串）。 */}
                 <div className="flex items-center justify-between gap-3 rounded-xl bg-white p-3 ring-1 ring-charcoal/5">
@@ -2345,7 +2342,6 @@ function DealSection({
             </label>
           </div>
 
-
           {/* Live preview of what the storefront will actually do right now. */}
           {teaser && armed && (
             <p className="rounded-lg bg-amber-50 px-2 py-1.5 text-[10px] leading-relaxed text-amber-800 ring-1 ring-amber-200">Coming Soon 优先：预告期间前台显示锁，不出秒杀价。日期会保留下来，取消 Coming Soon 之后秒杀就回来了。</p>
@@ -2362,7 +2358,6 @@ function DealSection({
     </div>
   )
 }
-
 
 /**
  * ACC（Amazon Creator Connections）
