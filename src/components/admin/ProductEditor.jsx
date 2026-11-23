@@ -813,6 +813,21 @@ export default function ProductEditor({
   const holidayOn = Boolean(draft.isHoliday)
   /* 预览按前台同一条规则切分：逗号/顿号/竖线都认，最多 3 枚。 */
 
+  /* 「同时归入」的候选：和主分类选择器同一套分组顺序，但排除主分类与已选项。 */
+  const groupedExtraOptions = (() => {
+    const primary = (draft.category || '').trim()
+    const chosen = new Set(draft.extraCategories || [])
+    const usable = (name) => name !== primary && !chosen.has(name)
+
+    const groups = groupedCategoryOptions
+      .map((group) => ({ title: group.title, items: group.items.filter(usable) }))
+      .filter((group) => group.items.length)
+    const listed = new Set(groups.flatMap((group) => group.items))
+    const rest = categoryOptions.filter((name) => usable(name) && !listed.has(name))
+
+    return rest.length ? [...groups, { title: '', items: rest }] : groups
+  })()
+
   const applyNewTag = (remember) => {
     const label = newTagText.trim()
     if (!label) return
@@ -1297,13 +1312,10 @@ export default function ProductEditor({
                       patch('extraCategories', [...new Set([...(draft.extraCategories || []), next])])
                       setExtraPickerOpen(false)
                     }}
-                    options={knownCategories
-                      .filter(
-                        (name) =>
-                          name !== (draft.category || '').trim() &&
-                          !(draft.extraCategories || []).includes(name),
-                      )
-                      .map((name) => ({ value: name, label: name }))}
+                    groups={groupedExtraOptions.map((group) => ({
+                      title: group.title,
+                      items: group.items.map((name) => ({ value: name, label: name })),
+                    }))}
                   />
                 </div>
               )}

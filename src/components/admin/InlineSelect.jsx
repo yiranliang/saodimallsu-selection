@@ -13,6 +13,8 @@ import { ChevronDown } from '../icons.jsx'
 export default function InlineSelect({
   value,
   options = [],
+  /* 可选：按分组渲染（分组名不可点，成员缩进）。传了它就忽略 options。 */
+  groups = [],
   onChange,
   placeholder = '未分组',
   ariaLabel,
@@ -68,7 +70,14 @@ export default function InlineSelect({
             align === 'right' ? 'right-0' : 'left-0'
           }`}
         >
-          {options.map((option) => {
+          {(groups.length ? groups : [{ title: '', items: options }]).map((group) => (
+            <div key={group.title || '__flat'}>
+              {group.title && (
+                <div className="px-2 pb-0.5 pt-1.5 text-[9.5px] font-medium uppercase tracking-[0.14em] text-charcoal-light/60">
+                  {group.title}
+                </div>
+              )}
+              {group.items.map((option) => {
             const active = option.value === value
             return (
               <button
@@ -90,7 +99,9 @@ export default function InlineSelect({
                 )}
               </button>
             )
-          })}
+              })}
+            </div>
+          ))}
         </div>
       )}
     </div>
