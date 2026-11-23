@@ -386,6 +386,30 @@ function warnAbsent(absent) {
  * 一次小查询：`product_id, category`。表还没建时静默返回空 Map —— 菜单和筛选
  * 会自动退回"只看主分类"，行为与迁移前一致。
  */
+/** id → 额外分类。目录加载时填一次，其它读路径都从这里补。 */
+let membershipsById = new Map()
+
+/**
+ * 给单个商品补上 `categories`（主分类 + 额外归属）。
+ *
+ * 关键：编辑器打开时走的是 `loadProduct` 的整行读取，这条路径不经过目录缓存，
+ * 所以如果不在这里补，编辑器看到的商品就"没有额外分类" —— 一保存就把成员行
+ * 全删了（"整个分类消失"就是这么来的）。
+ */
+function withMemberships(product) {
+  if (!product) return product
+  const extra = membershipsById.get(String(product.id)) || []
+  const all = [product.category, ...extra]
+    .map((name) => String(name ?? '').trim())
+    .filter(Boolean)
+  const unique = [...new Set(all)]
+  if (unique.length <= 1) {
+    const { categories: _dropped, ...rest } = product
+    return rest
+  }
+  return { ...product, categories: unique }
+}
+
 async function loadCategoryMembers() {
   try {
     const { data, error } = await requireClient().from('product_categories').select('product_id, category')
@@ -398,6 +422,7 @@ async function loadCategoryMembers() {
       if (!map.has(id)) map.set(id, [])
       map.get(id).push(category)
     }
+    membershipsById = map
     return map
   } catch {
     return new Map()
@@ -559,16 +584,8 @@ export async function loadProducts({ silent = false, light } = {}) {
       photoCountStatus = photoCountAvailable ? 'ok' : 'missing'
 
       /* 多分类归属：主分类永远在里面，额外分类按成员表补齐。 */
-      const members = await loadCategoryMembers()
-      cache = rows.map((row) => {
-        const product = rowToProduct(row)
-        const extra = members.get(String(row.id)) || []
-        const all = [product.category, ...extra]
-          .map((name) => String(name ?? '').trim())
-          .filter(Boolean)
-        const unique = [...new Set(all)]
-        return unique.length > 1 ? { ...product, categories: unique } : product
-      })
+      await loadCategoryMembers()
+      cache = rows.map((row) => withMemberships(rowToProduct(row)))
       orderById.clear()
       for (const row of rows) orderById.set(row.id, row.sort_order ?? 0)
 
@@ -636,7 +653,7 @@ export async function loadProduct(id) {
 
     if (error) throw new Error(error.message)
 
-    const product = rowToProduct(data)
+    const product = withMemberships(rowToProduct(data))
     const known = cache.some((item) => String(item.id) === key)
     cache = known
       ? cache.map((item) => (String(item.id) === key ? product : item))
@@ -687,7 +704,7 @@ export function applyProductEvent(payload) {
   if (!row || !row.id) return false
 
   const id = String(row.id)
-  const product = rowToProduct(row)
+  const product = withMemberships(rowToProduct(row))
   cache = cache.some((item) => String(item.id) === id)
     ? cache.map((item) => (String(item.id) === id ? product : item))
     : [...cache, product]
@@ -735,7 +752,7 @@ export async function createProduct(product) {
 
   cache = [
     ...cache,
-    rowToProduct({ ...row, id: data.id, sort_order: data.sort_order ?? 0 }),
+    withMemberships(rowToProduct({ ...row, id: data.id, sort_order: data.sort_order ?? 0 })),
   ]
   orderById.set(data.id, data.sort_order ?? 0)
   /* A new product lands at `max + 1`, i.e. last — `resort()` is what enforces
