@@ -1237,6 +1237,27 @@ export async function setProductExtraCategories(id, categories) {
  * @param {string} category
  * @param {'add'|'remove'} action
  */
+/**
+ * 一次性的数据修复：清空所有"额外分类归属"，只保留主分类。
+ *
+ * 为什么需要：`21-product-categories.sql` 当年把每件商品的主分类都写进了成员
+ * 表。之后改主分类时（修复前）这些行没被清掉，于是留在旧分类里、而且会被
+ * 编辑器当成"用户设置的额外分类"原样保留 —— 越改越乱。
+ *
+ * 这是破坏性操作：所有"同时归入"都会被清空，需要的话重新设置。
+ */
+export async function clearAllExtraMemberships() {
+  const { error } = await requireClient().from('product_categories').delete().not('product_id', 'is', null)
+  if (error) throw new Error(error.message)
+
+  membershipsById = new Map()
+  cache = cache.map((product) => {
+    const { categories: _dropped, ...rest } = product
+    return rest
+  })
+  notify()
+}
+
 export async function setProductsExtraCategory(ids, category, action = 'add') {
   const list = (Array.isArray(ids) ? ids : [ids]).filter(Boolean)
   const name = String(category ?? '').trim()

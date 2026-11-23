@@ -236,6 +236,20 @@ export default function CategoryLayoutEditor({ model }) {
           </div>
         )}
 
+        <div className="mt-3 rounded-xl bg-amber-50/60 px-3 py-2.5 ring-1 ring-amber-200/70">
+          <p className="text-[10.5px] leading-relaxed text-amber-900/80">
+            历史数据修复：早期迁移把每件商品的主分类也写进了「同时归入」，
+            改分类后这些行仍留在旧分类里，看起来像"没改成功"。
+          </p>
+          <button
+            type="button"
+            onClick={() => model.clearExtras?.()}
+            className="mt-1.5 rounded-full bg-white px-3 py-1.5 text-[11px] font-medium text-amber-900 ring-1 ring-amber-300 transition hover:bg-amber-50"
+          >
+            清空「同时归入」
+          </button>
+        </div>
+
         <div className="flex gap-1.5 pt-1">
           <input
             type="text"
