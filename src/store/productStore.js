@@ -1313,11 +1313,40 @@ export async function setProductsCategoryByIds(ids, category, mode = 'replace') 
           })
         : part
 
+    /* 改主分类之前，先记下每件商品原来的分类 —— 改完要把"原分类"那条成员行
+     * 删掉。否则它仍留在 product_categories 里，前台按分类筛选（任一命中）就
+     * 还会在旧分类下出现，看起来像"批量改分类没生效"。 */
+    const before = new Map()
+    for (const id of targets) {
+      const product = cache.find((item) => String(item.id) === String(id))
+      const previous = String(product?.category || '').trim()
+      if (previous && previous !== name) before.set(String(id), previous)
+    }
+
     const { error } = await query
     if (error) throw new Error(error.message)
 
     for (const id of targets) patchCachedRow(id, { category: name })
     changed += targets.length
+
+    /* 按"旧分类"分组删除成员行（每组一条 SQL）。表不存在时静默跳过。 */
+    const grouped = new Map()
+    for (const [id, previous] of before) {
+      if (!grouped.has(previous)) grouped.set(previous, [])
+      grouped.get(previous).push(id)
+    }
+    for (const [previous, ids] of grouped) {
+      try {
+        await requireClient()
+          .from('product_categories')
+          .delete()
+          .in('product_id', ids)
+          .eq('category', previous)
+      } catch {
+        /* 迁移没跑：没有成员表，忽略 */
+      }
+    }
+
     notify()
   }
 
