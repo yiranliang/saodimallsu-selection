@@ -326,7 +326,7 @@ export default function SettingsDialog({
           >
             <span>
               <span className="block text-[11px] font-medium tracking-wider text-charcoal-light">
-                一级分组
+                分组
               </span>
               <span className="mt-0.5 block text-[10.5px] leading-relaxed text-charcoal-light/80">
                 前台 SHOP 菜单左栏的顺序就是这里的顺序。
@@ -341,10 +341,10 @@ export default function SettingsDialog({
 
           {openSection === 'groups' && (
             <>
-              {/* 一级分组本身：新增 / 排序 / 删除。 */}
+              {/* 分组本身：新增 / 排序 / 删除。 */}
           <div className="border-t border-charcoal/[0.06] pt-5">
             <div className="text-[11px] font-medium tracking-wider text-charcoal-light">
-              一级分组
+              分组
             </div>
             <p className="mt-0.5 text-[10.5px] leading-relaxed text-charcoal-light/80">
               前台 SHOP 菜单左栏的顺序就是这里的顺序。
@@ -446,7 +446,7 @@ export default function SettingsDialog({
 
             {panelOpen && groupColumnStatus === 'missing' && (
               <p className="mt-2 rounded-lg bg-amber-50 px-2.5 py-1.5 text-[10.5px] leading-relaxed text-amber-800 ring-1 ring-amber-200">
-                一级分组暂时存不进去：数据库里没有{' '}
+                分组暂时存不进去：数据库里没有{' '}
                 <code className="font-mono">group_name</code> 列。先在 Supabase 跑一次{' '}
                 <code className="font-mono">supabase/20-category-group.sql</code>。
               </p>
@@ -493,7 +493,7 @@ export default function SettingsDialog({
                     <InlineSelect
                       value={categories.groups?.[name] || ''}
                       onChange={(next) => categories.setGroup?.(name, next)}
-                      ariaLabel={`${name} 的一级分组`}
+                      ariaLabel={`${name} 的分组`}
                       placeholder="未分组"
                       width="w-[7.5rem]"
                       options={[

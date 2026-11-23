@@ -13,6 +13,7 @@ import { isColourType, specTypeLabel } from '../../utils/variantImage.js'
 import { deleteDealSlotsBySku } from '../../store/dealStore.js'
 import { isSizeType, sizeOrder } from '../../utils/sizes.js'
 import { useDealSlots } from '../../hooks/useDealSlots.js'
+import { useCategoryGroups } from '../../hooks/useCategories.js'
 import { looksLikeUrl } from '../../utils/lines.js'
 import { variantKey } from '../../utils/sku.js'
 import {
@@ -95,6 +96,7 @@ export default function ProductEditor({
   const [queuedSave, setQueuedSave] = useState(false)
   const [saving, setSaving] = useState(false)
   const knownCategories = useCategories()
+  const categoryGroups = useCategoryGroups()
 
   /* ASIN edits, keyed by `"Colour|Size"`. Deliberately a sparse overlay on top
    * of the store rather than a copy of it: the map can land after the modal
@@ -758,6 +760,15 @@ export default function ProductEditor({
   const previewBadge = badgeStyle(draft.badgeColor)
   /* 节日特选是**独立开关**（`is_holiday` 列），和标签完全解耦：
    * 打开它不会往标签里塞 Holiday，删标签也不会把它关掉。 */
+  /* 分组由分类决定，只读展示 —— 换分类时它跟着变，运营不需要（也不能）
+   * 单独选分组，避免"分类在 Tops、分组写着 Shoes"这种自相矛盾的数据。 */
+  const draftGroup = (() => {
+    const category = (draft.category || '').trim()
+    if (!category) return ''
+    /* 只认数据库里配的分组：猜出来的分组一旦和服务端不一致，编辑器的读数和
+     * 前台菜单就会对不上 —— 那种"看起来有分组"比"未分组"更误导。 */
+    return String(categoryGroups?.[category] || '').trim()
+  })()
   const holidayOn = Boolean(draft.isHoliday)
   /* 预览按前台同一条规则切分：逗号/顿号/竖线都认，最多 3 枚。 */
 
@@ -1113,7 +1124,13 @@ export default function ProductEditor({
                 into two ragged rows. Stacked, the badge area reads as one
                 block: text, templates, swatches. */}
             <div className="space-y-4">
-              <Field label="Category" hint="from the categories table">
+              <Field label="分组" hint="由分类自动决定（只读）">
+              <div className="flex items-center gap-2 rounded-lg bg-cream/70 px-3 py-2 text-[13px] text-charcoal/80">
+                {draftGroup || <span className="text-charcoal-light/60">未分组</span>}
+              </div>
+            </Field>
+
+            <Field label="Category" hint="from the categories table">
                 {newCategory ? (
                   <div className="flex items-center gap-1.5">
                     <input

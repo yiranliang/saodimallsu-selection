@@ -6,12 +6,12 @@ const noop = () => {}
 
 const product = {
   id: 'p1',
-  sku: 'M6D749',
-  name: 'Vintage Button Down Floral Cardigan',
-  category: 'Floral',
-  categories: ['Floral'],
+  sku: 'C8P407',
+  name: 'Color Block Ruffle Sleeve Cardigan',
+  category: 'Cropped Cardigans',
+  categories: ['Cropped Cardigans', 'Striped'],
   image: 'https://m.media-amazon.com/images/I/71example.jpg',
-  tag: '',
+  tag: 'Best-seller',
   badgeColor: '#B74C2E',
   hidden: false,
   isTeaser: false,
