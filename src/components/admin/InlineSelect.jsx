@@ -17,6 +17,8 @@ export default function InlineSelect({
   placeholder = '未分组',
   ariaLabel,
   width = 'w-[8.5rem]',
+  /* 面板可以比触发器宽：PC 上空间够，选项名（比如 Long Cardigans）不该被截断。 */
+  panelWidth = 'w-64',
   align = 'right',
 }) {
   const [open, setOpen] = useState(false)
@@ -62,7 +64,7 @@ export default function InlineSelect({
 
       {open && (
         <div
-          className={`absolute top-full z-40 mt-1 max-h-56 overflow-y-auto rounded-xl bg-white p-1 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10 ${width} ${
+          className={`absolute top-full z-40 mt-1 max-h-[22rem] overflow-y-auto rounded-xl bg-white p-1 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10 ${panelWidth} ${
             align === 'right' ? 'right-0' : 'left-0'
           }`}
         >

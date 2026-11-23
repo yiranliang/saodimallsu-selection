@@ -1533,6 +1533,7 @@ export default function ProductsPage() {
             Only categories that actually have products are listed, so an empty
             selection can never look like a bug. */}
         <FilterMenu
+          panelWidth="w-72"
           open={openFilter === 'category'}
           onOpenChange={(next) => setOpenFilter(next ? 'category' : null)}
           label={t('Category')}
@@ -1563,7 +1564,7 @@ export default function ProductsPage() {
           </button>
 
           {openFilter === 'tag' && (
-            <div className="absolute left-0 top-full z-30 mt-1 w-44 rounded-xl bg-white p-1.5 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10">
+            <div className="absolute left-0 top-full z-30 mt-1 max-h-[22rem] w-56 overflow-y-auto rounded-xl bg-white p-1.5 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10">
               {tagMenuOptions.map((option) => (
                 <button
                   key={option.value}

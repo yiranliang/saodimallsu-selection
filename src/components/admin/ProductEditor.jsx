@@ -1185,7 +1185,7 @@ export default function ProductEditor({
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-end gap-2">
                     <select
                       value={draft.category || UNCATEGORISED}
                       onChange={(e) => {
@@ -1212,8 +1212,8 @@ export default function ProductEditor({
                       <option value={NEW_CATEGORY}>{t('＋ New category…')}</option>
                     </select>
 
-                    {/* 分组由分类自动决定，和选择器同一行，不再单独占一行 */}
-                    <span className="shrink-0 rounded-full bg-cream-dark px-2.5 py-1 text-[10.5px] text-charcoal/70">
+                    {/* 分组由分类自动决定：纯文本，和选择器底部对齐 */}
+                    <span className="shrink-0 pb-2 text-[11px] leading-none text-charcoal-light">
                       分组：{draftGroup || '未分组'}
                     </span>
                   </div>
@@ -1265,6 +1265,7 @@ export default function ProductEditor({
                     placeholder="+ 添加分类"
                     ariaLabel="添加额外分类"
                     width="w-[7.5rem]"
+                    panelWidth="w-64"
                     align="left"
                     onChange={(next) => {
                       if (!next) return

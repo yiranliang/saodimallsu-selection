@@ -21,7 +21,7 @@ export default function FilterMenu({
   ariaLabel,
   align = 'left',
   maxWidth = 'max-w-[16rem]',
-  panelWidth = 'w-56',
+  panelWidth = 'w-64',
   open: openProp,
   onOpenChange,
 }) {
@@ -79,7 +79,7 @@ export default function FilterMenu({
 
       {open && (
         <div
-          className={`absolute top-full z-30 mt-1 max-h-[18rem] overflow-y-auto rounded-xl bg-white p-1.5 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10 ${panelWidth} ${
+          className={`absolute top-full z-30 mt-1 max-h-[22rem] overflow-y-auto rounded-xl bg-white p-1.5 shadow-xl shadow-charcoal/10 ring-1 ring-charcoal/10 ${panelWidth} ${
             align === 'right' ? 'right-0' : 'left-0'
           }`}
         >
