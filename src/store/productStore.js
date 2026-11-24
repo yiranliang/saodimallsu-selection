@@ -122,6 +122,7 @@ const OPTIONAL_COLUMNS = [
   ...ACC_COLUMNS,
   ...SUB_BADGE_COLUMNS,
   'deal_priority',
+  'category_pins',
   PHOTO_COUNT_COLUMN,
 ]
 
