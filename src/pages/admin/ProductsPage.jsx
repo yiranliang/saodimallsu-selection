@@ -1868,6 +1868,11 @@ export default function ProductsPage() {
           // asins.js is { 货号: { 'Colour|Size': ASIN } } — count the entries,
           // not the keys of the outer object
           const asinCount = Object.keys(asinMap[skuOf(product)] || {}).length
+          /* 「同时归入」的分类：卡片上要看得见，否则运营只有打开编辑器才知道
+           * 这件商品还挂在别的分类里（筛选命中时更让人困惑）。 */
+          const extraCategories = (product.categories || []).filter(
+            (name) => name && name !== product.category,
+          )
           /* 优先用 `photo_count`（触发器维护的整数）——轻列表里根本没有
            * `variant_images` 可数。数据库还没跑 15-photo-count.sql 时退回
            * 数 JSON，这样"没迁移的库"只是多传流量，标签照常显示。 */
@@ -1976,10 +1981,24 @@ export default function ProductsPage() {
                   <p className="mt-0.5 line-clamp-1 text-[11px] text-charcoal-light">{subName}</p>
                 )}
 
-                <div className="mt-1 flex items-center gap-1.5 text-[11px] text-charcoal-light">
+                <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-charcoal-light">
                   <span className="shrink-0 rounded bg-cream-dark px-1.5 py-0.5 text-[10px] font-medium text-charcoal/70">
                     {product.category}
                   </span>
+                    {extraCategories.slice(0, 2).map((name) => (
+                      <span
+                        key={name}
+                        title={`同时归入：${name}`}
+                        className="shrink-0 rounded bg-cream-dark/50 px-1.5 py-0.5 text-[10px] text-charcoal/60"
+                      >
+                        + {name}
+                      </span>
+                    ))}
+                    {extraCategories.length > 2 && (
+                      <span className="shrink-0 text-[10px] text-charcoal-light/70">
+                        +{extraCategories.length - 2}
+                      </span>
+                    )}
                   {asinCount > 0 && (
                     <>
                       <span className="text-charcoal/20">·</span>
